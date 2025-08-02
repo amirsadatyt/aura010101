@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <title>Sadat Digital Banknote (Advanced Security)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-sha256/build/sha256.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-steganography@1.0.2/dist/simple-steganography.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@3.0.0/dist/mobilenet.min.js"></script>
+
+    <style>
+        :root {
+            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
+            --mono-font: 'Roboto Mono', monospace;
+            --dark-bg: #10101a;
+            --medium-bg: #1a1a2e;
+            --light-bg: #2a2a3e;
+            --accent-color-1: #e040fb;
+            --accent-color-2: #7c4dff;
+            --text-color: #e0e0e0;
+            --text-muted: #a0a0c0;
+            --success-color: #00e676;
+            --error-color: #ff5252;
+            --info-color: #40c4ff;
+            --border-color: rgba(124, 77, 255, 0.2);
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--primary-font);
+            background-color: var(--dark-bg);
+            background-image:
+                radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%);
+            color: var(--text-color);
+            text-align: center;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(26, 26, 46, 0.7);
+            backdrop-filter: blur(12px);
+            padding: 24px;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 8px 0;
+            letter-spacing: 1px;
+            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        canvas {
+            border-radius: 16px;
+            margin-top: 24px;
+            background: #050508;
+            cursor: default;
+            box-shadow: 0 0 50px rgba(124, 77, 255, 0.15);
+            width: 100%;
+            max-width: 900px;
+            height: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        input[type="number"], button, label {
+            padding: 14px 22px;
+            font-size: 16px;
+            font-family: var(--primary-font);
+            border-radius: 12px;
+            margin: 8px 5px;
+            border: 1px solid var(--border-color);
+            background: var(--medium-bg);
+            color: #fff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            outline: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        input[type="number"] {
+            font-family: var(--mono-font);
+            font-weight: 700;
+            text-align: center;
+            width: 150px;
+        }
+
+        input[type="number"]:focus {
+            border-color: var(--accent-color-2);
+            box-shadow: 0 0 15px rgba(124, 77, 255, 0.5);
+        }
+
+        button, label {
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2));
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        button:hover, label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4);
+        }
+
+        .section {
+            background: rgba(16, 16, 26, 0.5);
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: var(--text-color);
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .controls-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        #validation-result {
+            margin-top: 20px;
+            font-size: 16px;
+            font-weight: normal;
+            min-height: 50px;
+            line-height: 1.8;
+            text-align: left;
+            background: var(--dark-bg);
+            padding: 20px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            font-family: var(--mono-font);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .valid { color: var(--success-color); }
+        .invalid { color: var(--error-color); }
+        .info { color: var(--info-color); }
+        .warning { color: #ffab40; }
+
+        .data-heading {
+            color: var(--accent-color-1);
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 18px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            font-weight: 600;
+            font-family: var(--primary-font);
+        }
+
+        .comparison-item {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-color-2);
+        }
+        code {
+            background: var(--medium-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Sadat Digital Banknote</h1>
+        <p>A secure, verifiable digital currency concept with advanced security features.</p>
+    </div>
+
+    <canvas id="noteCanvas" width="2700" height="1500"></canvas>
+
+    <div class="section">
+        <h2>Banknote Controls</h2>
+        <div class="controls-grid">
+            <input type="number" id="amount-input" value="50000">
+            <button onclick="handleCreateNewNote()">🎨 Redesign Banknote</button>
+            <button onclick="downloadNote()">📥 Download Banknote</button>
+        </div>
+    </div>
+
+    <div class="section" id="validator-section">
+        <h2>Validate Banknote</h2>
+        <label for="validator-input">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Select Image for Validation
+        </label>
+        <input type="file" id="validator-input" accept="image/png" style="display: none;">
+        <div id="validation-result">Validation result will be displayed here.</div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("noteCanvas");
+const ctx = canvas.getContext("2d");
+let currentNoteData = {};
+let mobileNetModel = null;
+
+// ===================================================================================
+// Advanced Cryptography & Security Configuration
+// ===================================================================================
+
+const SECURITY_CONSTANTS = {
+    WATERMARK_SECRET: "SADAT_NOTE_V4_WATERMARK",
+    RSA_KEY_SIZE: 2048,
+    // --- WARNING: INSECURE FOR PRODUCTION ---
+    // In a real application, the private key MUST be stored on a secure server.
+    // It is only included here for demonstration purposes.
+    RSA_PRIVATE_KEY: `-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEAw+pEXyXyV9f+nL2s+CgGJwZ33pau9+A9wL2u6nL4Z14Z8YgW
+J5q9cM5z3X4FzYy4o6ZzI8y4q4w8w9s8c/v2b+h6g3x4k9m7g9r6x8f+x5g4h8w9s
+... (full private key would be here) ...
+-----END RSA PRIVATE KEY-----`,
+    // The public key can be freely distributed in client-side code.
+    RSA_PUBLIC_KEY: `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw+pEXyXyV9f+nL2s+CgG
+... (full public key would be here) ...
+-----END PUBLIC KEY-----`
+};
+
+const rsaEncrypt = new JSEncrypt();
+rsaEncrypt.setPublicKey(SECURITY_CONSTANTS.RSA_PUBLIC_KEY);
+
+const rsaDecrypt = new JSEncrypt();
+rsaDecrypt.setPrivateKey(SECURITY_CONSTANTS.RSA_PRIVATE_KEY);
+
+
+// ===================================================================================
+// Validation Logic
+// ===================================================================================
+document.getElementById('validator-input').addEventListener('change', handleFileSelect);
+
+async function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const resultDiv = document.getElementById('validation-result');
+    resultDiv.innerHTML = `<span class="info">⏳ Initializing validation process...</span>`;
+    
+    let resultHTML = '';
+    let isFullyValid = true;
+
+    try {
+        const fileUrl = URL.createObjectURL(file);
+        const img = await new Promise((resolve, reject) => {
+            const i = new Image();
+            i.onload = () => resolve(i);
+            i.onerror = reject;
+            i.src = fileUrl;
+        });
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 900;
+        tempCanvas.height = 500;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // STAGE 1: READ QR CODE
+        resultHTML += `<span class="info">1. Reading QR Code...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const qrContent = readQRCodeFromCanvas(tempCanvas);
+        if (!qrContent) throw new Error("FATAL ERROR: QR Code not found or unreadable.");
+        resultHTML += `\n<span class="valid">✅ 1. QR Code read successfully.</span>`;
+
+        // STAGE 2: DECRYPT QR DATA
+        resultHTML += `\n\n<span class="info">2. Decrypting banknote data...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const decryptedData = decryptQRData(qrContent);
+        if (!decryptedData) throw new Error("FATAL ERROR: Failed to decrypt QR data. Key or data is corrupt.");
+        resultHTML += `\n<span class="valid">✅ 2. Data decrypted successfully.</span>`;
+
+        // STAGE 3: VERIFY DIGITAL SIGNATURE
+        resultHTML += `\n\n<span class="info">3. Verifying digital signature...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const isSignatureValid = verifyDigitalSignature(decryptedData);
+        if (!isSignatureValid) throw new Error("FATAL ERROR: Digital signature is INVALID. Banknote data has been forged.");
+        resultHTML += `\n<span class="valid">✅ 3. Digital signature is authentic.</span>`;
+        
+        // At this point, the data from the QR code is trusted.
+        const trustedData = decryptedData;
+
+        // STAGE 4: INVISIBLE WATERMARK CHECK
+        resultHTML += `\n\n<span class="info">4. Checking for invisible watermark...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const watermarkData = await SimpleSteganography.decode(tempCanvas);
+        const expectedWatermark = `${SECURITY_CONSTANTS.WATERMARK_SECRET}::${trustedData.serial}`;
+        if (watermarkData !== expectedWatermark) {
+            isFullyValid = false;
+            resultHTML += `\n<span class="invalid">❌ FAILED: Invisible watermark is missing or corrupt. Image may be a screenshot or edited copy.</span>`;
+        } else {
+            resultHTML += `\n<span class="valid">✅ 4. Invisible watermark verified.</span>`;
+        }
+
+        // STAGE 5: AI-POWERED TAMPER DETECTION
+        resultHTML += `\n\n<span class="info">5. Performing AI image integrity analysis...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        
+        const referenceCanvas = document.createElement('canvas');
+        referenceCanvas.width = tempCanvas.width;
+        referenceCanvas.height = tempCanvas.height;
+        // Generate a pristine reference image without a watermark for comparison
+        await drawNoteOnCanvas(referenceCanvas, trustedData, referenceCanvas.width, referenceCanvas.height, false);
+        
+        const similarity = await compareImagesWithAI(tempCanvas, referenceCanvas);
+        const similarityThreshold = 0.99; // Very high similarity required
+
+        if (similarity < similarityThreshold) {
+            isFullyValid = false;
+            resultHTML += `\n<span class="invalid">❌ FAILED: AI detected significant graphical tampering. (Similarity: ${(similarity * 100).toFixed(2)}% | Threshold: >99%)</span>`;
+        } else {
+            resultHTML += `\n<span class="valid">✅ 5. AI analysis passed. Image structure is intact. (Similarity: ${(similarity * 100).toFixed(2)}%)</span>`;
+        }
+
+        // STAGE 6: OCR CROSS-CHECK
+        resultHTML += `\n\n<span class="info">6. Performing Optical Character Recognition (OCR) cross-check...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        
+        const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
+        const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
+
+        resultHTML += `\n<span class="valid">✅ 6. OCR scan complete.</span>\n`;
+        resultHTML += `\n<div class="data-heading">Final Security Cross-Check</div>`;
+        const comparison = compareQRAndOCR(trustedData, ocrResult);
+
+        resultHTML += `<div class="comparison-item"><strong>Amount (Right Side):</strong>\n`;
+        resultHTML += `  Expected: <code>${comparison.expected.amount}</code> | Found: <code>${comparison.found.amount || '(not found)'}</code>\n`;
+        resultHTML += `  Status: ${comparison.match.amount ? '<span class="valid">✅ MATCH</span>' : '<span class="invalid">❌ MISMATCH</span>'}\n`;
+        if (!comparison.match.amount) isFullyValid = false;
+
+        resultHTML += `</div><div class="comparison-item"><strong>Serial/Key (Left Side):</strong>\n`;
+        resultHTML += `  Expected Serial: <code>${comparison.expected.serial}</code> | Expected Key: <code>${comparison.expected.key}</code>\n`;
+        resultHTML += `  Found by OCR: <code>${comparison.found.serialText || '(not found)'}</code>\n`;
+        resultHTML += `  Serial/Key Status: ${comparison.match.serial && comparison.match.key ? '<span class="valid">✅ MATCH</span>' : '<span class="invalid">❌ MISMATCH</span>'}\n`;
+        if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
+
+    } catch (e) {
+        isFullyValid = false;
+        resultHTML += `\n<span class="invalid">❌ ${e.message}</span>`;
+    } finally {
+        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 20px 0;">\n<span style="font-size: 18px; font-weight: 600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery or tampering detected.'}</span>`;
+        resultDiv.innerHTML = resultHTML;
+    }
+}
+
+// ===================================================================================
+// Core Validation Sub-routines
+// ===================================================================================
+
+function readQRCodeFromCanvas(canvasToCheck) {
+    const context = canvasToCheck.getContext('2d');
+    const imageData = context.getImageData(0, 0, canvasToCheck.width, canvasToCheck.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code) {
+        try { return JSON.parse(code.data); } catch { return null; }
+    }
+    return null;
+}
+
+function decryptQRData(qrContent) {
+    try {
+        const { key, data } = qrContent;
+        const decryptedAesKey = rsaDecrypt.decrypt(key);
+        if (!decryptedAesKey) return null;
+
+        const decryptedBytes = CryptoJS.AES.decrypt(data, decryptedAesKey);
+        const decryptedJson = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        return JSON.parse(decryptedJson);
+    } catch {
+        return null;
+    }
+}
+
+function verifyDigitalSignature(data) {
+    try {
+        const { signature, ...restOfData } = data;
+        if (!signature) return false;
+        
+        const stringToVerify = JSON.stringify(restOfData);
+        
+        const verify = new JSEncrypt();
+        verify.setPublicKey(SECURITY_CONSTANTS.RSA_PUBLIC_KEY);
+        // We use sha256 for the hash algorithm with PSS padding
+        return verify.verify(stringToVerify, signature, sha256);
+    } catch {
+        return false;
+    }
+}
+
+async function compareImagesWithAI(canvas1, canvas2) {
+    if (!mobileNetModel) {
+        console.log("Loading MobileNet model...");
+        mobileNetModel = await mobilenet.load();
+        console.log("MobileNet model loaded.");
+    }
+
+    const getFingerprint = async (canvas) => {
+        const tensor = tf.browser.fromPixels(canvas).resizeNearestNeighbor([224, 224]).toFloat().expandDims();
+        const features = mobileNetModel.infer(tensor, true);
+        return features;
+    };
+
+    const fingerprint1 = await getFingerprint(canvas1);
+    const fingerprint2 = await getFingerprint(canvas2);
+
+    // Calculate Cosine Similarity
+    const similarity = tf.losses.cosineDistance(fingerprint1, fingerprint2, 0).mul(-1).add(1);
+    const similarityValue = await similarity.data();
+    
+    // Clean up tensors
+    fingerprint1.dispose();
+    fingerprint2.dispose();
+    similarity.dispose();
+
+    return similarityValue[0];
+}
+
+function compareQRAndOCR(qrData, ocrResult) {
+    const words = ocrResult.data.words;
+    const serialRegion = { x_min: 0, x_max: 550, y_min: 0, y_max: 300 };
+    const amountRegion = { x_min: 700, x_max: 900, y_min: 0, y_max: 200 };
+    let textInAmountRegion = '';
+    let textInSerialRegion = '';
+
+    words.forEach(word => {
+        const bbox = word.bbox;
+        if (bbox.x0 >= amountRegion.x_min && bbox.x1 <= amountRegion.x_max &&
+            bbox.y0 >= amountRegion.y_min && bbox.y1 <= amountRegion.y_max) {
+            textInAmountRegion += word.text;
+        }
+        if (bbox.x0 >= serialRegion.x_min && bbox.x1 <= serialRegion.x_max &&
+            bbox.y0 >= serialRegion.y_min && bbox.y1 <= serialRegion.y_max) {
+            textInSerialRegion += word.text;
+        }
+    });
+    
+    const cleanAmountText = textInAmountRegion.replace(/[\s,:.-]/g, '');
+    const cleanSerialText = textInSerialRegion.replace(/[\s,:.-]/g, '').toUpperCase();
+    const expectedAmount = String(qrData.amount);
+    const expectedSerial = qrData.serial.substring(4); 
+    const expectedKey = qrData.verificationKey.substring(4);
+
+    return {
+        expected: { amount: expectedAmount, serial: expectedSerial, key: expectedKey },
+        found: { amount: cleanAmountText, serialText: cleanSerialText },
+        match: {
+            amount: (cleanAmountText === expectedAmount),
+            serial: cleanSerialText.includes(expectedSerial),
+            key: cleanSerialText.includes(expectedKey)
+        }
+    };
+}
+
+
+// ===================================================================================
+// Banknote Creation Logic
+// ===================================================================================
+const H = (hash, index, min, max) => min + (parseInt(hash.substring(index, index + 2), 16) % (max - min + 1));
+
+async function handleCreateNewNote() {
+    const now = Date.now();
+    const amount = document.getElementById("amount-input").value;
+
+    const notePayload = {
+        amount: parseInt(amount) || 0,
+        verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
+        serial: "SDT-" + now.toString().slice(-8),
+        timestamp: now
+    };
+    
+    // Sign the payload
+    const sign = new JSEncrypt();
+    sign.setPrivateKey(SECURITY_CONSTANTS.RSA_PRIVATE_KEY);
+    const signature = sign.sign(JSON.stringify(notePayload), sha256, "sha256");
+
+    currentNoteData = { ...notePayload, signature };
+
+    // Generate a hash for graphical elements
+    currentNoteData.designHash = sha256(JSON.stringify(currentNoteData));
+
+    // Draw the note onto the main canvas, WITH the watermark
+    await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
+}
+
+
+function downloadNote() {
+    if (Object.keys(currentNoteData).length === 0) {
+        alert("Please generate a banknote first!");
+        return;
+    }
+    const link = document.createElement("a");
+    link.download = `SADAT-NOTE-SECURE-${currentNoteData.serial}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+}
+
+async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applyWatermark = false) {
+    if (Object.keys(noteData).length === 0) return;
+
+    const g_ctx = targetCanvas.getContext("2d");
+    const { amount, verificationKey, serial, designHash } = noteData;
+
+    // --- QR Code Generation (Encrypted & Signed) ---
+    const aesKey = CryptoJS.lib.WordArray.random(32).toString(); // 256-bit key
+    const encryptedData = CryptoJS.AES.encrypt(JSON.stringify(noteData), aesKey).toString();
+    const encryptedAesKey = rsaEncrypt.encrypt(aesKey);
+    const qrPayload = JSON.stringify({ key: encryptedAesKey, data: encryptedData });
+    // ---
+
+    const w = width;
+    const h = height;
+
+    const bgGradient = g_ctx.createLinearGradient(0, 0, 0, h);
+    const baseHue = H(designHash, 0, 0, 360);
+    bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
+    bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
+    g_ctx.fillStyle = bgGradient;
+    g_ctx.fillRect(0, 0, w, h);
+
+    const scale = w / 2700;
+
+    drawWatermarkPattern(g_ctx, designHash, w, h);
+    drawGuilloche(g_ctx, designHash, w, h);
+
+    g_ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+    g_ctx.shadowBlur = 8 * scale;
+    g_ctx.shadowOffsetX = 2 * scale;
+    g_ctx.shadowOffsetY = 2 * scale;
+    g_ctx.fillStyle = "#EAEAEA";
+
+    g_ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
+    g_ctx.textAlign = 'left';
+    g_ctx.fillText(serial.substring(4), 150 * scale, 160 * scale);
+    g_ctx.fillText(verificationKey.substring(4), 150 * scale, 280 * scale);
+
+    g_ctx.font = `bold ${120 * scale}px 'Roboto Mono'`;
+    g_ctx.textAlign = "right";
+    g_ctx.shadowBlur = 10 * scale;
+    g_ctx.shadowOffsetX = 3 * scale;
+    g_ctx.shadowOffsetY = 3 * scale;
+    g_ctx.fillText(amount.toString(), w - 150 * scale, 200 * scale);
+
+    g_ctx.shadowColor = "transparent";
+    g_ctx.shadowBlur = 0;
+    g_ctx.shadowOffsetX = 0;
+    g_ctx.shadowOffsetY = 0;
+    
+    await new Promise((resolve, reject) => {
+        const qrCanvas = document.createElement("canvas");
+        const qrSize = 380 * scale;
+        QRCode.toCanvas(qrCanvas, qrPayload, { width: qrSize, color: { dark: '#1c1827', light: '#FFFFFF' } }, (err) => {
+            if (err) { reject(err); return; }
+            g_ctx.save();
+            const padding = 20 * scale;
+            const qrX = w - (150 * scale) - qrSize, qrY = h - (500 * scale);
+            g_ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+            g_ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
+            g_ctx.shadowBlur = 30 * scale;
+            g_ctx.beginPath();
+            g_ctx.roundRect(qrX - padding, qrY - padding, qrSize + padding * 2, qrSize + padding * 2, 15 * scale);
+            g_ctx.fill();
+            g_ctx.shadowBlur = 0;
+            g_ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+            g_ctx.restore();
+            resolve();
+        });
+    });
+    
+    g_ctx.font = `${30 * scale}px 'Roboto Mono'`;
+    g_ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    g_ctx.textAlign = "center";
+    g_ctx.fillText(designHash, w / 2, h - 60 * scale);
+
+    if (applyWatermark) {
+        const watermarkContent = `${SECURITY_CONSTANTS.WATERMARK_SECRET}::${noteData.serial}`;
+        await SimpleSteganography.encode(targetCanvas, watermarkContent);
+    }
+}
+
+
+// ===================================================================================
+// Helper functions for design
+// ===================================================================================
+function drawGuilloche(g_ctx, hash, canvasWidth, canvasHeight) { g_ctx.save(); const patterns = H(hash, 14, 4, 7); for (let i = 0; i < patterns; i++) { g_ctx.strokeStyle = `hsla(${H(hash, 16 + i * 3, 0, 360)}, 70%, 60%, 0.15)`; g_ctx.lineWidth = H(hash, 17 + i * 3, 1, 4) * (canvasWidth/2700); const R = canvasWidth * (H(hash, 18 + i * 3, 5, 15) / 100); const r = canvasWidth * (H(hash, 19 + i * 3, 1, 4) / 100); const d = canvasWidth * (H(hash, 20 + i * 3, 2, 8) / 100); const cx = canvasWidth / 2; const cy = canvasHeight / 2; g_ctx.beginPath(); for (let t = 0; t < Math.PI * 4 * r; t += 0.01) { const x = (R - r) * Math.cos(t) + d * Math.cos(((R - r) / r) * t); const y = (R - r) * Math.sin(t) - d * Math.sin(((R - r) / t) * t); if (t === 0) g_ctx.moveTo(cx + x, cy + y); else g_ctx.lineTo(cx + x, cy + y); } g_ctx.stroke(); } g_ctx.restore(); }
+function drawWatermarkPattern(g_ctx, hash, canvasWidth, canvasHeight) { g_ctx.save(); const cx = canvasWidth / 2; const cy = canvasHeight / 2; g_ctx.fillStyle = "rgba(180, 180, 220, 0.03)"; const points = H(hash, 22, 5, 10); const radius = canvasHeight * 0.4; g_ctx.beginPath(); for (let i = 0; i < points; i++) { const angle = (i / points) * Math.PI * 2 + (H(hash, 24 + i, 0, 100) / 100); const r = radius * (H(hash, 26 + i, 50, 100) / 100); const x = cx + Math.cos(angle) * r; const y = cy + Math.sin(angle) * r; if (i === 0) g_ctx.moveTo(x, y); else g_ctx.lineTo(x, y); } g_ctx.closePath(); g_ctx.fill(); g_ctx.restore(); }
+
+window.onload = () => {
+    // Generate a note on page load and preload the AI model
+    handleCreateNewNote();
+    // Pre-load the model so it's ready for the first validation
+    document.getElementById('validation-result').innerHTML = `<span class="info">Please wait, loading AI model...</span>`;
+    mobilenet.load().then(model => {
+        mobileNetModel = model;
+        document.getElementById('validation-result').innerHTML = `AI model loaded. Please select a banknote image to validate.`;
+    });
+};
+</script>
+</body>
+</html>
