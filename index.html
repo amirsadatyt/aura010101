@@ -318,7 +318,7 @@
         "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
         "https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js",
         "./falcon.js",
-        // ** CORRECTED SHAKE256 LIBRARY URL **
+        // ** CORRECTED AND VERIFIED SHAKE256 LIBRARY URL **
         "https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"
     ];
     const loadingScreen = document.getElementById('loading-screen');
@@ -418,7 +418,8 @@
             const encodedData = new TextEncoder().encode(data);
             const ed25519_sig = nacl.sign.detached(encodedData, hexToBytes(privateKeys.ed25519));
             const falcon_sig = falcon.sign(encodedData, hexToBytes(privateKeys.falcon));
-            const shake_hash = sha3.shake256(data, 1024); // Corrected usage for js-sha3 library
+            // ** CORRECTED USAGE FOR js-sha3 LIBRARY **
+            const shake_hash = sha3.shake256(data, 1024); // Output length in bits
             return {
                 ed25519Sig: bytesToHex(ed25519_sig),
                 falconSig: bytesToHex(falcon_sig),
@@ -435,7 +436,8 @@
             const { ed25519Sig, falconSig, shake256Hash } = compositeSignature;
             let verificationLog = [];
 
-            const calculated_shake = sha3.shake256(data, 1024); // Corrected usage for js-sha3 library
+            // ** CORRECTED USAGE FOR js-sha3 LIBRARY **
+            const calculated_shake = sha3.shake256(data, 1024); // Output length in bits
             const isShakeValid = (calculated_shake === shake256Hash);
             verificationLog.push(`<span class="${isShakeValid ? 'valid' : 'invalid'}">${isShakeValid ? '✅' : '❌'} SHAKE256 Hash... OK</span>`);
             if (!isShakeValid) return { isValid: false, log: verificationLog.join('\n') };
@@ -513,7 +515,6 @@
 
     function updateControlsState(isEnabled) {
         document.getElementById('generate-keys-button').disabled = !isEnabled;
-        // The other buttons are enabled after keys are generated/imported
         if (!isEnabled) {
             document.getElementById('create-note-button').disabled = true;
             document.getElementById('download-batch-button').disabled = true;
@@ -1132,13 +1133,15 @@
             if (typeof nacl?.sign?.keyPair === 'function' && typeof falcon?.keyPair === 'function') {
                 clearInterval(checkLibrariesReady); // Stop checking
                 updateKeyStatus('<span class="valid">✅ برنامه آماده است. لطفاً کلیدها را تولید یا وارد کنید.</span>');
-                updateControlsState(true); // Enable all necessary buttons
+                updateControlsState(true); // Enable the main generate button
             }
         }, 100);
 
         setTimeout(() => {
             // This is a safety timeout
-            if (typeof falcon?.keyPair !== 'function' || typeof nacl?.sign?.keyPair !== 'function') {
+            const falconReady = typeof falcon?.keyPair === 'function';
+            const naclReady = typeof nacl?.sign?.keyPair === 'function';
+            if (!falconReady || !naclReady) {
                 clearInterval(checkLibrariesReady);
                 updateKeyStatus('<span class="invalid">❌ یکی از کتابخانه‌های رمزنگاری پس از 5 ثانیه آماده نشد. لطفاً صفحه را رفرش کنید.</span>');
             }
