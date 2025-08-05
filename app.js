@@ -1,0 +1,473 @@
+// --- Element Selectors ---
+const canvas = document.getElementById("noteCanvas");
+const ctx = canvas.getContext("2d");
+const createNoteButton = document.getElementById('create-note-button');
+const downloadBatchButton = document.getElementById('download-batch-button');
+const generateKeysButton = document.getElementById('generate-keys-button');
+const importKeyPairInput = document.getElementById('import-key-pair');
+const validatorInput = document.getElementById('validator-input');
+const amountInput = document.getElementById('amount-input');
+const quantityInput = document.getElementById('quantity-input');
+const keyStatusDiv = document.getElementById('key-status');
+const validationResultDiv = document.getElementById('validation-result');
+
+// --- Global State ---
+let currentNoteData = {};
+let activeKeys = {
+    rsa: { publicKey: null, privateKey: null },
+    dilithium: { publicKey: null, privateKey: null }
+};
+
+// ===================================================================================
+// Bank Key Management and Crypto Logic
+// ===================================================================================
+const BankCrypto = (() => {
+    const RSA_HASH_ALGO = "SHA-256";
+    const dilithium = window.pqc.sign.dilithium2;
+
+    async function generateRsaKeyPair() {
+        return await window.crypto.subtle.generateKey(
+            { name: "RSA-PSS", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: RSA_HASH_ALGO },
+            true, ["sign", "verify"]
+        );
+    }
+    async function signRsa(data, privateKey) {
+        const encodedData = new TextEncoder().encode(data);
+        return await window.crypto.subtle.sign({ name: "RSA-PSS", saltLength: 32 }, privateKey, encodedData);
+    }
+    async function verifyRsa(signature, data, publicKey) {
+        const encodedData = new TextEncoder().encode(data);
+        return await window.crypto.subtle.verify({ name: "RSA-PSS", saltLength: 32 }, publicKey, signature, encodedData);
+    }
+    async function exportRsaKey(key) { return await window.crypto.subtle.exportKey('jwk', key); }
+    async function importRsaKey(jwk, usage) {
+        return await window.crypto.subtle.importKey('jwk', jwk, { name: 'RSA-PSS', hash: RSA_HASH_ALGO }, true, [usage]);
+    }
+
+    async function generateDilithiumKeyPair() {
+        return await dilithium.keyPair();
+    }
+    async function signDilithium(data, privateKey) {
+        const encodedData = new TextEncoder().encode(data);
+        return await dilithium.sign(encodedData, privateKey);
+    }
+    async function verifyDilithium(signature, data, publicKey) {
+        const encodedData = new TextEncoder().encode(data);
+        return await dilithium.verify(signature, encodedData, publicKey);
+    }
+
+    function hashSha3(message) {
+        return sha3_256(message);
+    }
+    
+    async function hashMessageForVisual(message) {
+        const encodedData = new TextEncoder().encode(message);
+        const hashBuffer = await window.crypto.subtle.digest(RSA_HASH_ALGO, encodedData);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    return { 
+        generateRsaKeyPair, signRsa, verifyRsa, exportRsaKey, importRsaKey,
+        generateDilithiumKeyPair, signDilithium, verifyDilithium,
+        hashSha3, hashMessageForVisual
+    };
+})();
+
+// --- Helper Functions ---
+function getStandardizedDataForSigning(noteData) {
+    const dataToSign = {
+        amount: noteData.amount,
+        serial: noteData.serial,
+        timestamp: noteData.timestamp,
+        verificationKey: noteData.verificationKey
+    };
+    return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
+}
+
+function updateKeyStatus(message) { keyStatusDiv.innerHTML = message; }
+
+function updateControlsState(isEnabled) {
+    createNoteButton.disabled = !isEnabled;
+    downloadBatchButton.disabled = !isEnabled;
+}
+
+function downloadFile(data, filename, type) {
+    const blob = new Blob([data], { type: type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function base64ToArrayBuffer(base64) {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) { bytes[i] = binary_string.charCodeAt(i); }
+    return bytes.buffer;
+}
+
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) { binary += String.fromCharCode(bytes[i]); }
+    return window.btoa(binary);
+}
+
+// --- LSB Steganography Module ---
+const LSB = (() => {
+    const MESSAGE_TERMINATOR = "00000000";
+    function messageToBinary(message) { return message.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('') + MESSAGE_TERMINATOR; }
+    function encode(ctx, message) {
+        const binaryMessage = messageToBinary(message);
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imageData.data;
+        if (binaryMessage.length > data.length / 4 * 3) throw new Error("Message too long for LSB encoding.");
+        let dataIndex = 0;
+        for (let i = 0; i < binaryMessage.length; i++) {
+            if ((dataIndex + 1) % 4 === 0) dataIndex++;
+            data[dataIndex] = (data[dataIndex] & 0xFE) | parseInt(binaryMessage[i], 10);
+            dataIndex++;
+        }
+        ctx.putImageData(imageData, 0, 0);
+    }
+    function decode(ctx) {
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imageData.data;
+        let decodedMessage = ""; let byte = "";
+        for (let i = 0; i < data.length; i++) {
+            if ((i + 1) % 4 === 0) continue;
+            byte += (data[i] & 1);
+            if (byte.length === 8) {
+                if (byte === MESSAGE_TERMINATOR) return decodedMessage;
+                decodedMessage += String.fromCharCode(parseInt(byte, 2));
+                byte = "";
+            }
+        }
+        return null;
+    }
+    return { encode, decode };
+})();
+
+
+// --- Core Application Logic & Event Handlers ---
+
+async function handleGenerateAndExportKeys() {
+    updateKeyStatus('<span class="info">⏳ Generating RSA & Dilithium key pairs... Please wait.</span>');
+    try {
+        const rsaKeyPair = await BankCrypto.generateRsaKeyPair();
+        const dilithiumKeyPair = await BankCrypto.generateDilithiumKeyPair();
+        activeKeys.rsa = rsaKeyPair;
+        activeKeys.dilithium = dilithiumKeyPair;
+        const exportedRsaPublicJwk = await BankCrypto.exportRsaKey(rsaKeyPair.publicKey);
+        const exportedRsaPrivateJwk = await BankCrypto.exportRsaKey(rsaKeyPair.privateKey);
+        const hybridKeyPairFile = {
+            rsa: { publicKey: exportedRsaPublicJwk, privateKey: exportedRsaPrivateJwk },
+            dilithium: { publicKey: arrayBufferToBase64(dilithiumKeyPair.publicKey), privateKey: arrayBufferToBase64(dilithiumKeyPair.privateKey) }
+        };
+        downloadFile(JSON.stringify(hybridKeyPairFile, null, 2), 'Sadat-hybrid-key-pair.json', 'application/json');
+        updateKeyStatus('<span class="valid">✅ New hybrid key pair (RSA + Dilithium) generated and exported! Keys are now active.</span>');
+        updateControlsState(true);
+        await handleCreateNewNote();
+    } catch (e) {
+        console.error("Key generation failed:", e);
+        updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${e.message}</span>`);
+    }
+}
+
+async function handleImportKeys(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            updateKeyStatus('<span class="info">⏳ Importing hybrid key pair...</span>');
+            const jwkData = JSON.parse(e.target.result);
+            const rsaPublicKey = await BankCrypto.importRsaKey(jwkData.rsa.publicKey, 'verify');
+            const rsaPrivateKey = await BankCrypto.importRsaKey(jwkData.rsa.privateKey, 'sign');
+            activeKeys.rsa = { publicKey: rsaPublicKey, privateKey: rsaPrivateKey };
+            activeKeys.dilithium = {
+                publicKey: base64ToArrayBuffer(jwkData.dilithium.publicKey),
+                privateKey: base64ToArrayBuffer(jwkData.dilithium.privateKey)
+            };
+            updateKeyStatus('<span class="valid">✅ Hybrid key pair imported successfully. Keys are now active.</span>');
+            updateControlsState(true);
+        } catch (error) {
+            updateKeyStatus(`<span class="invalid">❌ Error importing key pair: ${error.message}</span>`);
+        }
+    };
+    reader.readAsText(file);
+}
+
+async function handleFileSelectForValidation(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (!activeKeys.rsa.publicKey || !activeKeys.dilithium.publicKey) {
+        alert("Error: A full hybrid key pair (RSA+Dilithium) must be active for validation.");
+        return;
+    }
+    validationResultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
+    const fileUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = async () => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 1350; tempCanvas.height = 750;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        await performValidation(tempCanvas);
+    };
+    img.src = fileUrl;
+}
+
+async function performValidation(canvasToCheck) {
+    let resultHTML = "";
+
+    resultHTML += `<span class="info">1. Reading digital data from QR Code...</span>`;
+    validationResultDiv.innerHTML = resultHTML;
+    const qrData = readQRCodeFromCanvas(canvasToCheck);
+    if (!qrData) {
+        validationResultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable. Validation stopped.</span>`;
+        return;
+    }
+    resultHTML += `\n<span class="valid">✅ QR data successfully read.</span>`;
+
+    resultHTML += `\n\n<span class="info">2. Verifying SHA-3 final hash for overall integrity...</span>`;
+    validationResultDiv.innerHTML = resultHTML;
+    const { noteCore, signatures, finalHash } = qrData;
+    const dataToHash = JSON.stringify({ noteCore, signatures });
+    const calculatedHash = BankCrypto.hashSha3(dataToHash);
+    if (calculatedHash !== finalHash) {
+        resultHTML += `\n<span class="invalid">❌ FATAL ERROR: SHA-3 hash mismatch. The entire data block is compromised.</span>`;
+        validationResultDiv.innerHTML = resultHTML;
+        return;
+    }
+    resultHTML += `\n<span class="valid">✅ SHA-3 hash confirmed. Data block integrity is OK.</span>`;
+
+    resultHTML += `\n\n<span class="info">3. Verifying classical signature (RSA-PSS)...</span>`;
+    validationResultDiv.innerHTML = resultHTML;
+    const isRsaValid = await validateRsaSignature(noteCore, signatures.rsa);
+    if (!isRsaValid) {
+        resultHTML += `\n<span class="invalid">❌ FATAL ERROR: RSA signature is invalid. Forgery detected (classical).</span>`;
+        validationResultDiv.innerHTML = resultHTML;
+        return;
+    }
+    resultHTML += `\n<span class="valid">✅ RSA signature is valid.</span>`;
+
+    resultHTML += `\n\n<span class="info">4. Verifying quantum-resistant signature (Dilithium)...</span>`;
+    validationResultDiv.innerHTML = resultHTML;
+    const isDilithiumValid = await validateDilithiumSignature(noteCore, signatures.dilithium);
+    if (!isDilithiumValid) {
+        resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Dilithium signature is invalid. Forgery detected (quantum).</span>`;
+        validationResultDiv.innerHTML = resultHTML;
+        return;
+    }
+    resultHTML += `\n<span class="valid">✅ Dilithium signature is valid.</span>`;
+    resultHTML += `\n\n<span class="valid">✅ ALL SIGNATURES VERIFIED. Banknote is cryptographically authentic.</span>`;
+    
+    resultHTML += `\n\n<span class="info">5. Extracting and verifying hidden LSB data...</span>`;
+    validationResultDiv.innerHTML = resultHTML;
+    const decodedHashFromLsb = LSB.decode(canvasToCheck.getContext('2d'));
+    if (!decodedHashFromLsb || decodedHashFromLsb !== finalHash) {
+        resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic hash is missing or does not match. The banknote's image has been modified.</span>`;
+        validationResultDiv.innerHTML = resultHTML;
+        return;
+    }
+    resultHTML += `\n<span class="valid">✅ Hidden LSB hash successfully matched. Image integrity is confirmed.</span>`;
+
+    resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic and all security layers passed.</span>`;
+    validationResultDiv.innerHTML = resultHTML;
+}
+
+async function validateRsaSignature(noteCore, signatureB64) {
+    try {
+        if (!signatureB64 || !activeKeys.rsa.publicKey) return false;
+        const stringToVerify = getStandardizedDataForSigning(noteCore);
+        const signatureBuffer = base64ToArrayBuffer(signatureB64);
+        return await BankCrypto.verifyRsa(signatureBuffer, stringToVerify, activeKeys.rsa.publicKey);
+    } catch (e) { return false; }
+}
+
+async function validateDilithiumSignature(noteCore, signatureB64) {
+    try {
+        if (!signatureB64 || !activeKeys.dilithium.publicKey) return false;
+        const stringToVerify = getStandardizedDataForSigning(noteCore);
+        const signatureBuffer = base64ToArrayBuffer(signatureB64);
+        return await BankCrypto.verifyDilithium(signatureBuffer, stringToVerify, activeKeys.dilithium.publicKey);
+    } catch (e) { return false; }
+}
+
+function readQRCodeFromCanvas(canvasToCheck) {
+    const context = canvasToCheck.getContext('2d');
+    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
+    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code) { try { return JSON.parse(code.data); } catch { return null; } }
+    return null;
+}
+
+const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
+
+async function createNoteData(amount, index = 0) {
+    if (!activeKeys.rsa.privateKey || !activeKeys.dilithium.privateKey) {
+        alert("Error: A full hybrid key pair (RSA+Dilithium) must be active for signing.");
+        return null;
+    }
+    const now = Date.now();
+    const noteCore = {
+        amount: parseInt(amount) || 0,
+        verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
+        serial: "SDT-" + (now + index).toString().slice(-8),
+        timestamp: now
+    };
+    const stringToSign = getStandardizedDataForSigning(noteCore);
+    const rsaSignatureBuffer = await BankCrypto.signRsa(stringToSign, activeKeys.rsa.privateKey);
+    const dilithiumSignatureBuffer = await BankCrypto.signDilithium(stringToSign, activeKeys.dilithium.privateKey);
+    const signatures = {
+        rsa: arrayBufferToBase64(rsaSignatureBuffer),
+        dilithium: arrayBufferToBase64(dilithiumSignatureBuffer)
+    };
+    const dataToHash = JSON.stringify({ noteCore, signatures });
+    const finalHash = BankCrypto.hashSha3(dataToHash);
+    const fullNoteData = { noteCore, signatures, finalHash };
+    fullNoteData.visualHash = await BankCrypto.hashMessageForVisual(finalHash);
+    return fullNoteData;
+}
+
+async function handleCreateNewNote() {
+    const amount = amountInput.value;
+    updateKeyStatus('<span class="info">⏳ Generating new banknote with hybrid signature...</span>');
+    const noteData = await createNoteData(amount);
+    if (noteData) {
+        currentNoteData = noteData;
+        await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
+        updateKeyStatus('<span class="valid">✅ New hybrid-signed banknote is ready.</span>');
+    } else {
+        updateKeyStatus('<span class="invalid">❌ Failed to create banknote. Check keys.</span>');
+    }
+}
+
+async function handleDownloadBatch() {
+    if (!activeKeys.rsa.privateKey || !activeKeys.dilithium.privateKey) {
+        alert("Error: No hybrid key pair is active for signing banknotes.");
+        return;
+    }
+    if (!window.showDirectoryPicker) {
+        await handleCreateNewNote();
+        const link = document.createElement("a");
+        link.download = `SADAT-NOTE-HYBRID-${currentNoteData.noteCore.serial}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        return;
+    }
+    const quantity = parseInt(quantityInput.value) || 1;
+    const amount = amountInput.value;
+    try {
+        const dirHandle = await window.showDirectoryPicker();
+        validationResultDiv.innerHTML = `<span class="info">Processing ${quantity} banknote(s)... Please wait.</span>`;
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = canvas.width; offscreenCanvas.height = canvas.height;
+        for (let i = 0; i < quantity; i++) {
+            const noteData = await createNoteData(amount, i);
+            await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
+            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-HYBRID-${noteData.noteCore.serial}.png`, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            validationResultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
+        }
+        validationResultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
+        await handleCreateNewNote();
+    } catch (error) {
+        validationResultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
+    }
+}
+
+async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
+    return new Promise(async (resolve, reject) => {
+        if (Object.keys(noteData).length === 0) return reject("No note data provided.");
+
+        const targetCtx = targetCanvas.getContext("2d");
+        const { noteCore, visualHash, finalHash } = noteData;
+        const { amount, verificationKey, serial } = noteCore;
+        const w = width, h = height, scale = w / 1350;
+
+        const bgGradient = targetCtx.createLinearGradient(0, 0, 0, h);
+        const baseHue = H(visualHash, 0, 0, 360);
+        bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
+        bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
+        targetCtx.fillStyle = bgGradient; targetCtx.fillRect(0, 0, w, h);
+        
+        drawWatermark(targetCtx, visualHash, w, h);
+        drawKochGuilloche(targetCtx, visualHash, w, h);
+        drawNoisePattern(targetCtx, visualHash, w, h);
+
+        targetCtx.shadowColor = "rgba(0, 0, 0, 0.7)"; targetCtx.shadowBlur = 8 * scale;
+        targetCtx.shadowOffsetX = 2 * scale; targetCtx.shadowOffsetY = 2 * scale;
+        targetCtx.fillStyle = "#EAEAEA"; targetCtx.font = `bold ${80 * scale}px 'Roboto Mono'`;
+        targetCtx.textAlign = 'left';
+        targetCtx.fillText(serial.substring(4), 150 * scale, 160 * scale);
+        targetCtx.fillText(verificationKey.substring(4), 150 * scale, 280 * scale);
+        targetCtx.font = `bold ${150 * scale}px 'Roboto Mono'`;
+        targetCtx.textAlign = "right"; targetCtx.shadowBlur = 12 * scale;
+        targetCtx.shadowOffsetX = 4 * scale; targetCtx.shadowOffsetY = 4 * scale;
+        targetCtx.fillText(amount.toString(), w - (120 * scale), 190 * scale);
+        targetCtx.shadowColor = "transparent";
+
+        const qrDataString = JSON.stringify(noteData);
+        const qrCanvas = document.createElement("canvas");
+        const qrSize = 380 * scale;
+        QRCode.toCanvas(qrCanvas, qrDataString, { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } }, (err) => {
+            if (err) { reject(err); return; }
+            const qrX = w - (150 * scale) - qrSize;
+            const qrY = h - (520 * scale);
+            targetCtx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
+            targetCtx.font = `${30 * scale}px 'Roboto Mono'`;
+            targetCtx.fillStyle = "rgba(255, 255, 255, 0.4)";
+            targetCtx.textAlign = "center";
+            targetCtx.fillText("Hybrid Signed (RSA+Dilithium) by Sadat Bank", w / 2, h - 60 * scale);
+
+            if (applySteganography && finalHash) {
+                try {
+                    LSB.encode(targetCtx, finalHash);
+                } catch (lsbError) { reject(lsbError); }
+            }
+            resolve();
+        });
+    });
+}
+function drawKochGuilloche(g_ctx, hash, w, h) {
+    g_ctx.save(); g_ctx.translate(w / 2, h / 2); const scale = w / 1350; const iteration = H(hash, 2, 2, 4); const size = w * (H(hash, 4, 10, 20) / 100); const angleOffset = (H(hash, 6, 0, 360) / 360) * Math.PI * 2; const numLines = H(hash, 8, 3, 6); const hueOffset = H(hash, 10, 0, 360);
+    function drawKochSegment(x1,y1,x2,y2,level){if(level===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,dist=Math.sqrt(dx*dx+dy*dy),ux=dx/dist,uy=dy/dist;const p1x=x1+ux*dist/3,p1y=y1+uy*dist/3,p2x=x1+ux*dist*2/3,p2y=y1+uy*dist*2/3,p3x=p1x+ux*dist/6-uy*dist*Math.sqrt(3)/6,p3y=p1y+uy*dist/6+ux*dist*Math.sqrt(3)/6;drawKochSegment(x1,y1,p1x,p1y,level-1);drawKochSegment(p1x,p1y,p3x,p3y,level-1);drawKochSegment(p3x,p3y,p2x,p2y,level-1);drawKochSegment(p2x,p2y,x2,y2,level-1)}
+    g_ctx.lineWidth = 1 * scale; g_ctx.lineJoin = 'bevel'; g_ctx.lineCap = 'round';
+    for(let i=0;i<numLines;i++){const hue=(hueOffset+i*(360/numLines))%360;g_ctx.strokeStyle=`hsla(${hue},70%,60%,0.15)`;const angle=(i/numLines)*Math.PI*2+angleOffset,x1=Math.cos(angle)*size,y1=Math.sin(angle)*size,x2=Math.cos(angle+Math.PI)*size,y2=Math.sin(angle+Math.PI)*size;g_ctx.beginPath();g_ctx.moveTo(x1,y1);drawKochSegment(x1,y1,x2,y2,iteration);g_ctx.stroke()}g_ctx.restore();
+}
+function drawWatermark(g_ctx, hash, w, h) {
+    g_ctx.save(); g_ctx.translate(w / 2, h / 2); const scale = w / 1350; const numSpirals = H(hash, 16, 3, 6); const spiralRadius = w * (H(hash, 18, 10, 25) / 100) * scale; const hue = H(hash, 20, 0, 360); g_ctx.strokeStyle = `hsla(${hue}, 50%, 80%, 0.05)`; g_ctx.lineWidth = 4 * scale;
+    for(let i=0;i<numSpirals;i++){g_ctx.beginPath();const startAngle=(i/numSpirals)*Math.PI*2+H(hash,22,0,100)/100,endAngle=startAngle+H(hash,24,6,12)*Math.PI;for(let t=startAngle;t<endAngle;t+=0.05){const r=spiralRadius*(t-startAngle)/(endAngle-startAngle),x=r*Math.cos(t),y=r*Math.sin(t);if(t===startAngle)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore();
+}
+function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
+
+
+// --- Initial Setup ---
+function initializeApp() {
+    // Bind event listeners
+    generateKeysButton.addEventListener('click', handleGenerateAndExportKeys);
+    importKeyPairInput.addEventListener('change', handleImportKeys);
+    validatorInput.addEventListener('change', handleFileSelectForValidation);
+    createNoteButton.addEventListener('click', handleCreateNewNote);
+    downloadBatchButton.addEventListener('click', handleDownloadBatch);
+    
+    // Set initial state
+    updateControlsState(false);
+    updateKeyStatus('<span class="info">Ready. Please generate a new hybrid key pair or import one to begin.</span>');
+}
+
+// Start the application
+initializeApp();

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <title>Sadat Digital Banknote (Triple Signature - Pro Fix)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/@dashlane/pqc-sign-dilithium2-browser@1.0.0/dist/pqc-sign-dilithium2.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/src/sha3.min.js"></script>
+
+    <script src="app.js" defer></script>
+
+    <style>
+        :root {
+            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
+            --mono-font: 'Roboto Mono', monospace;
+            --dark-bg: #10101a;
+            --medium-bg: #1a1a2e;
+            --light-bg: #2a2a3e;
+            --accent-color-1: #e040fb;
+            --accent-color-2: #7c4dff;
+            --text-color: #e0e0e0;
+            --text-muted: #a0a0c0;
+            --success-color: #00e676;
+            --error-color: #ff5252;
+            --info-color: #40c4ff;
+            --border-color: rgba(124, 77, 255, 0.2);
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--primary-font);
+            background-color: var(--dark-bg);
+            background-image:
+                radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%);
+            color: var(--text-color);
+            text-align: center;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(26, 26, 46, 0.7);
+            backdrop-filter: blur(12px);
+            padding: 24px;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 8px 0;
+            letter-spacing: 1px;
+            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        canvas {
+            border-radius: 16px;
+            margin-top: 24px;
+            background: #050508;
+            cursor: default;
+            box-shadow: 0 0 50px rgba(124, 77, 255, 0.15);
+            width: 100%;
+            max-width: 900px;
+            height: auto;
+            border: 1px solid var(--border-color);
+        }
+
+        input[type="number"], button, label {
+            padding: 14px 22px;
+            font-size: 16px;
+            font-family: var(--primary-font);
+            border-radius: 12px;
+            margin: 8px 5px;
+            border: 1px solid var(--border-color);
+            background: var(--medium-bg);
+            color: #fff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            outline: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        input[type="number"] {
+            font-family: var(--mono-font);
+            font-weight: 700;
+            text-align: center;
+            width: 150px;
+        }
+
+        input[type="number"]:focus {
+            border-color: var(--accent-color-2);
+            box-shadow: 0 0 15px rgba(124, 77, 255, 0.5);
+        }
+
+        button:not([disabled]), label:not([disabled]) {
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2));
+            border: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        button.sub-button, label.sub-button {
+            background: var(--light-bg);
+            border: 1px solid var(--border-color);
+        }
+        
+        button[disabled], label[disabled] {
+            cursor: not-allowed;
+            opacity: 0.5;
+            background: var(--light-bg);
+            border: 1px solid var(--border-color);
+        }
+
+        button.sub-button:hover:not([disabled]), label.sub-button:hover:not([disabled]) {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transform: translateY(-1px);
+        }
+
+        button:hover:not([disabled]), label:hover:not([disabled]) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4);
+        }
+
+        .section {
+            background: rgba(16, 16, 26, 0.5);
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: var(--text-color);
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .controls-grid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        #validation-result, #key-status {
+            margin-top: 20px;
+            font-size: 12px;
+            font-weight: normal;
+            min-height: 50px;
+            line-height: 1.6;
+            text-align: left;
+            background: var(--dark-bg);
+            padding: 15px 20px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            font-family: var(--mono-font);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .valid { color: var(--success-color); }
+        .invalid { color: var(--error-color); }
+        .info { color: var(--info-color); }
+        
+        .key-info {
+            text-align: left;
+            padding: 10px;
+        }
+        .key-info p {
+            margin: 5px 0;
+            color: var(--text-muted);
+        }
+        .key-info code {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.8rem;
+            word-break: break-all;
+            background: var(--light-bg);
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+
+        .data-heading {
+            color: var(--accent-color-1);
+            margin-top: 15px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            font-weight: 600;
+            font-family: var(--primary-font);
+        }
+
+        .comparison-item {
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-color-2);
+        }
+        code {
+            background: var(--medium-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        .input-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-right: -10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Sadat Digital Banknote</h1>
+        <p>A secure, verifiable digital currency concept using a Hybrid Signature Scheme (RSA-PSS + Dilithium + SHA3).</p>
+    </div>
+
+    <canvas id="noteCanvas" width="1350" height="750"></canvas>
+
+    <div class="section">
+        <h2>Banknote Controls</h2>
+        <div class="controls-grid">
+            <span class="input-label">Amount:</span>
+            <input type="number" id="amount-input" value="50000">
+            <span class="input-label">Quantity:</span>
+            <input type="number" id="quantity-input" value="1" min="1" max="100">
+            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 Redesign Banknote</button>
+            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 Download Batch</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Bank Key Management</h2>
+        <div class="controls-grid">
+            <button id="generate-keys-button">🔑 Generate & Export Hybrid Key Pair</button>
+             <label for="import-key-pair" class="sub-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Import Hybrid Key Pair
+            </label>
+            <input type="file" id="import-key-pair" accept=".json" style="display: none;">
+        </div>
+        <div id="key-status">Key pair status will be displayed here.</div>
+    </div>
+
+    <div class="section" id="validator-section">
+        <h2>Validate Banknote</h2>
+        <label for="validator-input">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Select Image for Validation
+        </label>
+        <input type="file" id="validator-input" accept="image/png" style="display: none;">
+        <div id="validation-result">Validation result will be displayed here.</div>
+    </div>
+</div>
+</body>
+</html>
