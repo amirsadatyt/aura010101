@@ -31,7 +31,6 @@
             text-align: center;
             padding: 24px;
         }
-        /* New Loading Screen Styles */
         #loading-screen {
             position: fixed;
             top: 0;
@@ -319,7 +318,7 @@
         "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
         "https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js",
         "./falcon.js",
-        "https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/src/sha3.min.js"
+        "https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/dist/sha3.min.js"
     ];
     const loadingScreen = document.getElementById('loading-screen');
     const progressBar = document.getElementById('progressBar');
@@ -347,21 +346,32 @@
                     document.head.appendChild(script);
                 });
             } catch (error) {
-                loadingStatus.textContent = `خطا در بارگذاری: ${error.message}`;
+                loadingStatus.textContent = `خطا در بارگذاری اسکریپت: ${error.message}`;
                 progressBar.style.backgroundColor = 'red';
                 return;
             }
         }
+        
+        try {
+            loadingStatus.textContent = 'در حال آماده‌سازی کتابخانه Falcon (WASM)...';
+            // This line requires 'falcon.wasm' to be in the same folder on the server
+            await falcon.init('./falcon.wasm'); 
+        } catch (initError) {
+            loadingStatus.textContent = `خطا در آماده‌سازی Falcon: ${initError.message}`;
+            progressBar.style.backgroundColor = 'red';
+            console.error("Falcon initialization failed:", initError);
+            return; 
+        }
+
         loadingStatus.textContent = `بارگذاری با موفقیت کامل شد.`;
         setTimeout(() => {
             loadingScreen.style.opacity = '0';
             loadingScreen.style.visibility = 'hidden';
             mainContent.classList.add('loaded');
-            window.onload(); // Call the original onload function after all scripts are loaded
+            window.onload();
         }, 500);
     }
     
-    // Call the loading function when the DOM is ready
     document.addEventListener("DOMContentLoaded", loadScripts);
 
     const canvas = document.getElementById("noteCanvas");
@@ -369,7 +379,6 @@
     let currentNoteData = {};
     let activeKeys = { publicKey: null, privateKey: null };
 
-    // Helper function to convert hex to Uint8Array
     function hexToBytes(hex) {
         const bytes = new Uint8Array(hex.length / 2);
         for (let i = 0; i < bytes.length; i++) {
@@ -378,17 +387,11 @@
         return bytes;
     }
 
-    // Helper function to convert Uint8Array to hex
     function bytesToHex(bytes) {
         return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
     }
 
-    // ===================================================================================
-    // Bank Key Management and Crypto Logic (Ed25519 + Falcon + SHAKE256)
-    // ===================================================================================
-
     const BankCrypto = (() => {
-        // Encryption settings for private key file
         const AES_ALGO = "AES-GCM";
         const PBKDF2_ITERATIONS = 100000;
         const PBKDF2_HASH_ALGO = "SHA-256";
@@ -396,12 +399,8 @@
 
         async function generateNewKeyPair() {
             try {
-                // Ed25519 key pair
                 const ed25519_key_pair = nacl.sign.keyPair();
-                
-                // Falcon key pair
                 const falcon_keys = falcon.keyPair();
-
                 return {
                     publicKey: {
                         ed25519: bytesToHex(ed25519_key_pair.publicKey),
@@ -414,7 +413,7 @@
                 };
             } catch (e) {
                 console.error("Crypto key generation failed:", e);
-                alert("Error: Could not generate cryptographic keys. This might be due to a browser compatibility issue with the crypto libraries.");
+                alert(`Error: Could not generate cryptographic keys. The specific error is: ${e.message}`);
                 return null;
             }
         }
@@ -424,17 +423,9 @@
                 throw new Error("Private keys (Ed25519 and Falcon) are not available for signing.");
             }
             const encodedData = new TextEncoder().encode(data);
-            
-            // 1. Ed25519 Signature (using tweetnacl)
             const ed25519_sig = nacl.sign.detached(encodedData, hexToBytes(privateKeys.ed25519));
-
-            // 2. Falcon Signature
             const falcon_sig = falcon.sign(encodedData, hexToBytes(privateKeys.falcon));
-
-            // 3. SHAKE256 Hash (1024-bit output)
-            const shake_hash = sha3_shake256.create(128).update(data).hex(); // 128 bytes = 1024 bits
-
-            // Bundle all three into a single object
+            const shake_hash = sha3_shake256.create(128).update(data).hex();
             return {
                 ed25519Sig: bytesToHex(ed25519_sig),
                 falconSig: bytesToHex(falcon_sig),
@@ -451,25 +442,21 @@
             const { ed25519Sig, falconSig, shake256Hash } = compositeSignature;
             let verificationLog = [];
 
-            // 1. Verify SHAKE256 Hash
             const calculated_shake = sha3_shake256.create(128).update(data).hex();
             const isShakeValid = (calculated_shake === shake256Hash);
             verificationLog.push(`<span class="${isShakeValid ? 'valid' : 'invalid'}">${isShakeValid ? '✅' : '❌'} SHAKE256 Hash... OK</span>`);
             if (!isShakeValid) return { isValid: false, log: verificationLog.join('\n') };
 
-            // 2. Verify Ed25519 Signature (using tweetnacl)
             const isEd25519Valid = nacl.sign.detached.verify(encodedData, hexToBytes(ed25519Sig), hexToBytes(publicKeys.ed25519));
             verificationLog.push(`<span class="${isEd25519Valid ? 'valid' : 'invalid'}">${isEd25519Valid ? '✅' : '❌'} Ed25519 Signature... OK</span>`);
             if (!isEd25519Valid) return { isValid: false, log: verificationLog.join('\n') };
 
-            // 3. Verify Falcon Signature
             const isFalconValid = falcon.verify(encodedData, hexToBytes(falconSig), hexToBytes(publicKeys.falcon));
             verificationLog.push(`<span class="${isFalconValid ? 'valid' : 'invalid'}">${isFalconValid ? '✅' : '❌'} Falcon PQC Signature... OK</span>`);
 
             return { isValid: isFalconValid, log: verificationLog.join('\n') };
         }
         
-        // --- Encryption/Decryption for Key Storage ---
         async function encryptPrivateKey(privateKeyObject, password) {
             const passwordBuffer = new TextEncoder().encode(password);
             const salt = window.crypto.getRandomValues(new Uint8Array(16));
@@ -536,9 +523,6 @@
         document.getElementById('download-batch-button').disabled = !isEnabled;
     }
 
-    // ===================================================================================
-    // UI Handlers for Key Management
-    // ===================================================================================
     async function handleGenerateAndExportKeys() {
         const password = prompt("Enter a strong password to encrypt your private key file:");
         if (!password) {
@@ -550,13 +534,10 @@
         const keyPair = await BankCrypto.generateNewKeyPair();
         if (keyPair) {
             activeKeys = keyPair;
-
             downloadFile(JSON.stringify(keyPair.publicKey, null, 2), 'Sadat-public-keys.json', 'application/json');
-
             const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
             downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-keys.json', 'application/json');
-
-            updateKeyStatus('<span class="valid">✅ New key pairs generated and exported! The new public keys are active for validation, and the encrypted private keys are active for signing.</span>');
+            updateKeyStatus('<span class="valid">✅ New key pairs generated and exported!</span>');
             updateControlsState(true);
             await handleCreateNewNote();
         } else {
@@ -573,7 +554,7 @@
                 const publicKeys = JSON.parse(e.target.result);
                 if (!publicKeys.ed25519 || !publicKeys.falcon) throw new Error("Invalid public key file format.");
                 activeKeys.publicKey = publicKeys;
-                updateKeyStatus('<span class="valid">✅ Public keys (Ed25519 & Falcon) imported successfully. They are now active for banknote validation.</span>');
+                updateKeyStatus('<span class="valid">✅ Public keys imported successfully.</span>');
             } catch (error) {
                 updateKeyStatus(`<span class="invalid">❌ Error importing public keys: ${error.message}</span>`);
             }
@@ -586,21 +567,21 @@
         if (!file) return;
         const password = prompt("Enter the password to decrypt the private keys file:");
         if (!password) {
-            updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required to decrypt.</span>');
+            updateKeyStatus('<span class="invalid">❌ Import cancelled.</span>');
             return;
         }
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
                 const encryptedData = JSON.parse(e.target.result);
-                updateKeyStatus('<span class="info">⏳ Decrypting and importing private keys...</span>');
+                updateKeyStatus('<span class="info">⏳ Decrypting private keys...</span>');
                 const privateKeys = await BankCrypto.decryptPrivateKey(encryptedData, password);
                 if (!privateKeys.ed25519 || !privateKeys.falcon) throw new Error("Invalid private key file format.");
                 activeKeys.privateKey = privateKeys;
-                updateKeyStatus('<span class="valid">✅ Private keys (Ed25519 & Falcon) imported successfully. They are now active for banknote signing.</span>');
+                updateKeyStatus('<span class="valid">✅ Private keys imported successfully.</span>');
                 updateControlsState(true);
             } catch (error) {
-                updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private keys. Check your password and file: ${error.message}</span>`);
+                updateKeyStatus(`<span class="invalid">❌ Error decrypting keys: ${error.message}</span>`);
             }
         };
         reader.readAsText(file);
@@ -619,9 +600,6 @@
     }
 
 
-    // ===================================================================================
-    // LSB Steganography Module
-    // ===================================================================================
     const LSB = (() => {
         const MESSAGE_TERMINATOR = "00000000";
 
@@ -656,9 +634,8 @@
         function decode(ctx) {
             const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
             const data = imageData.data;
-            let binaryMessage = "";
-            let byte = "";
             let decodedMessage = "";
+            let byte = "";
 
             for (let i = 0; i < data.length; i++) {
                 if ((i + 1) % 4 === 0) continue;
@@ -679,10 +656,6 @@
         return { encode, decode };
     })();
 
-
-    // ===================================================================================
-    // Validation Logic
-    // ===================================================================================
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
 
     function base64ToArrayBuffer(base64) {
@@ -726,52 +699,44 @@
             tempCanvas.height = 750;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-
-            // --- VALIDATION PIPELINE ---
             
-            // Step 1: Read QR Code
             resultDiv.innerHTML = `<span class="info">1. Reading digital data from QR Code...</span>`;
             const qrData = await readQRCodeFromCanvas(tempCanvas);
 
             if (!qrData) {
-                resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable. Validation stopped.</span>`;
+                resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`;
                 return;
             }
             let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
             
-            // Step 2: Verify Triple Signature
-            resultHTML += `\n\n<span class="info">2. Verifying Triple Signature (SHAKE256 -> Ed25519 -> Falcon)...</span>`;
+            resultHTML += `\n\n<span class="info">2. Verifying Triple Signature...</span>`;
             resultDiv.innerHTML = resultHTML;
             const signatureValidation = await validateDigitalSignature(qrData);
 
             if (!signatureValidation.isValid) {
                 resultHTML += `\n${signatureValidation.log}`;
-                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. The banknote data is forged or has been tampered with.</span>`;
+                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid.</span>`;
                 resultDiv.innerHTML = resultHTML;
                 return;
             }
             resultHTML += `\n${signatureValidation.log}`;
-            resultHTML += `\n<span class="valid">✅ 2. Triple Signature confirmed. Authenticity verified by the issuing bank's public keys.</span>`;
+            resultHTML += `\n<span class="valid">✅ 2. Triple Signature confirmed.</span>`;
 
-            // Step 3: Verify LSB Steganography
             resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
             resultDiv.innerHTML = resultHTML;
             const decodedSignature = LSB.decode(tempCtx);
 
             if (!decodedSignature || decodedSignature !== qrData.signature) {
-                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature is missing or does not match the QR data. The banknote's image has been modified or replaced.</span>`;
-                resultDiv.innerHTML = resultHTML;
+                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature mismatch.</span>`;
                 isFullyValid = false;
+                resultDiv.innerHTML = resultHTML;
                 return;
             }
-            resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature extracted and successfully matched. Integrity of the image is confirmed.</span>`;
+            resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature matched.</span>`;
 
-
-            // Step 4: Perform Graphical Integrity Check
             resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
             resultDiv.innerHTML = resultHTML;
             
-            // Generate a reference hash from the verified signature
             const compositeSigString = JSON.stringify(JSON.parse(atob(qrData.signature)))
             const expectedVisualHash = await BankCrypto.hashMessage(compositeSigString);
             const referenceCanvas = document.createElement('canvas');
@@ -782,15 +747,14 @@
             const differencePercentage = compareImages(tempCanvas, referenceCanvas, 35);
             
             if (differencePercentage > 0.15) {
-                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}% from original (Threshold: >0.15%).</span>`;
+                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected (${differencePercentage.toFixed(2)}% difference).</span>`;
                 isFullyValid = false;
             } else {
-                resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
+                resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed.</span>`;
             }
             
-            // Step 5: Perform OCR Cross-Check
             if (isFullyValid) {
-                resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
+                resultHTML += `\n\n<span class="info">5. Performing OCR...</span>`;
                 resultDiv.innerHTML = resultHTML;
                 const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
                 const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
@@ -803,7 +767,6 @@
                 if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
             }
 
-            // --- FINAL VERDICT ---
             resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery detected.'}</span>`;
             resultDiv.innerHTML = resultHTML;
         };
@@ -812,7 +775,7 @@
 
     async function validateDigitalSignature(qrData) {
         try {
-            const { signature } = qrData; // This is a base64 string of the composite signature JSON
+            const { signature } = qrData;
             if (!signature || !activeKeys.publicKey) return { isValid: false, log: "No public key loaded." };
             
             const compositeSignature = JSON.parse(atob(signature));
@@ -871,22 +834,15 @@
         tempCanvas.height = targetCanvas.height;
         const tempCtx = tempCanvas.getContext('2d');
 
-        // Draw the note to the offscreen canvas
         await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, true);
 
-        // Read the QR code from the generated note
         const qrData = await readQRCodeFromCanvas(tempCanvas);
-        if (!qrData) return false;
+        if (!qrData || JSON.stringify(qrData) !== JSON.stringify(noteData)) return false;
 
-        // Check if the QR data matches the original noteData
-        if (JSON.stringify(qrData) !== JSON.stringify(noteData)) return false;
-
-        // Perform OCR on the generated note
         const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
         const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
         const comparison = compareQRAndOCR(qrData, ocrResult);
 
-        // Check if both the amount and serial/key match
         return comparison.match.amount && comparison.match.serial && comparison.match.key;
     }
 
@@ -905,14 +861,11 @@
         };
     }
 
-    // ===================================================================================
-    // Banknote Creation Logic
-    // ===================================================================================
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
 
     async function createNoteData(amount, index = 0) {
         if (!activeKeys.privateKey) {
-            alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
+            alert("Error: No private key is active for signing banknotes.");
             return null;
         }
         const now = Date.now();
@@ -926,11 +879,8 @@
         const stringToSign = getStandardizedDataForSigning(noteData);
         const compositeSignature = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
         
-        // Store the composite signature as a base64 string
         const compositeSignatureString = JSON.stringify(compositeSignature);
         noteData.signature = btoa(compositeSignatureString);
-        
-        // Visual hash is now a hash of the composite digital signature string
         noteData.visualHash = await BankCrypto.hashMessage(compositeSignatureString);
 
         return noteData;
@@ -938,7 +888,7 @@
 
     async function handleCreateNewNote() {
         const amount = document.getElementById("amount-input").value;
-        updateKeyStatus('<span class="info">⏳ Generating new banknote with triple signature...</span>');
+        updateKeyStatus('<span class="info">⏳ Generating new banknote...</span>');
         const noteData = await createNoteData(amount);
         if (noteData) {
             currentNoteData = noteData;
@@ -951,7 +901,7 @@
 
     async function handleDownloadBatch() {
         if (!activeKeys.privateKey) {
-            alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
+            alert("Error: No private key is active for signing banknotes.");
             return;
         }
         if (!window.showDirectoryPicker) {
@@ -980,13 +930,12 @@
                 while (!isNoteValid && attempts < 10) {
                     noteData = await createNoteData(amount, i);
                     if (!noteData) {
-                        resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key available.</span>`;
+                        resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped.</span>`;
                         return;
                     }
                     isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
                     if (!isNoteValid) {
-                        // Update the status for every failed attempt during batch generation
-                        resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR check on attempt ${attempts + 1}. Regenerating...</span>`;
+                        resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed check on attempt ${attempts + 1}. Regenerating...</span>`;
                     }
                     attempts++;
                 }
@@ -1000,12 +949,11 @@
                     await writable.close();
                     resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
                 } else {
-                    resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts. Batch download stopped.</span>`;
+                    resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts.</span>`;
                     return;
                 }
             }
             resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
-            // After batch is complete, display the last created note on the main canvas
             await handleCreateNewNote();
         } catch (error) {
             resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
@@ -1023,7 +971,6 @@
             const h = height;
             const scale = w / 1350; 
 
-            // --- DRAWING STARTS ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
             const baseHue = H(visualHash, 0, 0, 360);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -1066,8 +1013,6 @@
                 ctx.textAlign = "center";
                 ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
 
-                // --- FINAL SECURITY STEP: LSB ENCODING ---
-                // We hide the same base64 composite signature string in the image
                 if (applySteganography && signature) {
                     try {
                         LSB.encode(ctx, signature);
@@ -1176,7 +1121,7 @@
         updateControlsState(false);
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
         if (typeof falcon === 'undefined' || typeof nacl === 'undefined') {
-            updateKeyStatus('<span class="invalid">❌ Failed to load cryptographic libraries. Signing/validation will fail. Please check your internet connection and refresh.</span>');
+            updateKeyStatus('<span class="invalid">❌ Failed to load cryptographic libraries.</span>');
         }
     };
 </script>
