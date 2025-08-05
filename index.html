@@ -43,6 +43,7 @@
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            transition: opacity 0.5s ease;
         }
         .loading-title {
             font-size: 2rem;
@@ -417,7 +418,7 @@
             const encodedData = new TextEncoder().encode(data);
             const ed25519_sig = nacl.sign.detached(encodedData, hexToBytes(privateKeys.ed25519));
             const falcon_sig = falcon.sign(encodedData, hexToBytes(privateKeys.falcon));
-            const shake_hash = sha3.shake256(data, 1024); // Output length in bits
+            const shake_hash = sha3.shake256(data, 1024);
             return {
                 ed25519Sig: bytesToHex(ed25519_sig),
                 falconSig: bytesToHex(falcon_sig),
@@ -434,7 +435,7 @@
             const { ed25519Sig, falconSig, shake256Hash } = compositeSignature;
             let verificationLog = [];
 
-            const calculated_shake = sha3.shake256(data, 1024); // Output length in bits
+            const calculated_shake = sha3.shake256(data, 1024);
             const isShakeValid = (calculated_shake === shake256Hash);
             verificationLog.push(`<span class="${isShakeValid ? 'valid' : 'invalid'}">${isShakeValid ? '✅' : '❌'} SHAKE256 Hash... OK</span>`);
             if (!isShakeValid) return { isValid: false, log: verificationLog.join('\n') };
