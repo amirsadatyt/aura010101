@@ -288,12 +288,12 @@
         <div class="controls-grid">
             <button onclick="handleGenerateAndExportKeys()" id="generate-keys-button" disabled>🔑 Generate & Export Keys</button>
             <label for="import-public-key" class="sub-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 '0' 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 Import Public Key
             </label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
             <label for="import-private-key" class="sub-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 '0' 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 Import Private Key
             </label>
             <input type="file" id="import-private-key" accept=".json" style="display: none;">
@@ -303,7 +303,7 @@
     <div class="section" id="validator-section">
         <h2>Validate Banknote</h2>
         <label for="validator-input">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 '0' 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             Select Image for Validation
         </label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
@@ -418,7 +418,7 @@
             const encodedData = new TextEncoder().encode(data);
             const ed25519_sig = nacl.sign.detached(encodedData, hexToBytes(privateKeys.ed25519));
             const falcon_sig = falcon.sign(encodedData, hexToBytes(privateKeys.falcon));
-            // ** CORRECTED USAGE FOR js-sha3 LIBRARY **
+            // ** FINAL CORRECTED USAGE FOR js-sha3 LIBRARY **
             const shake_hash = sha3.shake256(data, 1024); // Output length in bits
             return {
                 ed25519Sig: bytesToHex(ed25519_sig),
@@ -436,7 +436,7 @@
             const { ed25519Sig, falconSig, shake256Hash } = compositeSignature;
             let verificationLog = [];
 
-            // ** CORRECTED USAGE FOR js-sha3 LIBRARY **
+            // ** FINAL CORRECTED USAGE FOR js-sha3 LIBRARY **
             const calculated_shake = sha3.shake256(data, 1024); // Output length in bits
             const isShakeValid = (calculated_shake === shake256Hash);
             verificationLog.push(`<span class="${isShakeValid ? 'valid' : 'invalid'}">${isShakeValid ? '✅' : '❌'} SHAKE256 Hash... OK</span>`);
@@ -1124,13 +1124,17 @@
 
     function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
-    // ** FINAL CORRECTED ONLOAD FUNCTION **
+    // ** FINAL, ROBUST ONLOAD FUNCTION **
     window.onAppReady = () => {
         updateKeyStatus('<span class="info">در حال بررسی آمادگی کتابخانه‌ها...</span>');
 
         const checkLibrariesReady = setInterval(() => {
-            // This condition checks if both nacl and falcon are fully ready
-            if (typeof nacl?.sign?.keyPair === 'function' && typeof falcon?.keyPair === 'function') {
+            // This condition now checks if ALL THREE crypto libraries are fully ready
+            const allReady = typeof nacl?.sign?.keyPair === 'function' &&
+                             typeof falcon?.keyPair === 'function' &&
+                             typeof sha3?.shake256 === 'function';
+
+            if (allReady) {
                 clearInterval(checkLibrariesReady); // Stop checking
                 updateKeyStatus('<span class="valid">✅ برنامه آماده است. لطفاً کلیدها را تولید یا وارد کنید.</span>');
                 updateControlsState(true); // Enable the main generate button
@@ -1141,7 +1145,9 @@
             // This is a safety timeout
             const falconReady = typeof falcon?.keyPair === 'function';
             const naclReady = typeof nacl?.sign?.keyPair === 'function';
-            if (!falconReady || !naclReady) {
+            const sha3Ready = typeof sha3?.shake256 === 'function';
+            
+            if (!falconReady || !naclReady || !sha3Ready) {
                 clearInterval(checkLibrariesReady);
                 updateKeyStatus('<span class="invalid">❌ یکی از کتابخانه‌های رمزنگاری پس از 5 ثانیه آماده نشد. لطفاً صفحه را رفرش کنید.</span>');
             }
