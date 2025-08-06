@@ -2,9 +2,9 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>نسخه بهبودیافته: امضا سه‌گانه Ed25519 + Falcon-512 + SHAKE256</title>
+    <title>نسخه نهایی: حل مشکل بارگذاری ماژول‌ها</title>
     
-    <script src="https://bundle.run/tweetnacl@1.0.3"></script> <script src="https://bundle.run/js-sha3@0.9.3"></script>  <script src="js/falcon.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script>  <script src="js/falcon.js"></script>
 
     <style>
         body { 
@@ -27,7 +27,7 @@
             margin-top: 10px; 
             border-radius: 6px;
             border: 1px solid #ccc;
-            box-sizing: border-box; /* Ensures padding doesn't affect width */
+            box-sizing: border-box;
             font-size: 1rem;
         }
         button { 
@@ -58,6 +58,19 @@
         .status.success { color: #1b5e20; background-color: #c8e6c9; }
         .status.error { color: #b71c1c; background-color: #ffcdd2; }
         .status.loading { color: #0d47a1; background-color: #bbdefb; }
+        .troubleshooting {
+            background-color: #fff9c4;
+            border: 1px solid #fbc02d;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 6px;
+        }
+        code {
+            background-color: #eee;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
         .spinner {
             display: inline-block;
             border: 2px solid rgba(255,255,255,0.3);
@@ -75,9 +88,10 @@
     </style>
 </head>
 <body>
-    <h2>امضا با Ed25519 + Falcon-512 + SHAKE256 (نسخه بهبودیافته)</h2>
+    <h2>امضا با Ed25519 + Falcon-512 + SHAKE256 (نسخه با رفع خطا)</h2>
 
     <div id="initStatus" class="status loading">🔄 در حال بارگذاری و آماده‌سازی ماژول‌های رمزنگاری...</div>
+    <div id="troubleshootingArea" class="troubleshooting" style="display: none;"></div>
 
     <h3>۱. تولید کلیدها و نمایش کلیدهای عمومی</h3>
     <div class="output-group">
@@ -109,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
     const dom = {
         initStatus: document.getElementById('initStatus'),
-        message: document.getElementById('message'),
+        troubleshootingArea: document.getElementById('troubleshootingArea'),
         signButton: document.getElementById('signButton'),
         verifyButton: document.getElementById('verifyButton'),
         ed25519Pk: document.getElementById('ed25519Pk'),
@@ -122,20 +136,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State Management ---
     let state = {
         falcon: null,
-        keys: {
-            ed25519: null,
-            falcon: null,
-        },
-        signatures: {
-            ed25519: null,
-            falcon: null,
-        },
+        keys: { ed25519: null, falcon: null },
+        signatures: { ed25519: null, falcon: null },
         messageHash: null,
-        modulesLoaded: {
-            ed25519: false,
-            falcon: false,
-            shake: false
-        }
+        modulesLoaded: { ed25519: false, falcon: false, shake: false }
     };
     
     // --- Helper Functions ---
@@ -152,82 +156,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Core Cryptographic Functions ---
-    function hashMessage(msg) {
-        try {
-            // SHAKE256 with 1024-bit output (128 bytes)
-            const hashHex = sha3.shake256(msg, 1024); 
-            state.modulesLoaded.shake = true;
-            return hexToBytes(hashHex);
-        } catch (e) {
-            console.error('SHAKE256 Hashing Error:', e);
-            state.modulesLoaded.shake = false;
-            dom.initStatus.textContent = '❌ خطا در تابع هش SHAKE256.';
-            dom.initStatus.className = 'status error';
-            return null;
-        }
+    function showTroubleshooting(errors) {
+        dom.troubleshootingArea.style.display = 'block';
+        dom.troubleshootingArea.innerHTML = `
+            <h3>راهنمای حل مشکل</h3>
+            <p>یک یا چند ماژول بارگذاری نشدند. لطفاً موارد زیر را بررسی کنید:</p>
+            <ul>
+                <li><strong>بررسی اتصال اینترنت:</strong> مطمئن شوید به اینترنت متصل هستید تا کتابخانه‌های Ed25519 و SHAKE256 دانلود شوند.</li>
+                <li><strong>بررسی مسیر فایل <code>falcon.js</code>:</strong> مطمئن شوید فایل <code>falcon.js</code> در پوشه‌ای به نام <code>js</code> در کنار این فایل HTML قرار دارد.</li>
+                <li><strong>باز کردن کنسول مرورگر:</strong> برای دیدن خطاهای دقیق، کلید <b>F12</b> را فشار دهید و به تب <b>"Console"</b> بروید. خطاهای قرمزرنگ اطلاعات مفیدی به شما می‌دهند.</li>
+            </ul>
+            <p><strong>خطاهای شناسایی‌شده:</strong></p>
+            <ul>${errors.map(e => `<li>${e}</li>`).join('')}</ul>
+        `;
     }
 
+    // --- Core Cryptographic Functions ---
     async function initialize() {
         const initEd25519 = new Promise((resolve, reject) => {
             try {
+                if (typeof nacl === 'undefined') throw new Error("کتابخانه nacl (Ed25519) از CDN بارگذاری نشده است.");
                 state.keys.ed25519 = nacl.sign.keyPair();
                 state.modulesLoaded.ed25519 = true;
                 resolve({ name: 'Ed25519', status: 'fulfilled' });
             } catch (e) {
                 console.error('Ed25519 Init Error:', e);
-                reject({ name: 'Ed25519', status: 'rejected', reason: e });
+                reject({ name: 'Ed25519', reason: e });
             }
         });
         
         const initFalcon = new Promise(async (resolve, reject) => {
             try {
-                // The pqcSignFalcon512 function is expected from falcon.js
+                if (typeof pqcSignFalcon512 === 'undefined') throw new Error("تابع pqcSignFalcon512 (Falcon) از فایل js/falcon.js پیدا نشد. مسیر فایل را بررسی کنید.");
                 state.falcon = await pqcSignFalcon512();
                 state.keys.falcon = await state.falcon.generateKeyPair();
                 state.modulesLoaded.falcon = true;
                 resolve({ name: 'Falcon-512', status: 'fulfilled' });
             } catch (e) {
                 console.error('Falcon-512 Init Error:', e);
-                reject({ name: 'Falcon-512', status: 'rejected', reason: e });
-            }
-        });
-        
-        const results = await Promise.allSettled([initEd25519, initFalcon]);
-
-        let success = true;
-        let errorMessages = [];
-        
-        results.forEach(result => {
-            if (result.status === 'rejected') {
-                success = false;
-                errorMessages.push(`- ${result.reason.name}`);
+                reject({ name: 'Falcon-512', reason: e });
             }
         });
 
         // Test SHAKE256
-        hashMessage(''); 
+        try {
+            if (typeof sha3 === 'undefined') throw new Error("کتابخانه js-sha3 از CDN بارگذاری نشده است.");
+            sha3.shake256('', 1024);
+            state.modulesLoaded.shake = true;
+        } catch(e) {
+            console.error('SHAKE256 Init Error:', e);
+        }
+        
+        const results = await Promise.allSettled([initEd25519, initFalcon]);
+        let allSuccess = true;
+        let errorDetails = [];
+        
+        results.forEach(result => {
+            if (result.status === 'rejected') {
+                allSuccess = false;
+                // Display the specific reason for the failure
+                errorDetails.push(`<b>${result.reason.name}:</b> ${result.reason.reason.message}`);
+            }
+        });
 
-        if (success && state.modulesLoaded.shake) {
+        if (!state.modulesLoaded.shake) {
+            allSuccess = false;
+            errorDetails.push("<b>SHAKE256:</b> کتابخانه js-sha3 بارگذاری نشده است.");
+        }
+
+        if (allSuccess) {
             dom.initStatus.textContent = '✅ تمام ماژول‌ها با موفقیت بارگذاری و کلیدها تولید شدند.';
             dom.initStatus.className = 'status success';
             dom.ed25519Pk.textContent = bytesToBase64(state.keys.ed25519.publicKey);
             dom.falconPk.textContent = bytesToBase64(state.keys.falcon.publicKey);
             dom.signButton.disabled = false;
         } else {
-            dom.initStatus.innerHTML = `❌ خطا در بارگذاری ماژول‌ها:<br>${errorMessages.join('<br>')}`;
+            dom.initStatus.textContent = '❌ خطا در بارگذاری ماژول‌ها. لطفاً راهنمای زیر را مطالعه کنید.';
             dom.initStatus.className = 'status error';
+            showTroubleshooting(errorDetails);
             if (!state.modulesLoaded.ed25519) dom.ed25519Pk.textContent = 'بارگذاری ناموفق';
             if (!state.modulesLoaded.falcon) dom.falconPk.textContent = 'بارگذاری ناموفق';
         }
+    }
+    
+    // The rest of the functions (handleSign, handleVerify, etc.) remain largely the same.
+    // They are included here for completeness.
+    
+    function hashMessage(msg) {
+        if (!state.modulesLoaded.shake) return null;
+        const hashHex = sha3.shake256(msg, 1024); 
+        return hexToBytes(hashHex);
     }
     
     async function handleSign() {
         setLoadingState(dom.signButton, true, '🖋 تولید امضا');
         dom.verifyButton.disabled = true;
         
-        const messageText = dom.message.value;
-        state.messageHash = hashMessage(messageText);
+        state.messageHash = hashMessage(dom.message.value);
 
         if (!state.messageHash) {
             alert('خطا در هش کردن پیام. عملیات متوقف شد.');
@@ -235,31 +260,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // --- Ed25519 Signing ---
         if (state.modulesLoaded.ed25519) {
             const sig = nacl.sign.detached(state.messageHash, state.keys.ed25519.secretKey);
             state.signatures.ed25519 = sig;
             dom.ed25519Sig.textContent = bytesToBase64(sig);
-        } else {
-            dom.ed25519Sig.textContent = '❌ ماژول بارگذاری نشده است';
         }
         
-        // --- Falcon Signing ---
         if (state.modulesLoaded.falcon) {
-            try {
-                const sig = await state.falcon.sign(state.keys.falcon.privateKey, state.messageHash);
-                state.signatures.falcon = sig;
-                dom.falconSig.textContent = bytesToBase64(sig);
-            } catch (e) {
-                console.error("Falcon signing error:", e);
-                dom.falconSig.textContent = '❌ خطا در هنگام امضا';
-            }
-        } else {
-            dom.falconSig.textContent = '❌ ماژول بارگذاری نشده است';
+            const sig = await state.falcon.sign(state.keys.falcon.privateKey, state.messageHash);
+            state.signatures.falcon = sig;
+            dom.falconSig.textContent = bytesToBase64(sig);
         }
 
         setLoadingState(dom.signButton, false, '🖋 تولید امضا');
-        dom.verifyButton.disabled = false;
+        if (state.signatures.ed25519 && state.signatures.falcon) {
+            dom.verifyButton.disabled = false;
+        }
         dom.verifyResult.style.display = 'none';
     }
     
@@ -270,28 +286,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         setLoadingState(dom.verifyButton, true, '✅ بررسی اعتبار');
-        
         let resultsHTML = '';
         
-        // --- Ed25519 Verification ---
         if (state.modulesLoaded.ed25519) {
             const isValid = nacl.sign.detached.verify(state.messageHash, state.signatures.ed25519, state.keys.ed25519.publicKey);
             resultsHTML += `<strong>Ed25519:</strong> ${isValid ? '✅ معتبر' : '❌ نامعتبر'}<br>`;
-        } else {
-            resultsHTML += '<strong>Ed25519:</strong> ماژول در دسترس نیست<br>';
         }
         
-        // --- Falcon Verification ---
         if (state.modulesLoaded.falcon) {
-            try {
-                 const isValid = await state.falcon.verify(state.keys.falcon.publicKey, state.messageHash, state.signatures.falcon);
-                 resultsHTML += `<strong>Falcon-512:</strong> ${isValid ? '✅ معتبر' : '❌ نامعتبر'}`;
-            } catch (e) {
-                console.error("Falcon verification error:", e);
-                resultsHTML += `<strong>Falcon-512:</strong> ❌ خطا در هنگام بررسی`;
-            }
-        } else {
-            resultsHTML += '<strong>Falcon-512:</strong> ماژول در دسترس نیست';
+            const isValid = await state.falcon.verify(state.keys.falcon.publicKey, state.messageHash, state.signatures.falcon);
+            resultsHTML += `<strong>Falcon-512:</strong> ${isValid ? '✅ معتبر' : '❌ نامعتبر'}`;
         }
 
         dom.verifyResult.innerHTML = resultsHTML;
