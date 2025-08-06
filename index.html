@@ -2,9 +2,9 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>نسخه نهایی: حل مشکل بارگذاری ماژول‌ها</title>
+    <title>نسخه نهایی: حل مشکل مسیر فایل</title>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script>  <script src="js/falcon.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl.min.js"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script>  <script src="falcon.js"></script>
 
     <style>
         body { 
@@ -88,7 +88,7 @@
     </style>
 </head>
 <body>
-    <h2>امضا با Ed25519 + Falcon-512 + SHAKE256 (نسخه با رفع خطا)</h2>
+    <h2>امضا با Ed25519 + Falcon-512 + SHAKE256 (مسیر فایل اصلاح شد)</h2>
 
     <div id="initStatus" class="status loading">🔄 در حال بارگذاری و آماده‌سازی ماژول‌های رمزنگاری...</div>
     <div id="troubleshootingArea" class="troubleshooting" style="display: none;"></div>
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <p>یک یا چند ماژول بارگذاری نشدند. لطفاً موارد زیر را بررسی کنید:</p>
             <ul>
                 <li><strong>بررسی اتصال اینترنت:</strong> مطمئن شوید به اینترنت متصل هستید تا کتابخانه‌های Ed25519 و SHAKE256 دانلود شوند.</li>
-                <li><strong>بررسی مسیر فایل <code>falcon.js</code>:</strong> مطمئن شوید فایل <code>falcon.js</code> در پوشه‌ای به نام <code>js</code> در کنار این فایل HTML قرار دارد.</li>
+                <li><strong>بررسی وجود فایل <code>falcon.js</code>:</strong> مطمئن شوید فایل <code>falcon.js</code> در کنار همین فایل HTML قرار دارد.</li>
                 <li><strong>باز کردن کنسول مرورگر:</strong> برای دیدن خطاهای دقیق، کلید <b>F12</b> را فشار دهید و به تب <b>"Console"</b> بروید. خطاهای قرمزرنگ اطلاعات مفیدی به شما می‌دهند.</li>
             </ul>
             <p><strong>خطاهای شناسایی‌شده:</strong></p>
@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const initFalcon = new Promise(async (resolve, reject) => {
             try {
-                if (typeof pqcSignFalcon512 === 'undefined') throw new Error("تابع pqcSignFalcon512 (Falcon) از فایل js/falcon.js پیدا نشد. مسیر فایل را بررسی کنید.");
+                if (typeof pqcSignFalcon512 === 'undefined') throw new Error("تابع pqcSignFalcon512 (Falcon) از فایل falcon.js پیدا نشد. آیا فایل کنار HTML قرار دارد؟");
                 state.falcon = await pqcSignFalcon512();
                 state.keys.falcon = await state.falcon.generateKeyPair();
                 state.modulesLoaded.falcon = true;
@@ -214,7 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
         results.forEach(result => {
             if (result.status === 'rejected') {
                 allSuccess = false;
-                // Display the specific reason for the failure
                 errorDetails.push(`<b>${result.reason.name}:</b> ${result.reason.reason.message}`);
             }
         });
@@ -238,9 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!state.modulesLoaded.falcon) dom.falconPk.textContent = 'بارگذاری ناموفق';
         }
     }
-    
-    // The rest of the functions (handleSign, handleVerify, etc.) remain largely the same.
-    // They are included here for completeness.
     
     function hashMessage(msg) {
         if (!state.modulesLoaded.shake) return null;
