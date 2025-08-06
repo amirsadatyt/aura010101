@@ -292,14 +292,14 @@
 // Import cryptographic libraries as modules
 import pqcSignFalcon512 from './falcon.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-import argon2 from 'https://cdn.skypack.dev/argon2-browser';
+import argon2 from 'https://esm.sh/argon2-browser';
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
 let activeKeys = { publicKey: null, privateKey: null };
-let falconApi = null; // To hold the initialized Falcon API
+let falconApi = null;
 
 // --- Utility Functions ---
 const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -316,13 +316,12 @@ const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte =>
 const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
 // ===================================================================================
-// Bank Key Management and Falcon-512 Crypto Logic
+// Bank Key Management and Crypto Logic
 // ===================================================================================
 
 const BankCrypto = (() => {
     
     function hashMessage(message) {
-        // Use SHAKE256 to produce a 1024-bit (128-byte) hash.
         const hexHash = shake256(message, 1024);
         return hexToUint8Array(hexHash);
     }
@@ -334,7 +333,6 @@ const BankCrypto = (() => {
 
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
-        if (!falconApi) throw new Error("Falcon API not initialized.");
         const dataHash = hashMessage(data);
         const { signature } = await falconApi.sign(dataHash, privateKey);
         return signature;
@@ -342,57 +340,39 @@ const BankCrypto = (() => {
 
     async function verifySignature(signature, data, publicKey) {
         if (!publicKey) throw new Error("Public key is not available for verification.");
-        if (!falconApi) throw new Error("Falcon API not initialized.");
         const dataHash = hashMessage(data);
         return await falconApi.verify(signature, dataHash, publicKey);
     }
     
     async function encryptPrivateKey(privateKeyBytes, password) {
-        // Define Argon2 parameters for deriving the AES key
         const argonParams = {
-            time: 2,
-            mem: 65536, // 64 MB
-            parallelism: 4,
-            type: argon2.ArgonType.Argon2id,
-            hashLen: 32 // We need a 32-byte (256-bit) key for AES-GCM
+            time: 2, mem: 65536, parallelism: 4,
+            type: argon2.ArgonType.Argon2id, hashLen: 32
         };
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
-        // Derive AES key from password using Argon2
-        const argon2Result = await argon2.hash({
-            pass: password,
-            salt: salt,
-            ...argonParams,
-            raw: true // Important: we need the raw bytes for the key
-        });
-        const derivedKeyBytes = argon2Result.hash;
-
-        const derivedKey = await window.crypto.subtle.importKey(
-            "raw", derivedKeyBytes, { name: "AES-GCM" }, true, ["encrypt"]
-        );
-
-        // Encrypt the Falcon private key
-        const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
-        const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
-        
-        const encryptedKey = await window.crypto.subtle.encrypt(
-            { name: "AES-GCM", iv: iv }, derivedKey, encodedKey
-        );
-        
-        // Return everything needed for decryption, including the exact Argon2 params used
-        return {
-            cipherText: arrayBufferToBase64(encryptedKey),
-            iv: arrayBufferToBase64(iv),
-            salt: arrayBufferToBase64(salt),
-            argonParams: { // Store the parameters
-                time: argonParams.time,
-                mem: argonParams.mem,
-                parallelism: argonParams.parallelism,
-                type: argonParams.type,
-                hashLen: argonParams.hashLen
-            }
-        };
+        try {
+            const argon2Result = await argon2.hash({ pass: password, salt: salt, ...argonParams, raw: true });
+            const derivedKeyBytes = argon2Result.hash;
+            const derivedKey = await window.crypto.subtle.importKey("raw", derivedKeyBytes, { name: "AES-GCM" }, true, ["encrypt"]);
+            const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
+            const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
+            const encryptedKey = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, derivedKey, encodedKey);
+            
+            return {
+                cipherText: arrayBufferToBase64(encryptedKey),
+                iv: arrayBufferToBase64(iv),
+                salt: arrayBufferToBase64(salt),
+                argonParams: {
+                    time: argonParams.time, mem: argonParams.mem, parallelism: argonParams.parallelism,
+                    type: argonParams.type, hashLen: argonParams.hashLen
+                }
+            };
+        } catch (err) {
+            console.error("Argon2 hashing failed during encryption:", err);
+            throw new Error("Failed to derive key with Argon2. The WASM module might have failed to load.");
+        }
     }
     
     async function decryptPrivateKey(encryptedData, password) {
@@ -400,26 +380,17 @@ const BankCrypto = (() => {
         const iv = base64ToUint8Array(encryptedData.iv);
         const cipherText = base64ToUint8Array(encryptedData.cipherText);
         
-        // Re-derive the same AES key using the stored Argon2 parameters
-        const argon2Result = await argon2.hash({
-            pass: password,
-            salt: salt,
-            ...encryptedData.argonParams, // Use the exact same parameters from the file
-            raw: true
-        });
-        const derivedKeyBytes = argon2Result.hash;
-        
-        const derivedKey = await window.crypto.subtle.importKey(
-            "raw", derivedKeyBytes, { name: "AES-GCM" }, true, ["decrypt"]
-        );
-        
-        // Decrypt the Falcon private key
-        const decryptedKeyBuffer = await window.crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: iv }, derivedKey, cipherText
-        );
-        
-        const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
-        return base64ToUint8Array(keyObject.keyData);
+        try {
+            const argon2Result = await argon2.hash({ pass: password, salt: salt, ...encryptedData.argonParams, raw: true });
+            const derivedKeyBytes = argon2Result.hash;
+            const derivedKey = await window.crypto.subtle.importKey("raw", derivedKeyBytes, { name: "AES-GCM" }, true, ["decrypt"]);
+            const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, derivedKey, cipherText);
+            const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
+            return base64ToUint8Array(keyObject.keyData);
+        } catch (err) {
+            console.error("Argon2 hashing failed during decryption:", err);
+            throw new Error("Failed to derive key with Argon2. Check password or see console for WASM loading errors.");
+        }
     }
 
     return { generateNewKeyPair, signData, verifySignature, encryptPrivateKey, decryptPrivateKey, hashMessage };
@@ -536,11 +507,38 @@ function downloadFile(data, filename, type) {
 // ===================================================================================
 const LSB = (() => {
     const MESSAGE_TERMINATOR = "00000000";
-    function messageToBinary(message){return message.split('').map(c=>c.charCodeAt(0).toString(2).padStart(8,'0')).join('')+MESSAGE_TERMINATOR}
-    function encode(ctx,message){const bin=messageToBinary(message),imgData=ctx.getImageData(0,0,ctx.canvas.width,ctx.canvas.height),data=imgData.data;if(bin.length>data.length/4*3)throw new Error("Message too long");let dI=0;for(let i=0;i<bin.length;i++){if((dI+1)%4===0)dI++;data[dI]=(data[dI]&254)|parseInt(bin[i],10);dI++}ctx.putImageData(imgData,0,0)}
-    function decode(ctx){const data=ctx.getImageData(0,0,ctx.canvas.width,ctx.canvas.height).data;let bin="",byte="",msg="";for(let i=0;i<data.length;i++){if((i+1)%4===0)continue;byte+=data[i]&1;if(byte.length===8){if(byte===MESSAGE_TERMINATOR)return msg;msg+=String.fromCharCode(parseInt(byte,2));byte=""}}return null}
+    function messageToBinary(message) { return message.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('') + MESSAGE_TERMINATOR; }
+    function encode(ctx, message) {
+        const binaryMessage = messageToBinary(message);
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imageData.data;
+        if (binaryMessage.length > data.length / 4 * 3) throw new Error("Message is too long to be encoded in the image.");
+        let dataIndex = 0;
+        for (let i = 0; i < binaryMessage.length; i++) {
+            if ((dataIndex + 1) % 4 === 0) dataIndex++;
+            data[dataIndex] = (data[dataIndex] & 0xFE) | parseInt(binaryMessage[i], 10);
+            dataIndex++;
+        }
+        ctx.putImageData(imageData, 0, 0);
+    }
+    function decode(ctx) {
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imageData.data;
+        let binaryMessage = "", byte = "", decodedMessage = "";
+        for (let i = 0; i < data.length; i++) {
+            if ((i + 1) % 4 === 0) continue;
+            byte += data[i] & 1;
+            if (byte.length === 8) {
+                if (byte === MESSAGE_TERMINATOR) return decodedMessage;
+                decodedMessage += String.fromCharCode(parseInt(byte, 2));
+                byte = "";
+            }
+        }
+        return null;
+    }
     return { encode, decode };
 })();
+
 
 // ===================================================================================
 // Validation Logic
@@ -548,45 +546,71 @@ const LSB = (() => {
 async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-    if (!activeKeys.publicKey) { alert("Error: No public key is active for validation."); return; }
+    if (!activeKeys.publicKey) {
+        alert("Error: No public key is active for validation. Please generate or import one.");
+        return;
+    }
     const resultDiv = document.getElementById('validation-result');
     resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
     let isFullyValid = true;
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
+
     img.onload = async () => {
-        const tempCanvas=document.createElement('canvas'); tempCanvas.width=1350; tempCanvas.height=750;
-        const tempCtx=tempCanvas.getContext('2d'); tempCtx.drawImage(img,0,0,tempCanvas.width,tempCanvas.height);
-        resultDiv.innerHTML=`<span class="info">1. Reading QR Code...</span>`;
-        const qrData=await readQRCodeFromCanvas(tempCanvas);
-        if(!qrData){resultDiv.innerHTML=`<span class="invalid">❌ FATAL: QR Code not found.</span>`;return}
-        let resultHTML=`<span class="valid">✅ 1. QR data read.</span>`;
-        resultHTML+=`\n\n<span class="info">2. Verifying Falcon-512 signature...</span>`;resultDiv.innerHTML=resultHTML;
-        const isSigValid=await validateDigitalSignature(qrData);
-        if(!isSigValid){resultHTML+=`\n<span class="invalid">❌ FATAL: Invalid signature. Forgery detected.</span>`;resultDiv.innerHTML=resultHTML;return}
-        resultHTML+=`\n<span class="valid">✅ 2. Signature confirmed.</span>`;
-        resultHTML+=`\n\n<span class="info">3. Verifying LSB data...</span>`;resultDiv.innerHTML=resultHTML;
-        const lsbSig=LSB.decode(tempCtx);
-        if(!lsbSig||lsbSig!==qrData.signature){resultHTML+=`\n<span class="invalid">❌ FATAL: LSB data mismatch. Image compromised.</span>`;resultDiv.innerHTML=resultHTML;isFullyValid=false;return}
-        resultHTML+=`\n<span class="valid">✅ 3. LSB data matched.</span>`;
-        resultHTML+=`\n\n<span class="info">4. Verifying graphical integrity...</span>`;resultDiv.innerHTML=resultHTML;
-        const expectedHash=uint8ArrayToHex(BankCrypto.hashMessage(qrData.signature));
-        const refCanvas=document.createElement('canvas');refCanvas.width=tempCanvas.width;refCanvas.height=tempCanvas.height;
-        await drawNoteOnCanvas(refCanvas,{...qrData,visualHash:expectedHash},refCanvas.width,refCanvas.height,false);
-        const diff=compareImages(tempCanvas,refCanvas,35);
-        if(diff>0.15){resultHTML+=`\n<span class="invalid">❌ FATAL: Graphical tampering detected (${diff.toFixed(2)}% difference).</span>`;isFullyValid=false}
-        else{resultHTML+=`\n<span class="valid">✅ 4. Graphical integrity passed (${diff.toFixed(2)}% difference).</span>`}
-        if(isFullyValid){resultHTML+=`\n\n<span class="info">5. Performing OCR cross-check...</span>`;resultDiv.innerHTML=resultHTML;
-        const whitelist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-        const ocrResult=await Tesseract.recognize(tempCanvas,'eng',{tessedit_char_whitelist:whitelist});
-        resultHTML+=`\n<span class="valid">✅ 5. OCR complete.</span>\n<div class="data-heading">Final Cross-Check</div>`;
-        const cmp=compareQRAndOCR(qrData,ocrResult);
-        resultHTML+=`<div class="comparison-item"><strong>Amount:</strong> Expected: <code>${cmp.expected.amount}</code>, Found: <code>${cmp.found.amount||'(missing)'}</code>, Status: ${cmp.match.amount?'<span class="valid">✅</span>':'<span class="invalid">❌</span>'}</div>`;
-        if(!cmp.match.amount)isFullyValid=false;
-        resultHTML+=`<div class="comparison-item"><strong>Serial & Key:</strong> Serial Match: ${cmp.match.serial?'<span class="valid">✅</span>':'<span class="invalid">❌</span>'}, Key Match: ${cmp.match.key?'<span class="valid">✅</span>':'<span class="invalid">❌</span>'}</div>`;
-        if(!cmp.match.serial||!cmp.match.key)isFullyValid=false}
-        resultHTML+=`\n<hr style="border-color:var(--border-color);border-style:dashed;margin:15px 0 10px;">\n<span style="font-size:14px;font-weight:600;">${isFullyValid?'✅ VERDICT: Banknote is authentic.':'❌ VERDICT: Forgery detected.'}</span>`;
-        resultDiv.innerHTML=resultHTML;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 1350;
+        tempCanvas.height = 750;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        // --- VALIDATION PIPELINE ---
+        resultDiv.innerHTML = `<span class="info">1. Reading digital data from QR Code...</span>`;
+        const qrData = await readQRCodeFromCanvas(tempCanvas);
+        if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`; return; }
+        let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
+        
+        resultHTML += `\n\n<span class="info">2. Verifying digital signature (Falcon-512)...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const isSignatureValid = await validateDigitalSignature(qrData);
+        if (!isSignatureValid) { resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`; resultDiv.innerHTML = resultHTML; return; }
+        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified.</span>`;
+
+        resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const decodedSignature = LSB.decode(tempCtx);
+        if (!decodedSignature || decodedSignature !== qrData.signature) { resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature does not match. Image integrity compromised.</span>`; resultDiv.innerHTML = resultHTML; isFullyValid = false; return; }
+        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature matched. Image integrity confirmed.</span>`;
+
+        resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const expectedVisualHash = uint8ArrayToHex(BankCrypto.hashMessage(qrData.signature));
+        const referenceCanvas = document.createElement('canvas');
+        referenceCanvas.width = tempCanvas.width;
+        referenceCanvas.height = tempCanvas.height;
+        await drawNoteOnCanvas(referenceCanvas, { ...qrData, visualHash: expectedVisualHash }, referenceCanvas.width, referenceCanvas.height, false);
+        const differencePercentage = compareImages(tempCanvas, referenceCanvas, 35);
+        if (differencePercentage > 0.15) {
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}%.</span>`;
+            isFullyValid = false;
+        } else {
+            resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
+        }
+        
+        if (isFullyValid) {
+            resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
+            resultDiv.innerHTML = resultHTML;
+            const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
+            const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
+            resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n<div class="data-heading">Final Security Cross-Check</div>`;
+            const comparison = compareQRAndOCR(qrData, ocrResult);
+            resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+            if (!comparison.match.amount) isFullyValid = false;
+            resultHTML += `<div class="comparison-item"><strong>Serial & Key:</strong>\n  Serial Match: ${comparison.match.serial ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}, Key Match: ${comparison.match.key ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+            if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
+        }
+
+        resultHTML += `\n<hr style="border-color:var(--border-color);border-style:dashed;margin:15px 0 10px;">\n<span style="font-size:14px;font-weight:600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery detected.'}</span>`;
+        resultDiv.innerHTML = resultHTML;
     };
     img.src = fileUrl;
     event.target.value = '';
@@ -602,10 +626,50 @@ async function validateDigitalSignature(qrData) {
     } catch (e) { console.error("Signature verification error:", e); return false; }
 }
 
-function compareImages(c1,c2,tol=30){const d1=c1.getContext('2d').getImageData(0,0,c1.width,c1.height).data,d2=c2.getContext('2d').getImageData(0,0,c1.width,c2.height).data;let diff=0;for(let i=0;i<d1.length;i+=4){if(Math.abs((d1[i]&254)-(d2[i]&254))>tol||Math.abs((d1[i+1]&254)-(d2[i+1]&254))>tol||Math.abs((d1[i+2]&254)-(d2[i+2]&254))>tol)diff++}return(diff/(c1.width*c1.height))*100}
-function readQRCodeFromCanvas(c){const ctx=c.getContext('2d'),r={x:800,y:210,width:420,height:420},imgData=ctx.getImageData(r.x,r.y,r.width,r.height),code=jsQR(imgData.data,imgData.width,imgData.height);if(code){try{return JSON.parse(code.data)}catch{return null}}return null}
-async function validateNoteForCreation(noteData,targetCanvas){const tC=document.createElement('canvas');tC.width=targetCanvas.width;tC.height=targetCanvas.height;await drawNoteOnCanvas(tC,noteData,tC.width,tC.height,true);const qrData=await readQRCodeFromCanvas(tC);if(!qrData||JSON.stringify(qrData)!==JSON.stringify(noteData))return false;const ocr=await Tesseract.recognize(tC,'eng',{tessedit_char_whitelist:'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:'}),cmp=compareQRAndOCR(qrData,ocr);return cmp.match.amount&&cmp.match.serial&&cmp.match.key}
-function compareQRAndOCR(qrData,ocr){const txt=ocr.data.text.replace(/[\s,:.-]/g,'').toUpperCase(),amt=String(qrData.amount),ser=qrData.serial.substring(4),key=qrData.verificationKey.substring(4);return{expected:{amount:amt},found:{amount:txt.match(/\d+/g)?.join('')},match:{amount:txt.includes(amt),serial:txt.includes(ser),key:txt.includes(key)}}}
+function compareImages(canvas1, canvas2, tolerance = 30) {
+    const ctx1 = canvas1.getContext('2d'), ctx2 = canvas2.getContext('2d');
+    const imgData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height), imgData2 = ctx2.getImageData(0, 0, canvas1.width, canvas2.height);
+    const data1 = imgData1.data, data2 = imgData2.data;
+    let diffPixels = 0;
+    const totalPixels = canvas1.width * canvas1.height;
+    for (let i = 0; i < data1.length; i += 4) {
+        const r1 = data1[i] & 0xFE, g1 = data1[i + 1] & 0xFE, b1 = data1[i + 2] & 0xFE;
+        const r2 = data2[i] & 0xFE, g2 = data2[i + 1] & 0xFE, b2 = data2[i + 2] & 0xFE;
+        if (Math.abs(r1 - r2) > tolerance || Math.abs(g1 - g2) > tolerance || Math.abs(b1 - b2) > tolerance) diffPixels++;
+    }
+    return (diffPixels / totalPixels) * 100;
+}
+
+function readQRCodeFromCanvas(canvasToCheck) {
+    const context = canvasToCheck.getContext('2d');
+    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
+    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code) { try { return JSON.parse(code.data); } catch { return null; } }
+    return null;
+}
+
+async function validateNoteForCreation(noteData, targetCanvas) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = targetCanvas.width;
+    tempCanvas.height = targetCanvas.height;
+    await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, true);
+    const qrData = await readQRCodeFromCanvas(tempCanvas);
+    if (!qrData || JSON.stringify(qrData) !== JSON.stringify(noteData)) return false;
+    const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:' });
+    const comparison = compareQRAndOCR(qrData, ocrResult);
+    return comparison.match.amount && comparison.match.serial && comparison.match.key;
+}
+
+function compareQRAndOCR(qrData, ocrResult) {
+    const text = ocrResult.data.text.replace(/[\s,:.-]/g, '').toUpperCase();
+    const expectedAmount = String(qrData.amount), expectedSerial = qrData.serial.substring(4), expectedKey = qrData.verificationKey.substring(4);
+    return {
+        expected: { amount: expectedAmount },
+        found: { amount: text.match(/\d+/g)?.join('') },
+        match: { amount: text.includes(expectedAmount), serial: text.includes(expectedSerial), key: text.includes(expectedKey) }
+    };
+}
 
 // ===================================================================================
 // Banknote Creation Logic
@@ -644,35 +708,160 @@ async function handleDownloadBatch() {
     if (!activeKeys.privateKey) { alert("Error: No private key active."); return; }
     if (!window.showDirectoryPicker) {
         alert("Your browser does not support batch downloads. Downloading one note.");
-        await handleCreateNewNote(); const a=document.createElement("a"); a.download=`SADAT-NOTE-SECURE-${currentNoteData.serial}.png`; a.href=canvas.toDataURL("image/png"); a.click(); return;
+        await handleCreateNewNote(); const a = document.createElement("a"); a.download = `SADAT-NOTE-SECURE-${currentNoteData.serial}.png`; a.href = canvas.toDataURL("image/png"); a.click(); return;
     }
-    const quantity=parseInt(document.getElementById('quantity-input').value)||1,amount=document.getElementById("amount-input").value,resDiv=document.getElementById('validation-result');
+    const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
+    const amount = document.getElementById("amount-input").value;
+    const resultDiv = document.getElementById('validation-result');
     try {
-        const dirHandle=await window.showDirectoryPicker();resDiv.innerHTML=`<span class="info">Processing ${quantity} banknote(s)...</span>`;
-        const offscreenCanvas=document.createElement('canvas');offscreenCanvas.width=canvas.width;offscreenCanvas.height=canvas.height;
-        for(let i=0;i<quantity;i++){
-            let noteData=null,isValid=false,attempts=0;
-            while(!isValid&&attempts<10){
-                noteData=await createNoteData(amount,i);
-                if(!noteData){resDiv.innerHTML=`<span class="invalid">❌ Batch stopped. No private key.</span>`;return}
-                isValid=await validateNoteForCreation(noteData,offscreenCanvas);
-                if(!isValid)resDiv.innerHTML=`<span class="invalid">❌ Note ${i+1} failed OCR on attempt ${attempts+1}. Regenerating...</span>`;attempts++
+        const dirHandle = await window.showDirectoryPicker();
+        resultDiv.innerHTML = `<span class="info">Processing ${quantity} banknote(s)...</span>`;
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = canvas.width;
+        offscreenCanvas.height = canvas.height;
+        for (let i = 0; i < quantity; i++) {
+            let noteData = null, isValid = false, attempts = 0;
+            while (!isValid && attempts < 10) {
+                noteData = await createNoteData(amount, i);
+                if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ Batch stopped. No private key.</span>`; return; }
+                isValid = await validateNoteForCreation(noteData, offscreenCanvas);
+                if (!isValid) resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR on attempt ${attempts + 1}. Regenerating...</span>`;
+                attempts++;
             }
-            if(isValid){
-                await drawNoteOnCanvas(offscreenCanvas,noteData,offscreenCanvas.width,offscreenCanvas.height,true);
-                const blob=await new Promise(r=>offscreenCanvas.toBlob(r,'image/png')),fileHandle=await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`,{create:true}),writable=await fileHandle.createWritable();
-                await writable.write(blob);await writable.close();resDiv.innerHTML=`<span class="info">Saved banknote ${i+1} of ${quantity}.</span>`;
-            } else {resDiv.innerHTML=`<span class="invalid">❌ Failed to create a valid note after multiple attempts. Batch stopped.</span>`;return}
+            if (isValid) {
+                await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
+                const blob = await new Promise(r => offscreenCanvas.toBlob(r, 'image/png'));
+                const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                resultDiv.innerHTML = `<span class="info">Saved banknote ${i + 1} of ${quantity}.</span>`;
+            } else { resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid note after multiple attempts. Batch stopped.</span>`; return; }
         }
-        resDiv.innerHTML=`<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
+        resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
         await handleCreateNewNote();
-    } catch (error) { resDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`; }
+    } catch (error) { resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`; }
 }
 
-async function drawNoteOnCanvas(targetCanvas,noteData,w,h,applyStego=true){return new Promise(async(resolve,reject)=>{if(Object.keys(noteData).length===0)return reject("No note data");const ctx=targetCanvas.getContext("2d"),{amount,verificationKey,serial,visualHash,signature}=noteData,scale=w/1350;const bg=ctx.createLinearGradient(0,0,0,h),hue=H(visualHash,0,0,360);bg.addColorStop(0,`hsl(${hue},50%,6%)`);bg.addColorStop(1,`hsl(${hue},40%,4%)`);ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);drawWatermark(ctx,visualHash,w,h);drawKochGuilloche(ctx,visualHash,w,h);drawNoisePattern(ctx,visualHash,w,h);ctx.shadowColor="rgba(0,0,0,0.7)";ctx.shadowBlur=8*scale;ctx.shadowOffsetX=2*scale;ctx.shadowOffsetY=2*scale;ctx.fillStyle="#EAEAEA";ctx.font=`bold ${80*scale}px 'Roboto Mono'`;ctx.textAlign='left';ctx.fillText(serial.substring(4),150*scale,160*scale);ctx.fillText(verificationKey.substring(4),150*scale,280*scale);ctx.font=`bold ${150*scale}px 'Roboto Mono'`;ctx.textAlign="right";ctx.shadowBlur=12*scale;ctx.shadowOffsetX=4*scale;ctx.shadowOffsetY=4*scale;ctx.fillText(amount.toString(),w-(120*scale),190*scale);ctx.shadowColor="transparent";const qrC=document.createElement("canvas"),qrS=380*scale;QRCode.toCanvas(qrC,JSON.stringify(noteData),{width:qrS,errorCorrectionLevel:'H',color:{dark:'#000',light:'#FFF'}},err=>{if(err)return reject(err);ctx.drawImage(qrC,w-(150*scale)-qrS,h-(520*scale),qrS,qrS);ctx.font=`${30*scale}px 'Roboto Mono'`;ctx.fillStyle="rgba(255,255,255,0.4)";ctx.textAlign="center";ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)",w/2,h-60*scale);if(applyStego&&signature){try{LSB.encode(ctx,signature)}catch(e){reject(e)}}resolve()})})}
-function drawKochGuilloche(g,h,w,H){g.save();g.translate(w/2,H/2);const s=w/1350,i=H(h,2,2,4),z=w*(H(h,4,10,20)/100),a=(H(h,6,0,360)/360)*Math.PI*2,n=H(h,8,3,6),o=H(h,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,D=Math.sqrt(dx*dx+dy*dy),uX=dx/D,uY=dy/D,p1x=x1+uX*D/3,p1y=y1+uY*D/3,p2x=x1+uX*D*2/3,p2y=y1+uY*D*2/3,p3x=p1x+uX*D/6-uY*D*Math.sqrt(3)/6,p3y=p1y+uY*D/6+uX*D*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g.lineWidth=1*s;g.lineJoin='bevel';g.lineCap='round';for(let j=0;j<n;j++){const C=(o+j*(360/n))%360;g.strokeStyle=`hsla(${C},70%,60%,0.15)`;const L=(j/n)*Math.PI*2+a,x1=Math.cos(L)*z,y1=Math.sin(L)*z,x2=Math.cos(L+Math.PI)*z,y2=Math.sin(L+Math.PI)*z;g.beginPath();g.moveTo(x1,y1);d(x1,y1,x2,y2,i);g.stroke()}g.restore()}
-function drawWatermark(g,h,w,H){g.save();g.translate(w/2,H/2);const s=w/1350,n=H(h,16,3,6),R=w*(H(h,18,10,25)/100)*s,c=H(h,20,0,360);g.strokeStyle=`hsla(${c},50%,80%,0.05)`;g.lineWidth=4*s;for(let i=0;i<n;i++){g.beginPath();const S=(i/n)*Math.PI*2+H(h,22,0,100)/100,E=S+H(h,24,6,12)*Math.PI;for(let t=S;t<E;t+=0.05){const r=R*(t-S)/(E-S),x=r*Math.cos(t),y=r*Math.sin(t);if(t===S)g.moveTo(x,y);else g.lineTo(x,y)}g.stroke()}g.restore()}
-function drawNoisePattern(g,h,w,H){g.save();for(let i=0;i<20000;i++){const x=Math.random()*w,y=Math.random()*H,o=Math.random()*0.15,c=H(h,(i%30)+4,0,360);g.fillStyle=`hsla(${c},50%,80%,${o})`;g.fillRect(x,y,1,1)}g.restore()}
+async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
+    return new Promise(async (resolve, reject) => {
+        if (Object.keys(noteData).length === 0) return reject("No note data provided.");
+        const ctx = targetCanvas.getContext("2d");
+        const { amount, verificationKey, serial, visualHash, signature } = noteData;
+        const scale = width / 1350;
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+        const baseHue = H(visualHash, 0, 0, 360);
+        bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
+        bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
+        ctx.fillStyle = bgGradient;
+        ctx.fillRect(0, 0, width, height);
+        drawWatermark(ctx, visualHash, width, height);
+        drawKochGuilloche(ctx, visualHash, width, height);
+        drawNoisePattern(ctx, visualHash, width, height);
+        ctx.shadowColor = "rgba(0,0,0,0.7)";
+        ctx.shadowBlur = 8 * scale;
+        ctx.shadowOffsetX = 2 * scale;
+        ctx.shadowOffsetY = 2 * scale;
+        ctx.fillStyle = "#EAEAEA";
+        ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
+        ctx.textAlign = 'left';
+        ctx.fillText(serial.substring(4), 150 * scale, 160 * scale);
+        ctx.fillText(verificationKey.substring(4), 150 * scale, 280 * scale);
+        ctx.font = `bold ${150 * scale}px 'Roboto Mono'`;
+        ctx.textAlign = "right";
+        ctx.shadowBlur = 12 * scale;
+        ctx.shadowOffsetX = 4 * scale;
+        ctx.shadowOffsetY = 4 * scale;
+        ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
+        ctx.shadowColor = "transparent";
+        const qrCanvas = document.createElement("canvas");
+        const qrSize = 380 * scale;
+        QRCode.toCanvas(qrCanvas, JSON.stringify(noteData), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000', light: '#FFF' } }, err => {
+            if (err) return reject(err);
+            ctx.drawImage(qrCanvas, width - (150 * scale) - qrSize, height - (520 * scale), qrSize, qrSize);
+            ctx.font = `${30 * scale}px 'Roboto Mono'`;
+            ctx.fillStyle = "rgba(255,255,255,0.4)";
+            ctx.textAlign = "center";
+            ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)", width / 2, height - 60 * scale);
+            if (applySteganography && signature) {
+                try { LSB.encode(ctx, signature); } catch (e) { reject(e); }
+            }
+            resolve();
+        });
+    });
+}
+
+function drawKochGuilloche(g_ctx, hash, w, h) {
+    g_ctx.save();
+    g_ctx.translate(w / 2, h / 2);
+    const scale = w / 1350;
+    const iteration = H(hash, 2, 2, 4);
+    const size = w * (H(hash, 4, 10, 20) / 100);
+    const angleOffset = (H(hash, 6, 0, 360) / 360) * Math.PI * 2;
+    const numLines = H(hash, 8, 3, 6);
+    const hueOffset = H(hash, 10, 0, 360);
+    function drawKochSegment(x1, y1, x2, y2, level) {
+        if (level === 0) { g_ctx.lineTo(x2, y2); return; }
+        const dx = x2 - x1, dy = y2 - y1;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const unitVecX = dx / dist, unitVecY = dy / dist;
+        const p1x = x1 + unitVecX * dist / 3, p1y = y1 + unitVecY * dist / 3;
+        const p2x = x1 + unitVecX * dist * 2 / 3, p2y = y1 + unitVecY * dist * 2 / 3;
+        const p3x = p1x + unitVecX * dist / 6 - unitVecY * dist * Math.sqrt(3) / 6;
+        const p3y = p1y + unitVecY * dist / 6 + unitVecX * dist * Math.sqrt(3) / 6;
+        drawKochSegment(x1, y1, p1x, p1y, level - 1);
+        drawKochSegment(p1x, p1y, p3x, p3y, level - 1);
+        drawKochSegment(p3x, p3y, p2x, p2y, level - 1);
+        drawKochSegment(p2x, p2y, x2, y2, level - 1);
+    }
+    g_ctx.lineWidth = 1 * scale; g_ctx.lineJoin = 'bevel'; g_ctx.lineCap = 'round';
+    for (let i = 0; i < numLines; i++) {
+        const hue = (hueOffset + i * (360 / numLines)) % 360;
+        g_ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.15)`;
+        const lineAngle = (i / numLines) * Math.PI * 2 + angleOffset;
+        const x1 = Math.cos(lineAngle) * size, y1 = Math.sin(lineAngle) * size;
+        const x2 = Math.cos(lineAngle + Math.PI) * size, y2 = Math.sin(lineAngle + Math.PI) * size;
+        g_ctx.beginPath(); g_ctx.moveTo(x1, y1);
+        drawKochSegment(x1, y1, x2, y2, iteration);
+        g_ctx.stroke();
+    }
+    g_ctx.restore();
+}
+
+function drawWatermark(g_ctx, hash, w, h) {
+    g_ctx.save();
+    g_ctx.translate(w / 2, h / 2);
+    const scale = w / 1350;
+    const numSpirals = H(hash, 16, 3, 6);
+    const spiralRadius = w * (H(hash, 18, 10, 25) / 100) * scale;
+    const hue = H(hash, 20, 0, 360);
+    g_ctx.strokeStyle = `hsla(${hue}, 50%, 80%, 0.05)`;
+    g_ctx.lineWidth = 4 * scale;
+    for (let i = 0; i < numSpirals; i++) {
+        g_ctx.beginPath();
+        const startAngle = (i / numSpirals) * Math.PI * 2 + H(hash, 22, 0, 100) / 100;
+        const endAngle = startAngle + H(hash, 24, 6, 12) * Math.PI;
+        for (let t = startAngle; t < endAngle; t += 0.05) {
+            const r = spiralRadius * (t - startAngle) / (endAngle - startAngle);
+            const x = r * Math.cos(t), y = r * Math.sin(t);
+            if (t === startAngle) g_ctx.moveTo(x, y); else g_ctx.lineTo(x, y);
+        }
+        g_ctx.stroke();
+    }
+    g_ctx.restore();
+}
+
+function drawNoisePattern(g_ctx, hash, w, h) {
+    g_ctx.save();
+    for (let i = 0; i < 20000; i++) {
+        const x = Math.random() * w, y = Math.random() * h;
+        const o = Math.random() * 0.15;
+        const hue = H(hash, (i % 30) + 4, 0, 360);
+        g_ctx.fillStyle = `hsla(${hue},50%,80%,${o})`;
+        g_ctx.fillRect(x, y, 1, 1);
+    }
+    g_ctx.restore();
+}
 
 // ===================================================================================
 // Application Initialization
@@ -683,16 +872,14 @@ async function main() {
     
     try {
         falconApi = await pqcSignFalcon512();
-        // Argon2 is imported but doesn't need an async init call like Falcon
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
         console.error("Failed to load a module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load a required module. Check the file paths and your browser console.</span>`);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load a required module. Check file paths and console.</span>`);
         alert("Error: Failed to load cryptographic modules. See the console for details.");
         return;
     }
     
-    // Attach event listeners now that the script is a module
     document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
     document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
     document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
@@ -701,7 +888,6 @@ async function main() {
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
 }
 
-// Start the application
 main();
 
 </script>
