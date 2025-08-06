@@ -9,7 +9,6 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-    <script src='./argon2.js'></script>
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -102,7 +101,7 @@
             justify-content: center;
             gap: 8px;
         }
-
+        
         input[type="number"] {
             font-family: var(--mono-font);
             font-weight: 700;
@@ -126,7 +125,7 @@
             background: var(--light-bg);
             border: 1px solid var(--border-color);
         }
-
+        
         button[disabled], label[disabled] {
             cursor: not-allowed;
             opacity: 0.5;
@@ -169,7 +168,7 @@
             flex-wrap: wrap;
             gap: 16px;
         }
-
+        
         #validation-result, #key-status {
             margin-top: 20px;
             font-size: 12px;
@@ -189,7 +188,7 @@
         .valid { color: var(--success-color); }
         .invalid { color: var(--error-color); }
         .info { color: var(--info-color); }
-
+        
         .key-info {
             text-align: left;
             padding: 10px;
@@ -293,6 +292,7 @@
 // Import cryptographic libraries as modules
 import pqcSignFalcon512 from './falcon.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import argon2 from './argon2.js';
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
@@ -320,12 +320,12 @@ const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).pad
 // ===================================================================================
 
 const BankCrypto = (() => {
-
+    
     function hashMessage(message) {
         const hexHash = shake256(message, 1024);
         return hexToUint8Array(hexHash);
     }
-
+    
     async function generateNewKeyPair() {
         if (!falconApi) throw new Error("Falcon API not initialized.");
         return await falconApi.keypair();
@@ -343,7 +343,7 @@ const BankCrypto = (() => {
         const dataHash = hashMessage(data);
         return await falconApi.verify(signature, dataHash, publicKey);
     }
-
+    
     async function encryptPrivateKey(privateKeyBytes, password) {
         const argonParams = {
             time: 2, mem: 65536, parallelism: 4,
@@ -359,7 +359,7 @@ const BankCrypto = (() => {
             const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
             const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
             const encryptedKey = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, derivedKey, encodedKey);
-
+            
             return {
                 cipherText: arrayBufferToBase64(encryptedKey),
                 iv: arrayBufferToBase64(iv),
@@ -374,12 +374,12 @@ const BankCrypto = (() => {
             throw new Error("Failed to derive key with Argon2. The WASM module might have failed to load.");
         }
     }
-
+    
     async function decryptPrivateKey(encryptedData, password) {
         const salt = base64ToUint8Array(encryptedData.salt);
         const iv = base64ToUint8Array(encryptedData.iv);
         const cipherText = base64ToUint8Array(encryptedData.cipherText);
-
+        
         try {
             const argon2Result = await argon2.hash({ pass: password, salt: salt, ...encryptedData.argonParams, raw: true });
             const derivedKeyBytes = argon2Result.hash;
@@ -430,7 +430,7 @@ async function handleGenerateAndExportKeys() {
         const keyPair = await BankCrypto.generateNewKeyPair();
         activeKeys.publicKey = keyPair.publicKey;
         activeKeys.privateKey = keyPair.privateKey;
-
+        
         const publicKeyB64 = arrayBufferToBase64(keyPair.publicKey);
         downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-public-key.json', 'application/json');
 
@@ -568,7 +568,7 @@ async function handleFileSelect(event) {
         const qrData = await readQRCodeFromCanvas(tempCanvas);
         if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`; return; }
         let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
-
+        
         resultHTML += `\n\n<span class="info">2. Verifying digital signature (Falcon-512)...</span>`;
         resultDiv.innerHTML = resultHTML;
         const isSignatureValid = await validateDigitalSignature(qrData);
@@ -595,7 +595,7 @@ async function handleFileSelect(event) {
         } else {
             resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
         }
-
+        
         if (isFullyValid) {
             resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
             resultDiv.innerHTML = resultHTML;
@@ -869,11 +869,8 @@ function drawNoisePattern(g_ctx, hash, w, h) {
 async function main() {
     updateControlsState(false);
     updateKeyStatus('<span class="info">⏳ Loading Cryptographic Modules...</span>');
-
+    
     try {
-        // این خط اطمینان می‌دهد که Argon2 فایل WASM را در همان پوشه پیدا می‌کند.
-        argon2.browser.init({ locateFile: (file) => './' + file }); 
-
         falconApi = await pqcSignFalcon512();
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
@@ -882,7 +879,7 @@ async function main() {
         alert("Error: Failed to load cryptographic modules. See the console for details.");
         return;
     }
-
+    
     document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
     document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
     document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
