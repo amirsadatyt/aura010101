@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>اسکناس دیجیتال سادات (امنیت پسا-کوانتومی)</title>
+    <title>Sadat Post-Quantum Banknote</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <style>
         :root {
-            --primary-font: 'Vazirmatn', 'Segoe UI', sans-serif;
+            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
             --mono-font: 'Roboto Mono', monospace;
             --dark-bg: #10101a;
             --medium-bg: #1a1a2e;
@@ -45,156 +45,152 @@
         .valid { color: var(--success-color); }
         .invalid { color: var(--error-color); }
         .info { color: var(--info-color); }
-        .key-info { text-align: left; padding: 10px; }
-        .key-info p { margin: 5px 0; color: var(--text-muted); }
-        .key-info code { display: block; margin-top: 5px; font-size: 0.8rem; word-break: break-all; background: var(--light-bg); padding: 5px; border-radius: 4px; }
         .data-heading { color: var(--accent-color-1); margin-top: 15px; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; font-weight: 600; font-family: var(--primary-font); }
         .comparison-item { margin-top: 10px; padding: 8px 10px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid var(--accent-color-2); }
         code { background: var(--medium-bg); padding: 2px 6px; border-radius: 4px; font-size: 1em; }
-        .input-label { font-size: 0.9rem; color: var(--text-muted); margin-left: 10px; }
+        .input-label { font-size: 0.9rem; color: var(--text-muted); margin-right: -10px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1>اسکناس دیجیتال سادات</h1>
-        <p>یک مفهوم ارز دیجیتال امن و قابل تایید با استفاده از امضای هیبریدی (Ed25519 + Falcon-512) و استگانوگرافی LSB</p>
+        <h1>Sadat Digital Banknote</h1>
+        <p>A secure, verifiable digital currency concept using Hybrid Signatures (Ed25519 + Falcon-512) and LSB Steganography.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
 
     <div class="section">
-        <h2>کنترل‌های اسکناس</h2>
+        <h2>Banknote Controls</h2>
         <div class="controls-grid">
-            <span class="input-label">مبلغ:</span>
+            <span class="input-label">Amount:</span>
             <input type="number" id="amount-input" value="50000">
-            <span class="input-label">تعداد:</span>
+            <span class="input-label">Quantity:</span>
             <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 طراحی مجدد اسکناس</button>
-            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 دانلود بسته‌ای</button>
+            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 Redesign Banknote</button>
+            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 Download Batch</button>
         </div>
     </div>
 
     <div class="section">
-        <h2>مدیریت کلید بانک (پسا-کوانتومی)</h2>
+        <h2>Bank Key Management (Post-Quantum)</h2>
         <div class="controls-grid">
-            <button onclick="handleGenerateAndExportKeys()">🔑 تولید و خروجی گرفتن کلیدهای هیبریدی</button>
-            <label for="import-public-key" class="sub-button">وارد کردن کلید عمومی</label>
+            <button onclick="handleGenerateAndExportKeys()">🔑 Generate & Export Hybrid Keys</button>
+            <label for="import-public-key" class="sub-button">Import Public Key</label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
-            <label for="import-private-key" class="sub-button">وارد کردن کلید خصوصی</label>
+            <label for="import-private-key" class="sub-button">Import Encrypted Private Key</label>
             <input type="file" id="import-private-key" accept=".json" style="display: none;">
         </div>
-        <div id="key-status">وضعیت جفت کلید در اینجا نمایش داده می‌شود.</div>
+        <div id="key-status">Key pair status will be displayed here.</div>
     </div>
 
     <div class="section" id="validator-section">
-        <h2>اعتبارسنجی اسکناس</h2>
-        <label for="validator-input">انتخاب تصویر برای اعتبارسنجی</label>
+        <h2>Validate Banknote</h2>
+        <label for="validator-input">Select Image for Validation</label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
-        <div id="validation-result">نتیجه اعتبارسنجی در اینجا نمایش داده می‌شود.</div>
+        <div id="validation-result">Validation result will be displayed here.</div>
     </div>
 </div>
 
 <script type="module">
 // ===================================================================================
-// وارد کردن ماژول‌های رمزنگاری
+// Import Crypto Modules
 // ===================================================================================
 import pqcSignFalcon512 from './falcon.js';
 import nacl from 'https://cdn.skypack.dev/tweetnacl';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
+// DOM Elements & Global State
 const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
-let activeKeys = { 
-    publicKey: { ed25519: null, falcon: null }, 
+let activeKeys = {
+    publicKey: { ed25519: null, falcon: null },
     privateKey: { ed25519: null, falcon: null }
 };
 let falconApi = null;
 
 // ===================================================================================
-// ابزارهای کمکی
+// Utility Functions
 // ===================================================================================
 const bytesToBase64 = (bytes) => btoa(String.fromCharCode(...bytes));
 const base64ToBytes = (base64) => Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 const hexToBytes = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 
 // ===================================================================================
-// منطق رمزنگاری بانک (هیبریدی: Ed25519 + Falcon-512)
+// Bank Crypto Logic (Hybrid: Ed25519 + Falcon-512)
 // ===================================================================================
 const BankCrypto = (() => {
-    
+    // Constants for private key encryption
+    const AES_ALGO = "AES-GCM";
+    const PBKDF2_ITERATIONS = 100000;
+    const PBKDF2_HASH_ALGO = "SHA-256";
+    const AES_KEY_LENGTH = 256;
+
     function hashMessage(message) {
-        // از SHAKE256 برای تولید هش با طول خروجی دلخواه استفاده می‌کنیم
-        return hexToBytes(shake256(message, 1024)); // 512 bits for each algo
+        // Use SHAKE256 for a variable-length hash output
+        return hexToBytes(shake256(message, 1024));
     }
 
     async function generateNewKeyPair() {
-        if (!falconApi) throw new Error("ماژول Falcon-512 هنوز بارگذاری نشده است.");
+        if (!falconApi) throw new Error("Falcon-512 module is not yet loaded.");
         const ed25519KeyPair = nacl.sign.keyPair();
         const falconKeyPair = await falconApi.keypair();
         return { ed25519: ed25519KeyPair, falcon: falconKeyPair };
     }
 
     async function signData(data, privateKeys) {
-        if (!privateKeys.ed25519 || !privateKeys.falcon) throw new Error("کلیدهای خصوصی برای امضا در دسترس نیستند.");
-        
+        if (!privateKeys.ed25519 || !privateKeys.falcon) throw new Error("Private keys are not available for signing.");
         const messageHash = hashMessage(data);
-        
-        // امضای کلاسیک
-        const ed25519Signature = nacl.sign.detached(messageHash, privateKeys.ed25519.secretKey);
-        
-        // امضای پسا-کوانتومی
-        const { signature: falconSignature } = await falconApi.sign(messageHash, privateKeys.falcon.privateKey);
-
+        const ed25519Signature = nacl.sign.detached(messageHash, privateKeys.ed25519);
+        const { signature: falconSignature } = await falconApi.sign(messageHash, privateKeys.falcon);
         return { ed25519: ed25519Signature, falcon: falconSignature };
     }
 
     async function verifySignatures(signatures, data, publicKeys) {
-        if (!publicKeys.ed25519 || !publicKeys.falcon) throw new Error("کلیدهای عمومی برای تایید در دسترس نیستند.");
-
+        if (!publicKeys.ed25519 || !publicKeys.falcon) throw new Error("Public keys are not available for verification.");
         const messageHash = hashMessage(data);
-
-        // تایید امضای کلاسیک
         const isEd25519Valid = nacl.sign.detached.verify(messageHash, signatures.ed25519, publicKeys.ed25519);
-        
-        // تایید امضای پسا-کوانتومی
         const isFalconValid = await falconApi.verify(signatures.falcon, messageHash, publicKeys.falcon);
-        
         return { isEd25519Valid, isFalconValid };
     }
-    
-    // توابع مدیریت کلید (خروجی و ورودی گرفتن)
-    function exportKeys(keys) {
+
+    async function encryptPrivateKeyBundle(privateKeyBundle, password) {
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const keyMaterial = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt"]
+        );
+        const privateKeysJson = JSON.stringify(privateKeyBundle);
+        const encryptedData = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv }, derivedKey, new TextEncoder().encode(privateKeysJson));
         return {
-            publicKey: {
-                ed25519: bytesToBase64(keys.publicKey.ed25519),
-                falcon: bytesToBase64(keys.publicKey.falcon)
-            },
-            privateKey: {
-                ed25519: bytesToBase64(keys.secretKey.ed25519),
-                falcon: bytesToBase64(keys.secretKey.falcon)
-            }
+            cipherText: bytesToBase64(new Uint8Array(encryptedData)),
+            salt: bytesToBase64(salt),
+            iv: bytesToBase64(iv),
         };
     }
 
-    function importPublicKeys(base64Keys) {
-        return {
-            ed25519: base64ToBytes(base64Keys.ed25519),
-            falcon: base64ToBytes(base64Keys.falcon)
-        };
-    }
-    
-    function importPrivateKeys(base64Keys) {
-        return {
-            ed25519: base64ToBytes(base64Keys.ed25519),
-            falcon: base64ToBytes(base64Keys.falcon)
-        };
+    async function decryptPrivateKeyBundle(encryptedPayload, password) {
+        const salt = base64ToBytes(encryptedPayload.salt);
+        const iv = base64ToBytes(encryptedPayload.iv);
+        const cipherText = base64ToBytes(encryptedPayload.cipherText);
+        const keyMaterial = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["decrypt"]
+        );
+        const decryptedJson = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv }, derivedKey, cipherText);
+        return JSON.parse(new TextDecoder().decode(decryptedJson));
     }
 
-    return { generateNewKeyPair, signData, verifySignatures, hashMessage, exportKeys, importPublicKeys, importPrivateKeys };
+    return { generateNewKeyPair, signData, verifySignatures, hashMessage, encryptPrivateKeyBundle, decryptPrivateKeyBundle };
 })();
 
+// ===================================================================================
+// UI Handlers and Logic
+// ===================================================================================
 function getStandardizedDataForSigning(noteData) {
     const dataToSign = {
         amount: noteData.amount,
@@ -215,37 +211,49 @@ function updateControlsState(isEnabled) {
     document.getElementById('download-batch-button').disabled = !isEnabled;
 }
 
-// ===================================================================================
-// مدیریت کلید در UI
-// ===================================================================================
 async function handleGenerateAndExportKeys() {
-    updateKeyStatus('<span class="info">⏳ در حال تولید جفت کلیدهای هیبریدی (Ed25519 + Falcon-512)...</span>');
+    if (!falconApi) {
+        alert("Error: Post-Quantum modules are not loaded. Cannot generate keys. Please check the browser console for errors.");
+        return;
+    }
+    const password = prompt("Enter a strong password to encrypt your new private key file:");
+    if (!password) {
+        updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>', true);
+        return;
+    }
+
+    updateKeyStatus('<span class="info">⏳ Generating hybrid key pairs (Ed25519 + Falcon-512)...</span>');
     try {
         const keyPairs = await BankCrypto.generateNewKeyPair();
-        activeKeys.publicKey.ed25519 = keyPairs.ed25519.publicKey;
-        activeKeys.privateKey.ed25519 = keyPairs.ed25519.secretKey;
-        activeKeys.publicKey.falcon = keyPairs.falcon.publicKey;
-        activeKeys.privateKey.falcon = keyPairs.falcon.privateKey;
-        
-        // خروجی گرفتن از کلید عمومی
+        activeKeys.publicKey = {
+            ed25519: keyPairs.ed25519.publicKey,
+            falcon: keyPairs.falcon.publicKey
+        };
+        activeKeys.privateKey = {
+            ed25519: keyPairs.ed25519.secretKey,
+            falcon: keyPairs.falcon.privateKey
+        };
+
+        // Export public keys (plain text)
         const publicKeysExport = {
             ed25519: bytesToBase64(activeKeys.publicKey.ed25519),
             falcon: bytesToBase64(activeKeys.publicKey.falcon)
         };
         downloadFile(JSON.stringify(publicKeysExport, null, 2), 'Sadat-post-quantum-public-keys.json', 'application/json');
 
-        // خروجی گرفتن از کلید خصوصی
-        const privateKeysExport = {
+        // Prepare private key bundle for encryption
+        const privateKeyBundle = {
             ed25519: bytesToBase64(activeKeys.privateKey.ed25519),
             falcon: bytesToBase64(activeKeys.privateKey.falcon)
         };
-        downloadFile(JSON.stringify(privateKeysExport, null, 2), 'Sadat-post-quantum-private-keys.json', 'application/json');
+        const encryptedPayload = await BankCrypto.encryptPrivateKeyBundle(privateKeyBundle, password);
+        downloadFile(JSON.stringify(encryptedPayload, null, 2), 'Sadat-post-quantum-private-keys-ENCRYPTED.json', 'application/json');
 
-        updateKeyStatus('<span class="valid">✅ کلیدهای هیبریدی جدید تولید و ذخیره شدند. کلیدها برای امضا و تایید فعال هستند.</span>');
+        updateKeyStatus('<span class="valid">✅ Hybrid keys generated and exported! Keys are now active for signing and verification.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
     } catch (e) {
-        updateKeyStatus(`<span class="invalid">❌ خطا در تولید کلید: ${e.message}</span>`, true);
+        updateKeyStatus(`<span class="invalid">❌ Key generation error: ${e.message}</span>`, true);
     }
 }
 
@@ -255,11 +263,14 @@ document.getElementById('import-public-key').addEventListener('change', async (e
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const jwk = JSON.parse(e.target.result);
-            activeKeys.publicKey = BankCrypto.importPublicKeys(jwk);
-            updateKeyStatus('<span class="valid">✅ کلیدهای عمومی هیبریدی با موفقیت وارد شدند. آماده برای اعتبارسنجی اسکناس.</span>');
+            const json = JSON.parse(e.target.result);
+            activeKeys.publicKey = {
+                ed25519: base64ToBytes(json.ed25519),
+                falcon: base64ToBytes(json.falcon)
+            };
+            updateKeyStatus('<span class="valid">✅ Public keys imported successfully. Ready for banknote validation.</span>');
         } catch (error) {
-            updateKeyStatus(`<span class="invalid">❌ خطا در وارد کردن کلید عمومی: ${error.message}</span>`, true);
+            updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`, true);
         }
     };
     reader.readAsText(file);
@@ -268,20 +279,31 @@ document.getElementById('import-public-key').addEventListener('change', async (e
 document.getElementById('import-private-key').addEventListener('change', async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+    const password = prompt("Enter the password to decrypt the private key file:");
+    if (!password) {
+        updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required.</span>', true);
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const jwk = JSON.parse(e.target.result);
-            activeKeys.privateKey = BankCrypto.importPrivateKeys(jwk);
-            updateKeyStatus('<span class="valid">✅ کلیدهای خصوصی هیبریدی با موفقیت وارد شدند. آماده برای صدور اسکناس.</span>');
+            const encryptedData = JSON.parse(e.target.result);
+            updateKeyStatus('<span class="info">⏳ Decrypting and importing private keys...</span>');
+            const decryptedBundle = await BankCrypto.decryptPrivateKeyBundle(encryptedData, password);
+            activeKeys.privateKey = {
+                ed25519: base64ToBytes(decryptedBundle.ed25519),
+                falcon: base64ToBytes(decryptedBundle.falcon)
+            };
+            updateKeyStatus('<span class="valid">✅ Private keys imported successfully. Ready for banknote signing.</span>');
             updateControlsState(true);
         } catch (error) {
-            updateKeyStatus(`<span class="invalid">❌ خطا در وارد کردن کلید خصوصی: ${error.message}</span>`, true);
+            console.error(error);
+            updateKeyStatus(`<span class="invalid">❌ Error decrypting private key. Check your password and file.</span>`, true);
         }
     };
     reader.readAsText(file);
 });
-
 
 function downloadFile(data, filename, type) {
     const blob = new Blob([data], { type: type });
@@ -295,26 +317,21 @@ function downloadFile(data, filename, type) {
     URL.revokeObjectURL(url);
 }
 
-
 // ===================================================================================
-// ماژول استگانوگرافی LSB
+// LSB Steganography Module
 // ===================================================================================
 const LSB = (() => {
     const MESSAGE_TERMINATOR = "00000000";
-
     function messageToBinary(message) {
         return message.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('') + MESSAGE_TERMINATOR;
     }
-
     function encode(ctx, message) {
         const binaryMessage = messageToBinary(message);
         const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
         const data = imageData.data;
-        
-        if (binaryMessage.length > data.length / 4 * 3) {
-            throw new Error("پیام برای کدگذاری در تصویر بیش از حد طولانی است.");
+        if (binaryMessage.length > (data.length / 4) * 3) {
+            throw new Error("Message is too long to be encoded in the image.");
         }
-
         let dataIndex = 0;
         for (let i = 0; i < binaryMessage.length; i++) {
             if ((dataIndex + 1) % 4 === 0) dataIndex++;
@@ -323,12 +340,10 @@ const LSB = (() => {
         }
         ctx.putImageData(imageData, 0, 0);
     }
-
     function decode(ctx) {
         const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
         const data = imageData.data;
-        let binaryMessage = "", byte = "", decodedMessage = "";
-
+        let byte = "", decodedMessage = "";
         for (let i = 0; i < data.length; i++) {
             if ((i + 1) % 4 === 0) continue;
             byte += (data[i] & 1);
@@ -340,13 +355,11 @@ const LSB = (() => {
         }
         return null;
     }
-
     return { encode, decode };
 })();
 
-
 // ===================================================================================
-// منطق اعتبارسنجی
+// Validation Logic
 // ===================================================================================
 document.getElementById('validator-input').addEventListener('change', handleFileSelect);
 
@@ -355,12 +368,12 @@ async function handleFileSelect(event) {
     if (!file) return;
 
     if (!activeKeys.publicKey.ed25519 || !activeKeys.publicKey.falcon) {
-        alert("خطا: هیچ کلید عمومی برای اعتبارسنجی فعال نیست. لطفا یک کلید تولید یا وارد کنید.");
+        alert("Error: No public key is active for validation. Please generate or import one.");
         return;
     }
 
     const resultDiv = document.getElementById('validation-result');
-    resultDiv.innerHTML = `<span class="info">⏳ آماده‌سازی تصویر برای اعتبارسنجی...</span>`;
+    resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
 
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
@@ -370,44 +383,43 @@ async function handleFileSelect(event) {
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
 
-        resultDiv.innerHTML = `<span class="info">1. خواندن داده‌های دیجیتال از QR Code...</span>`;
+        let resultHTML = `<span class="info">1. Reading digital data from QR Code...</span>`;
+        resultDiv.innerHTML = resultHTML;
         const qrData = readQRCodeFromCanvas(tempCanvas);
 
         if (!qrData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ خطای مهلک: QR Code یافت نشد یا غیرقابل خواندن است. اعتبارسنجی متوقف شد.</span>`;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable. Validation stopped.</span>`;
             return;
         }
-        let resultHTML = `<span class="valid">✅ 1. داده‌های QR با موفقیت خوانده شد.</span>`;
-        
-        resultHTML += `\n\n<span class="info">2. اعتبارسنجی امضاهای دیجیتال هیبریدی...</span>`;
+        resultHTML += `\n<span class="valid">✅ 1. QR data successfully read.</span>`;
+
+        resultHTML += `\n\n<span class="info">2. Verifying hybrid digital signatures...</span>`;
         resultDiv.innerHTML = resultHTML;
 
-        // Verify hybrid signatures
         const verificationResult = await validateDigitalSignatures(qrData);
-        resultHTML += `\n<span class="${verificationResult.isEd25519Valid ? 'valid' : 'invalid'}">   - امضای کلاسیک (Ed25519): ${verificationResult.isEd25519Valid ? '✅ معتبر' : '❌ نامعتبر'}</span>`;
-        resultHTML += `\n<span class="${verificationResult.isFalconValid ? 'valid' : 'invalid'}">   - امضای پسا-کوانتومی (Falcon-512): ${verificationResult.isFalconValid ? '✅ معتبر' : '❌ نامعتبر'}</span>`;
+        resultHTML += `\n<span class="${verificationResult.isEd25519Valid ? 'valid' : 'invalid'}">   - Classical Signature (Ed25519): ${verificationResult.isEd25519Valid ? '✅ Valid' : '❌ Invalid'}</span>`;
+        resultHTML += `\n<span class="${verificationResult.isFalconValid ? 'valid' : 'invalid'}">   - Post-Quantum Signature (Falcon-512): ${verificationResult.isFalconValid ? '✅ Valid' : '❌ Invalid'}</span>`;
 
         if (!verificationResult.isEd25519Valid || !verificationResult.isFalconValid) {
-            resultHTML += `\n<span class="invalid">❌ خطای مهلک: امضای دیجیتال نامعتبر است. داده‌های اسکناس جعلی یا دستکاری شده است.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. The banknote data is forged or has been tampered with.</span>`;
             resultDiv.innerHTML = resultHTML;
             return;
         }
-        resultHTML += `\n<span class="valid">✅ 2. امضاهای هیبریدی تایید شدند. اصالت توسط کلید عمومی بانک صادرکننده تایید شد.</span>`;
+        resultHTML += `\n<span class="valid">✅ 2. Hybrid signatures confirmed. Authenticity verified by the issuing bank's public key.</span>`;
         
-        // بقیه مراحل اعتبارسنجی مانند قبل باقی می‌مانند
-        resultHTML += `\n\n<span class="info">3. استخراج و تایید داده‌های پنهان LSB...</span>`;
+        resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
         resultDiv.innerHTML = resultHTML;
         const decodedSignatures = LSB.decode(tempCtx);
         const expectedHiddenData = JSON.stringify(qrData.signatures);
 
         if (!decodedSignatures || decodedSignatures !== expectedHiddenData) {
-            resultHTML += `\n<span class="invalid">❌ خطای مهلک: امضای پنهان شده در تصویر (LSB) یافت نشد یا با داده‌های QR مطابقت ندارد. تصویر اسکناس تغییر کرده یا جایگزین شده است.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature is missing or does not match the QR data. The banknote's image has been modified or replaced.</span>`;
             resultDiv.innerHTML = resultHTML;
             return;
         }
-        resultHTML += `\n<span class="valid">✅ 3. داده‌های پنهان LSB با موفقیت استخراج و تایید شدند. یکپارچگی تصویر تایید شد.</span>`;
+        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature extracted and successfully matched. Integrity of the image is confirmed.</span>`;
         
-        resultHTML += `\n\n<span style="font-size: 14px; font-weight: 600;">✅ حکم نهایی: اسکناس معتبر و اصیل است.</span>`;
+        resultHTML += `\n\n<hr style="border-color: var(--border-color); margin: 15px 0;"><span style="font-size: 14px; font-weight: 600;">✅ FINAL VERDICT: Banknote is authentic.</span>`;
         resultDiv.innerHTML = resultHTML;
     };
     img.src = fileUrl;
@@ -423,17 +435,16 @@ async function validateDigitalSignatures(qrData) {
             ed25519: base64ToBytes(signatures.ed25519),
             falcon: base64ToBytes(signatures.falcon)
         };
-
         return await BankCrypto.verifySignatures(sigsToVerify, stringToVerify, activeKeys.publicKey);
     } catch (e) {
-        console.error("خطا در تایید امضا:", e);
+        console.error("Signature verification error:", e);
         return { isEd25519Valid: false, isFalconValid: false };
     }
 }
 
 function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d');
-    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
+    const qrRegion = { x: 800, y: 210, width: 420, height: 420 }; // Note: Adjust if your layout changes
     const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     if (code) {
@@ -443,11 +454,11 @@ function readQRCodeFromCanvas(canvasToCheck) {
 }
 
 // ===================================================================================
-// منطق ایجاد اسکناس
+// Banknote Creation Logic
 // ===================================================================================
 async function createNoteData(amount, index = 0) {
     if (!activeKeys.privateKey.ed25519 || !activeKeys.privateKey.falcon) {
-        alert("خطا: کلید خصوصی برای امضای اسکناس فعال نیست.");
+        alert("Error: Private key is not active for signing banknotes.");
         return null;
     }
     const now = Date.now();
@@ -472,71 +483,61 @@ async function createNoteData(amount, index = 0) {
     return noteData;
 }
 
-async function handleCreateNewNote() {
+// Make `window.handle...` to be accessible from inline HTML onclick
+window.handleCreateNewNote = async function() {
     const amount = document.getElementById("amount-input").value;
-    updateKeyStatus('<span class="info">⏳ در حال تولید اسکناس جدید پسا-کوانتومی...</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new post-quantum banknote...</span>');
     const noteData = await createNoteData(amount);
     if (noteData) {
         currentNoteData = noteData;
         await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
-        updateKeyStatus('<span class="valid">✅ طرح اسکناس جدید آماده است.</span>');
+        updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
     } else {
-        updateKeyStatus('<span class="invalid">❌ تولید اسکناس جدید با شکست مواجه شد.</span>', true);
+        updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>', true);
     }
 }
 
-// ... سایر توابع UI مانند handleDownloadBatch بدون تغییر باقی می‌مانند ...
-async function handleDownloadBatch() {
-    // This function can remain largely the same, as it calls createNoteData internally.
-    // Error messages and file names should be updated to reflect the new reality.
-    if (!activeKeys.privateKey.ed25519) {
-        alert("خطا: کلید خصوصی برای امضای اسکناس فعال نیست.");
-        return;
-    }
-    if (!window.showDirectoryPicker) {
-        alert("مرورگر شما از File System Access API پشتیبانی نمی‌کند. یک اسکناس به عنوان جایگزین دانلود می‌شود.");
-        await handleCreateNewNote();
-        const link = document.createElement("a");
-        link.download = `SADAT-POST-QUANTUM-NOTE-${currentNoteData.serial}.png`;
-        link.href = canvas.toDataURL("image/png");
-        link.click();
-        return;
-    }
-    // Batch logic continues here...
+window.handleDownloadBatch = async function() {
+    // This function can be expanded later if needed
+    alert("Batch download is not fully implemented in this example.");
 }
 
+// Expose main handlers to the global window object
+window.handleGenerateAndExportKeys = handleGenerateAndExportKeys;
 
+// ===================================================================================
+// Canvas Drawing Logic
+// ===================================================================================
 async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
+    // This function remains largely the same as the original, drawing patterns based on the visualHash
     return new Promise(async (resolve, reject) => {
         if (Object.keys(noteData).length === 0) return reject("No note data provided.");
 
         const ctx = targetCanvas.getContext("2d");
         const { amount, verificationKey, serial, visualHash, signatures } = noteData;
-
         const w = width, h = height, scale = w / 1350;
 
-        // --- Drawing background and patterns based on visualHash ---
-        const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
+        // --- DRAWING STARTS ---
         const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
         const baseHue = H(visualHash, 0, 0, 360);
         bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
         bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, w, h);
         
-        // ... Calls to drawWatermark, drawKochGuilloche, drawNoisePattern remain the same ...
+        // ... Calls to drawWatermark, drawKochGuilloche can be added here if desired ...
 
         ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
         ctx.shadowBlur = 8 * scale;
         ctx.fillStyle = "#EAEAEA";
         ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
-        ctx.textAlign = 'right';
-        ctx.fillText(serial.substring(7), w - (150 * scale), 160 * scale);
-        ctx.fillText(verificationKey.substring(4), w - (150 * scale), 280 * scale);
-
-        ctx.font = `bold ${150 * scale}px 'Vazirmatn'`;
-        ctx.textAlign = "left";
-        ctx.fillText(amount.toLocaleString('fa-IR'), 120 * scale, 190 * scale);
+        ctx.textAlign = 'left';
+        ctx.fillText(serial.substring(7), 150 * scale, 160 * scale);
+        ctx.fillText(verificationKey.substring(4), 150 * scale, 280 * scale);
+        ctx.font = `bold ${150 * scale}px 'Poppins'`;
+        ctx.textAlign = "right";
+        ctx.fillText(amount.toLocaleString(), w - (120 * scale), 190 * scale);
         ctx.shadowColor = "transparent";
 
         const qrDataString = JSON.stringify(noteData);
@@ -544,18 +545,17 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         const qrSize = 380 * scale;
         QRCode.toCanvas(qrCanvas, qrDataString, { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#FFFFFF', light: '#00000000' } }, (err) => {
             if (err) { reject(err); return; }
-            const qrX = 50 * scale; // Moved to left
-            const qrY = h - (520 * scale);
+            const qrX = w - (150 * scale) - qrSize;
+            const qrY = h / 2 - qrSize / 2;
             ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
 
-            ctx.font = `${30 * scale}px 'Vazirmatn'`;
+            ctx.font = `${30 * scale}px 'Poppins'`;
             ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
             ctx.textAlign = "center";
-            ctx.fillText("امضا شده به صورت هیبریدی (کلاسیک + پسا-کوانتومی) توسط بانک سادات", w / 2, h - 60 * scale);
+            ctx.fillText("Hybrid Signed (Classic + Post-Quantum) by Sadat Bank Authority", w / 2, h - 60 * scale);
 
             if (applySteganography && signatures) {
                 try {
-                    // Hide the JSON string of the signature object
                     LSB.encode(ctx, JSON.stringify(signatures));
                 } catch (lsbError) {
                     reject(lsbError);
@@ -566,21 +566,20 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
     });
 }
 
-
 // ===================================================================================
-// مقداردهی اولیه برنامه
+// Application Initialization
 // ===================================================================================
 window.onload = async () => {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ در حال بارگذاری ماژول‌های پسا-کوانتومی...</span>');
+    updateKeyStatus('<span class="info">⏳ Loading Post-Quantum modules... (This may take a moment)</span>');
     try {
         falconApi = await pqcSignFalcon512();
-        updateKeyStatus('<span>✅ ماژول‌ها آماده هستند. لطفاً یک جفت کلید جدید تولید کرده یا کلیدهای موجود را وارد کنید.</span>');
+        updateKeyStatus('<span>✅ Modules are ready. Please generate a new key pair or import existing keys.</span>');
     } catch(e) {
-        updateKeyStatus(`<span class="invalid">❌ خطا در بارگذاری ماژول Falcon-512. از فایل‌های صحیح falcon.js و .wasm اطمینان حاصل کنید. ${e.message}</span>`, true);
+        console.error("Falcon-512 Loading Error:", e);
+        updateKeyStatus(`<span class="invalid">❌ Error loading Post-Quantum modules. Ensure 'falcon.js' and '.wasm' files are in the same directory and you are using a local server.</span>`, true);
     }
 };
-
 </script>
 </body>
 </html>
