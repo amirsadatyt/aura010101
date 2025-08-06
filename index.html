@@ -1,622 +1,132 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="fa">
 <head>
-    <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Post-Quantum Security)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-    
-    <script src="shake256.js"></script>
-    <script src="ed25519.js"></script>
-    <script src="falcon.js"></script> <style>
-        :root {
-            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
-            --mono-font: 'Roboto Mono', monospace;
-            --dark-bg: #10101a;
-            --medium-bg: #1a1a2e;
-            --light-bg: #2a2a3e;
-            --accent-color-1: #00e676; /* Green for PQC */
-            --accent-color-2: #40c4ff; /* Blue for reliability */
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0c0;
-            --success-color: #00e676;
-            --error-color: #ff5252;
-            --info-color: #40c4ff;
-            --warning-color: #ffab40;
-            --border-color: rgba(64, 196, 255, 0.2);
-        }
-        body{margin:0;font-family:var(--primary-font);background-color:var(--dark-bg);background-image:radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%),radial-gradient(at 100% 100%, hsla(150, 100%, 20%, 0.3) 0px, transparent 50%);color:var(--text-color);text-align:center;padding:24px}
-        .container{max-width:900px;margin:0 auto;background:rgba(26,26,46,0.7);backdrop-filter:blur(12px);padding:24px;border-radius:24px;border:1px solid var(--border-color);box-shadow:0 8px 32px rgba(0,0,0,0.2)}
-        .header{border-bottom:1px solid var(--border-color);padding-bottom:16px;margin-bottom:24px}
-        h1{font-size:2.5rem;font-weight:600;color:#fff;margin:0 0 8px 0;letter-spacing:1px;background:linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-        .header p{font-size:1rem;color:var(--text-muted);margin:0}
-        canvas{border-radius:16px;margin-top:24px;background:#050508;cursor:default;box-shadow:0 0 50px rgba(64,196,255,0.15);width:100%;max-width:900px;height:auto;border:1px solid var(--border-color)}
-        input[type="number"],button,label{padding:14px 22px;font-size:16px;font-family:var(--primary-font);border-radius:12px;margin:8px 5px;border:1px solid var(--border-color);background:var(--medium-bg);color:#fff;transition:all .3s ease;cursor:pointer;outline:none;display:inline-flex;align-items:center;justify-content:center;gap:8px}
-        input[type="number"]{font-family:var(--mono-font);font-weight:700;text-align:center;width:150px}
-        input[type="number"]:focus{border-color:var(--accent-color-2);box-shadow:0 0 15px rgba(64,196,255,0.5)}
-        button:not([disabled]),label:not([disabled]){font-weight:600;background:linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2));border:none;box-shadow:0 4px 15px rgba(0,0,0,0.2)}
-        button.sub-button,label.sub-button{background:var(--light-bg);border:1px solid var(--border-color)}
-        button[disabled],label[disabled]{cursor:not-allowed;opacity:0.5;background:var(--light-bg);border:1px solid var(--border-color)}
-        button:hover:not([disabled]),label:hover:not([disabled]){transform:translateY(-2px);box-shadow:0 6px 20px rgba(64,196,255,0.4)}
-        .section{background:rgba(16,16,26,0.5);padding:20px;margin-top:30px;border-radius:16px;border:1px solid var(--border-color)}
-        h2{font-size:1.5rem;color:var(--text-color);margin-top:0;margin-bottom:20px;font-weight:600;border-bottom:1px solid var(--border-color);padding-bottom:10px}
-        .controls-grid{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:16px}
-        #validation-result, #key-status{margin-top:20px;font-size:12px;font-weight:normal;min-height:50px;line-height:1.6;text-align:left;background:var(--dark-bg);padding:15px 20px;border-radius:12px;white-space:pre-wrap;font-family:var(--mono-font);border:1px solid var(--border-color);transition:all .3s ease}
-        .valid{color:var(--success-color)}.invalid{color:var(--error-color)}.info{color:var(--info-color)}.warning{color:var(--warning-color)}
-        .error-block{background:rgba(255,82,82,0.1);border-left:4px solid var(--error-color);padding:10px;margin-top:10px;border-radius:4px}
-        .error-block strong{color:var(--error-color)}
-    </style>
+  <meta charset="UTF-8">
+  <title>امضا سه‌گانه: Ed25519 + Falcon-512 + SHAKE256</title>
+  <script src="js/Ed25519.js"></script>
+  <script src="js/Shake256.js"></script>
+  <script src="js/falcon.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; direction: rtl; max-width: 800px; margin: auto; }
+    textarea, input { width: 100%; padding: 10px; margin-top: 10px; }
+    button { padding: 10px 20px; margin-top: 10px; }
+    .output { background: #f9f9f9; padding: 10px; margin-top: 10px; border-radius: 5px; word-break: break-word; }
+    .error { color: red; font-weight: bold; }
+  </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1>Sadat Digital Banknote</h1>
-        <p>A quantum-resistant, verifiable digital currency using a hybrid signature scheme: <strong>Ed25519 + Falcon-512</strong> with <strong>SHAKE256 (1024-bit)</strong> hash and LSB Steganography.</p>
-    </div>
+  <h2>امضا با Ed25519 + Falcon-512 + SHAKE256</h2>
 
-    <canvas id="noteCanvas" width="1350" height="750"></canvas>
+  <div id="initStatus">🔄 در حال بارگذاری ماژول‌ها...</div>
 
-    <div class="section">
-        <h2>Banknote Controls</h2>
-        <div class="controls-grid">
-            <span class="input-label">Amount:</span>
-            <input type="number" id="amount-input" value="50000">
-            <span class="input-label">Quantity:</span>
-            <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 Redesign Banknote</button>
-            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 Download Batch</button>
-        </div>
-    </div>
+  <textarea id="message" rows="5" placeholder="پیام را وارد کنید..."></textarea>
+  <button onclick="signMessage()">🖋 امضا</button>
 
-    <div class="section">
-        <h2>Bank Key Management</h2>
-        <div class="controls-grid">
-            <button id="generate-keys-button" onclick="handleGenerateAndExportKeys()" disabled>🔑 Generate & Export Hybrid Keys</button>
-            <label for="import-public-key" class="sub-button" id="import-public-label" disabled>Import Public Key</label>
-            <input type="file" id="import-public-key" accept=".json" style="display: none;">
-            <label for="import-private-key" class="sub-button" id="import-private-label" disabled>Import Private Key</label>
-            <input type="file" id="import-private-key" accept=".json" style="display: none;">
-        </div>
-        <div id="key-status">Key pair status will be displayed here.</div>
-    </div>
+  <div class="output">
+    <strong>امضای Ed25519 (base64):</strong>
+    <div id="ed25519Sig"></div>
+    <strong>امضای Falcon-512 (base64):</strong>
+    <div id="falconSig"></div>
+  </div>
 
-    <div class="section" id="validator-section">
-        <h2>Validate Banknote</h2>
-        <label for="validator-input" id="validator-label" disabled>Select Image for Validation</label>
-        <input type="file" id="validator-input" accept="image/png" style="display: none;">
-        <div id="validation-result">Validation result will be displayed here.</div>
-    </div>
-</div>
+  <button onclick="verifySignature()">✅ بررسی اعتبار</button>
+  <div class="output" id="verifyResult"></div>
 
-<script>
-// ===================================================================================
-// == لایه انتزاعی و مدیریت هوشمند خطا
-// ===================================================================================
-const ErrorHandler = (() => {
-    const errorMap = {
-        'CRYPTO_LIBS_MISSING': {
-            algorithm: "System",
-            cause: "یک یا چند کتابخانه رمزنگاری (shake256.js, ed25519.js, falcon.js) بارگذاری نشده‌اند یا وجود ندارند.",
-            solution: "اطمینان حاصل کنید که فایل‌های .js کتابخانه‌ها در کنار این فایل HTML قرار دارند و نام آن‌ها صحیح است. کنسول مرورگر (F12) را برای خطاهای 404 بررسی کنید."
-        },
-        'KEY_GENERATION_ED25519': {
-            algorithm: "Ed25519",
-            cause: "خطای داخلی در هنگام تولید زوج کلید Ed25519.",
-            solution: "پیاده‌سازی تابع generateKeyPair در کتابخانه ed25519.js را بررسی کنید. ممکن است مرورگر از ویژگی‌های مورد نیاز پشتیبانی نکند."
-        },
-        'KEY_GENERATION_FALCON': {
-            algorithm: "Falcon-512",
-            cause: "خطای داخلی در هنگام تولید زوج کلید Falcon-512.",
-            solution: "پیاده‌سازی تابع generateKeyPair در کتابخانه falcon.js (احتمالاً WebAssembly) را بررسی کنید. اطمینان حاصل کنید که برای سطح امنیتی Falcon-512 پیکربندی شده است."
-        },
-        'HASH_FAILURE': {
-            algorithm: "SHAKE256",
-            cause: "فرایند هش کردن داده‌ها با شکست مواجه شد.",
-            solution: "ورودی تابع هش و پیاده‌سازی SHAKE256 را بررسی کنید. ورودی نباید null یا undefined باشد."
-        },
-        'SIGNATURE_FAILURE_ED25519': {
-            algorithm: "Ed25519",
-            cause: "تولید امضا با کلید خصوصی Ed25519 ناموفق بود.",
-            solution: "از معتبر بودن کلید خصوصی و فرمت صحیح آن اطمینان حاصل کنید. کلید نباید آسیب دیده باشد."
-        },
-        'SIGNATURE_FAILURE_FALCON': {
-            algorithm: "Falcon-512",
-            cause: "تولید امضا با کلید خصوصی Falcon-512 ناموفق بود.",
-            solution: "از معتبر بودن کلید خصوصی Falcon اطمینان حاصل کنید. این الگوریتم به منابع محاسباتی بیشتری نیاز دارد؛ ممکن است به دلیل محدودیت منابع با شکست مواجه شود."
-        },
-        'VERIFICATION_FAILURE_ED25519': {
-            algorithm: "Ed25519",
-            cause: "امضای Ed25519 با داده‌ها و کلید عمومی مطابقت ندارد.",
-            solution: "این خطا نشان‌دهنده دستکاری داده‌ها یا استفاده از کلید عمومی اشتباه است. اسکناس جعلی است."
-        },
-        'VERIFICATION_FAILURE_FALCON': {
-            algorithm: "Falcon-512",
-            cause: "امضای Falcon-512 با داده‌ها و کلید عمومی مطابقت ندارد.",
-            solution: "این خطا نشان‌دهنده دستکاری داده‌ها یا استفاده از کلید عمومی اشتباه است. این یک پرچم قرمز جدی برای امنیت پسا-کوانتومی است. اسکناس جعلی است."
-        },
-        'KEY_IMPORT_INVALID_FORMAT': {
-            algorithm: 'System',
-            cause: 'فایل کلید وارد شده فرمت JSON معتبری ندارد یا ساختار مورد انتظار (ed25519/falcon) را ندارد.',
-            solution: 'فقط از فایل‌های کلیدی که توسط همین سیستم تولید شده‌اند استفاده کنید. فایل نباید به صورت دستی ویرایش شده باشد.'
-        },
-        'KEY_DECRYPTION_FAILURE': {
-            algorithm: 'System (AES-GCM)',
-            cause: 'رمزگشایی کلید خصوصی با شکست مواجه شد. به احتمال زیاد رمز عبور اشتباه است.',
-            solution: 'رمز عبور صحیح را وارد کنید. اگر رمز عبور را فراموش کرده‌اید، کلید غیرقابل استفاده است.'
-        }
+  <script>
+    let falcon, falconKeyPair;
+    let ed25519KeyPair;
+    let modulesLoaded = {
+      ed25519: false,
+      falcon: false,
+      shake: false
     };
 
-    function generateReport(errorCode, error) {
-        const details = errorMap[errorCode] || {
-            algorithm: "Unknown",
-            cause: "یک خطای ناشناخته رخ داده است.",
-            solution: "کنسول مرورگر (F12) را برای اطلاعات بیشتر بررسی کنید."
-        };
-        console.error(`[CRITICAL ERROR] Code: ${errorCode}`, 'Details:', details, 'Original Error:', error);
-        return `
-            <div class="error-block">
-                <strong>❌ خطای امنیتی: عدم تطابق در الگوریتم ${details.algorithm}</strong><br>
-                <strong>علت احتمالی:</strong> ${details.cause}<br>
-                <strong>راه حل پیشنهادی:</strong> ${details.solution}
-            </div>
-        `;
-    }
-    return { report: generateReport };
-})();
-
-// ===================================================================================
-// == پل ارتباطی با کتابخانه های رمزنگاری (Ed25519, Falcon, SHAKE256)
-// ===================================================================================
-const CryptoBridge = (() => {
-    function hash(data) {
-        if (typeof window.shake256 !== 'function') throw new Error('HASH_FAILURE');
-        try {
-            return window.shake256(data, 128); // Generate a 1024-bit hash
-        } catch (e) {
-            console.error("SHAKE256 Hashing failed:", e);
-            throw new Error('HASH_FAILURE');
-        }
+    function shake256_1024(input) {
+      try {
+        const hashHex = sha3.shake256(input, 1024);
+        modulesLoaded.shake = true;
+        return new Uint8Array(hashHex.match(/.{1,2}/g).map(h => parseInt(h, 16)));
+      } catch (e) {
+        console.error('SHAKE256 خطا:', e);
+        modulesLoaded.shake = false;
+        return null;
+      }
     }
 
-    async function generateNewKeyPair() {
-        let ed25519_keys, falcon_keys;
-        try {
-            if (typeof window.ed25519?.generateKeyPair !== 'function') throw new Error('KEY_GENERATION_ED25519');
-            ed25519_keys = await window.ed25519.generateKeyPair();
-        } catch (e) {
-            console.error("Ed25519 key generation failed:", e);
-            throw new Error('KEY_GENERATION_ED25519');
-        }
-        try {
-            if (typeof window.falcon?.generateKeyPair !== 'function') throw new Error('KEY_GENERATION_FALCON');
-            falcon_keys = await window.falcon.generateKeyPair();
-        } catch (e) {
-            console.error("Falcon-512 key generation failed:", e);
-            throw new Error('KEY_GENERATION_FALCON');
-        }
-        return {
-            ed25519: {
-                publicKey: arrayBufferToBase64(ed25519_keys.publicKey),
-                privateKey: arrayBufferToBase64(ed25519_keys.privateKey)
-            },
-            falcon: {
-                publicKey: arrayBufferToBase64(falcon_keys.publicKey),
-                privateKey: arrayBufferToBase64(falcon_keys.privateKey)
-            }
-        };
-    }
-    
-    async function sign(dataToSign, privateKeys) {
-        const messageHash = hash(dataToSign);
-        let edSignature, falconSignature;
-        try {
-            const edPrivateKey = base64ToArrayBuffer(privateKeys.ed25519.privateKey);
-            edSignature = await window.ed25519.sign(messageHash, edPrivateKey);
-        } catch(e) {
-            console.error("Ed25519 signing failed:", e);
-            throw new Error('SIGNATURE_FAILURE_ED25519');
-        }
-        try {
-            const falconPrivateKey = base64ToArrayBuffer(privateKeys.falcon.privateKey);
-            falconSignature = await window.falcon.sign(messageHash, falconPrivateKey);
-        } catch(e) {
-            console.error("Falcon-512 signing failed:", e);
-            throw new Error('SIGNATURE_FAILURE_FALCON');
-        }
-        return {
-            ed25519_sig: arrayBufferToBase64(edSignature),
-            falcon_sig: arrayBufferToBase64(falconSignature)
-        };
+    async function initModules() {
+      try {
+        ed25519KeyPair = nacl.sign.keyPair();
+        modulesLoaded.ed25519 = true;
+      } catch (e) {
+        console.error('Ed25519 خطا:', e);
+        modulesLoaded.ed25519 = false;
+      }
+
+      try {
+        falcon = await pqcSignFalcon512();
+        falconKeyPair = await falcon.generateKeyPair();
+        modulesLoaded.falcon = true;
+      } catch (e) {
+        console.error('Falcon-512 خطا:', e);
+        modulesLoaded.falcon = false;
+      }
+
+      updateStatus();
     }
 
-    async function verify(combinedSignature, dataToVerify, publicKeys) {
-        const messageHash = hash(dataToVerify);
-        let isEd25519Valid = false;
-        try {
-            const edPublicKey = base64ToArrayBuffer(publicKeys.ed25519.publicKey);
-            const edSignature = base64ToArrayBuffer(combinedSignature.ed25519_sig);
-            isEd25519Valid = await window.ed25519.verify(edSignature, messageHash, edPublicKey);
-        } catch (e) {
-             console.error("Ed25519 verification failed:", e);
-             throw new Error('VERIFICATION_FAILURE_ED25519');
-        }
-        if (!isEd25519Valid) throw new Error('VERIFICATION_FAILURE_ED25519');
-        
-        let isFalconValid = false;
-        try {
-            const falconPublicKey = base64ToArrayBuffer(publicKeys.falcon.publicKey);
-            const falconSignature = base64ToArrayBuffer(combinedSignature.falcon_sig);
-            isFalconValid = await window.falcon.verify(falconSignature, messageHash, falconPublicKey);
-        } catch(e) {
-             console.error("Falcon-512 verification failed:", e);
-             throw new Error('VERIFICATION_FAILURE_FALCON');
-        }
-        if (!isFalconValid) throw new Error('VERIFICATION_FAILURE_FALCON');
-        return isEd25519Valid && isFalconValid;
+    function updateStatus() {
+      const status = document.getElementById('initStatus');
+      if (modulesLoaded.ed25519 && modulesLoaded.falcon && modulesLoaded.shake) {
+        status.textContent = '✅ همه الگوریتم‌ها با موفقیت بارگذاری شدند.';
+      } else {
+        status.innerHTML = '<span class=\"error\">❌ خطا در بارگذاری الگوریتم‌ها. برخی عملیات ممکن است انجام نشود.</span>';
+      }
     }
 
-    return { generateNewKeyPair, sign, verify, hash };
-})();
+    async function signMessage() {
+      const msg = document.getElementById('message').value;
+      const hash = shake256_1024(msg);
+      if (!hash) return alert('خطا در هش با SHAKE256');
 
+      if (modulesLoaded.ed25519) {
+        const sig = nacl.sign.detached(hash, ed25519KeyPair.secretKey);
+        document.getElementById('ed25519Sig').textContent = btoa(String.fromCharCode(...sig));
+        window._edSig = sig;
+      } else {
+        document.getElementById('ed25519Sig').textContent = '❌ Ed25519 بارگذاری نشد';
+      }
 
-// ===================================================================================
-// == منطق اصلی برنامه و مدیریت کلیدها
-// ===================================================================================
-const App = (() => {
-    let activeKeys = { publicKeys: null, privateKeys: null };
-    
-    const AES_ALGO = "AES-GCM";
-    const PBKDF2_ITERATIONS = 100000;
-    const PBKDF2_HASH_ALGO = "SHA-256";
+      if (modulesLoaded.falcon) {
+        const sig = await falcon.sign(falconKeyPair.privateKey, hash);
+        document.getElementById('falconSig').textContent = btoa(String.fromCharCode(...sig));
+        window._falSig = sig;
+      } else {
+        document.getElementById('falconSig').textContent = '❌ Falcon بارگذاری نشد';
+      }
 
-    async function encryptKeys(privateKeys, password) {
-        const salt = window.crypto.getRandomValues(new Uint8Array(16));
-        const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        const keyMaterial = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
-        const derivedKey = await window.crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
-            keyMaterial, { name: AES_ALGO, length: 256 }, true, ["encrypt"]
-        );
-        const encodedKeys = new TextEncoder().encode(JSON.stringify(privateKeys));
-        const encrypted = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv }, derivedKey, encodedKeys);
-        return {
-            cipherText: arrayBufferToBase64(encrypted), salt: arrayBufferToBase64(salt), iv: arrayBufferToBase64(iv)
-        };
+      window._hash = hash;
     }
 
-    async function decryptKeys(encryptedData, password) {
-        try {
-            const salt = base64ToArrayBuffer(encryptedData.salt);
-            const iv = base64ToArrayBuffer(encryptedData.iv);
-            const cipherText = base64ToArrayBuffer(encryptedData.cipherText);
-            const keyMaterial = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
-            const derivedKey = await window.crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
-                keyMaterial, { name: AES_ALGO, length: 256 }, true, ["decrypt"]
-            );
-            const decrypted = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv }, derivedKey, cipherText);
-            return JSON.parse(new TextDecoder().decode(decrypted));
-        } catch (e) {
-            throw new Error('KEY_DECRYPTION_FAILURE');
-        }
+    async function verifySignature() {
+      let results = '';
+      if (modulesLoaded.ed25519) {
+        const valid = nacl.sign.detached.verify(window._hash, window._edSig, ed25519KeyPair.publicKey);
+        results += `Ed25519: ${valid ? '✅ معتبر' : '❌ نامعتبر'}<br>`;
+      } else {
+        results += '❌ Ed25519 در دسترس نیست<br>';
+      }
+
+      if (modulesLoaded.falcon) {
+        const valid = await falcon.verify(falconKeyPair.publicKey, window._hash, window._falSig);
+        results += `Falcon-512: ${valid ? '✅ معتبر' : '❌ نامعتبر'}`;
+      } else {
+        results += '❌ Falcon-512 در دسترس نیست';
+      }
+
+      document.getElementById('verifyResult').innerHTML = results;
     }
 
-    async function handleGenerateAndExport() {
-        const password = prompt("یک رمز عبور قوی برای رمزنگاری فایل کلید خصوصی ترکیبی خود وارد کنید:");
-        if (!password) {
-            updateKeyStatus('<span class="warning">⚠️ عملیات لغو شد. رمز عبور برای امنیت کلید خصوصی الزامی است.</span>');
-            return;
-        }
-
-        updateKeyStatus('<span class="info">⏳ در حال تولید زوج کلیدهای ترکیبی (Ed25519 & Falcon-512)... این فرآیند ممکن است کمی طول بکشد.</span>');
-        
-        try {
-            const keyPair = await CryptoBridge.generateNewKeyPair();
-            
-            // From this point on, we have a valid keypair.
-            activeKeys.privateKeys = keyPair;
-            activeKeys.publicKeys = {
-                 ed25519: { publicKey: keyPair.ed25519.publicKey },
-                 falcon: { publicKey: keyPair.falcon.publicKey }
-            };
-            
-            downloadFile(JSON.stringify(activeKeys.publicKeys, null, 2), 'Sadat-Hybrid-PublicKey-512.json', 'application/json');
-            
-            const encryptedPrivate = await encryptKeys(keyPair, password);
-            downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Hybrid-PrivateKey-512.json', 'application/json');
-
-            updateKeyStatus('<span class="valid">✅ زوج کلیدهای ترکیبی با موفقیت تولید و صادر شدند. سیستم برای صدور اسکناس آماده است.</span>');
-            updateControlsState(true);
-            await handleCreateNewNote();
-        } catch (error) {
-            updateKeyStatus(ErrorHandler.report(error.message, error));
-        }
-    }
-
-    function importPublicKey(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const keyData = JSON.parse(e.target.result);
-                if (!keyData.ed25519?.publicKey || !keyData.falcon?.publicKey) {
-                    throw new Error('KEY_IMPORT_INVALID_FORMAT');
-                }
-                activeKeys.publicKeys = keyData;
-                updateKeyStatus('<span class="valid">✅ کلید عمومی ترکیبی با موفقیت وارد شد. اکنون برای تأیید اسکناس‌ها فعال است.</span>');
-                document.getElementById('validator-label').removeAttribute('disabled');
-            } catch (error) {
-                updateKeyStatus(ErrorHandler.report(error.message || 'KEY_IMPORT_INVALID_FORMAT', error));
-            }
-        };
-        reader.readAsText(file);
-    }
-    
-    function importPrivateKey(file) {
-        const password = prompt("رمز عبور فایل کلید خصوصی را برای رمزگشایی وارد کنید:");
-        if (!password) {
-            updateKeyStatus('<span class="warning">⚠️ عملیات لغو شد. رمز عبور الزامی است.</span>');
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const encryptedData = JSON.parse(e.target.result);
-                updateKeyStatus('<span class="info">⏳ در حال رمزگشایی و وارد کردن کلید خصوصی...</span>');
-                const privateKeys = await decryptKeys(encryptedData, password);
-                if (!privateKeys.ed25519?.privateKey || !privateKeys.falcon?.privateKey) {
-                    throw new Error('KEY_IMPORT_INVALID_FORMAT');
-                }
-                activeKeys.privateKeys = privateKeys;
-                activeKeys.publicKeys = {
-                    ed25519: { publicKey: privateKeys.ed25519.publicKey },
-                    falcon: { publicKey: privateKeys.falcon.publicKey }
-                };
-                updateKeyStatus('<span class="valid">✅ کلید خصوصی ترکیبی با موفقیت وارد شد. اکنون برای امضای اسکناس‌ها فعال است.</span>');
-                updateControlsState(true);
-            } catch (error) {
-                updateKeyStatus(ErrorHandler.report(error.message, error));
-            }
-        };
-        reader.readAsText(file);
-    }
-    
-    async function getSignedNoteData(amount, index = 0) {
-        if (!activeKeys.privateKeys) {
-            alert("خطا: کلید خصوصی برای امضا فعال نیست.");
-            return null;
-        }
-        const now = Date.now();
-        const noteData = {
-            amount: parseInt(amount) || 0,
-            verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
-            serial: "SDT-" + (now + index).toString().slice(-8),
-            timestamp: now,
-            sig_scheme: "Ed25519+Falcon-512/SHAKE256"
-        };
-        const stringToSign = getStandardizedDataForSigning(noteData);
-        
-        try {
-            const combinedSignature = await CryptoBridge.sign(stringToSign, activeKeys.privateKeys);
-            noteData.signature = arrayBufferToBase64(new TextEncoder().encode(JSON.stringify(combinedSignature)));
-            noteData.visualHash = arrayBufferToHex(await CryptoBridge.hash(noteData.signature));
-            return noteData;
-        } catch (error) {
-            updateKeyStatus(ErrorHandler.report(error.message, error));
-            return null;
-        }
-    }
-
-    async function validateNote(file) {
-        if (!activeKeys.publicKeys) {
-            alert("خطا: کلید عمومی برای تأیید فعال نیست. لطفاً یک کلید عمومی وارد کنید.");
-            return;
-        }
-        const resultDiv = document.getElementById('validation-result');
-        resultDiv.innerHTML = `<span class="info">⏳ آماده سازی تصویر برای اعتبارسنجی...</span>`;
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = async () => {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 1350; tempCanvas.height = 750;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-            let resultHTML = "";
-
-            try {
-                resultHTML += `<span class="info">۱. خواندن داده‌های دیجیتال از کد QR...</span>\n`;
-                const qrData = readQRCodeFromCanvas(tempCanvas);
-                if (!qrData) {
-                    resultHTML += `<span class="invalid">❌ خطای مهلک: کد QR یافت نشد یا غیرقابل خواندن است.</span>`;
-                    resultDiv.innerHTML = resultHTML;
-                    return;
-                }
-                resultHTML += `<span class="valid">✅ کد QR با موفقیت خوانده شد.</span>\n\n`;
-
-                resultHTML += `<span class="info">۲. تأیید امضای دیجیتال ترکیبی (${qrData.sig_scheme || 'N/A'})...</span>\n`;
-                const isSignatureValid = await validateDigitalSignature(qrData);
-                if (isSignatureValid) {
-                     resultHTML += `<span class="valid">✅ امضای دیجیتال ترکیبی معتبر است. اصالت و یکپارچگی داده‌ها تأیید شد.</span>\n\n`;
-                }
-                
-                resultHTML += `<span class="info">۳. استخراج و تطبیق داده‌های پنهان شده (Steganography)...</span>\n`;
-                const expectedSignatureString = JSON.stringify(JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(qrData.signature))));
-                const decodedSignature = LSB.decode(tempCtx);
-                if (decodedSignature && decodedSignature === expectedSignatureString) {
-                    resultHTML += `<span class="valid">✅ داده‌های پنهان شده با موفقیت استخراج و با امضای اصلی تطبیق داده شد. یکپارچگی تصویر تأیید شد.</span>\n\n`;
-                } else {
-                     resultHTML += `<span class="invalid">❌ خطای مهلک: داده‌های پنهان شده در تصویر با امضای دیجیتال مطابقت ندارد. تصویر اسکناس دستکاری شده است.</span>\n`;
-                     resultDiv.innerHTML = resultHTML;
-                     return;
-                }
-
-                resultHTML += `<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ رأی نهایی: اسکناس معتبر و اصیل است.</span>`;
-                resultDiv.innerHTML = resultHTML;
-
-            } catch (error) {
-                resultHTML += ErrorHandler.report(error.message, error);
-                resultHTML += `<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">❌ رأی نهایی: اسکناس جعلی یا دستکاری شده است.</span>`;
-                resultDiv.innerHTML = resultHTML;
-            }
-        };
-    }
-
-    async function validateDigitalSignature(qrData) {
-        const { signature, ...dataToVerify } = qrData;
-        const stringToVerify = getStandardizedDataForSigning(dataToVerify);
-        const combinedSignature = JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(signature)));
-        return await CryptoBridge.verify(combinedSignature, stringToVerify, activeKeys.publicKeys);
-    }
-    
-    function getStandardizedDataForSigning(noteData) {
-        const data = { ...noteData };
-        delete data.signature;
-        delete data.visualHash;
-        return JSON.stringify(data, Object.keys(data).sort());
-    }
-
-    return { 
-        handleGenerateAndExport, 
-        importPublicKey, 
-        importPrivateKey, 
-        getSignedNoteData,
-        validateNote
-    };
-})();
-
-// ===================================================================================
-// == مقداردهی اولیه و کنترل های UI
-// ===================================================================================
-// Global variables and utility functions
-let currentNoteData = {};
-const canvas = document.getElementById("noteCanvas");
-const ctx = canvas.getContext("2d");
-
-function updateKeyStatus(message) { document.getElementById('key-status').innerHTML = message; }
-function updateControlsState(isEnabled) {
-    document.getElementById('create-note-button').disabled = !isEnabled;
-    document.getElementById('download-batch-button').disabled = !isEnabled;
-    if (isEnabled) {
-        document.getElementById('validator-label').removeAttribute('disabled');
-    }
-}
-function downloadFile(data, filename, type) {
-    const blob = new Blob([data], { type: type });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
-}
-function arrayBufferToBase64(buffer) {
-    return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));
-}
-function base64ToArrayBuffer(base64) {
-    const binary_string = atob(base64);
-    const len = binary_string.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binary_string.charCodeAt(i);
-    }
-    return bytes.buffer;
-}
-function arrayBufferToHex(buffer) {
-    return Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// UI Event Listeners
-document.getElementById('import-public-key').addEventListener('change', (e) => e.target.files[0] && App.importPublicKey(e.target.files[0]));
-document.getElementById('import-private-key').addEventListener('change', (e) => e.target.files[0] && App.importPrivateKey(e.target.files[0]));
-document.getElementById('validator-input').addEventListener('change', (e) => e.target.files[0] && App.validateNote(e.target.files[0]));
-function handleGenerateAndExportKeys() { App.handleGenerateAndExport(); }
-
-
-async function handleCreateNewNote() {
-    const amount = document.getElementById("amount-input").value;
-    updateKeyStatus('<span class="info">⏳ در حال تولید طرح اسکناس جدید...</span>');
-    const noteData = await App.getSignedNoteData(amount);
-    if (noteData) {
-        currentNoteData = noteData;
-        await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
-        updateKeyStatus('<span class="valid">✅ طرح اسکناس جدید آماده است.</span>');
-    }
-}
-
-async function handleDownloadBatch() {
-    const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
-    const amount = document.getElementById("amount-input").value;
-    const resultDiv = document.getElementById('validation-result');
-    if (!window.showDirectoryPicker) {
-         alert("مرورگر شما از File System Access API پشتیبانی نمی‌کند. لطفاً اسکناس‌ها را به صورت تکی دانلود کنید.");
-         return;
-    }
-     try {
-        const dirHandle = await window.showDirectoryPicker();
-        resultDiv.innerHTML = `<span class="info">پردازش ${quantity} اسکناس... لطفاً منتظر بمانید.</span>`;
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = canvas.width;
-        offscreenCanvas.height = canvas.height;
-
-        for (let i = 0; i < quantity; i++) {
-            const noteData = await App.getSignedNoteData(amount, i);
-            if (!noteData) {
-                resultDiv.innerHTML += `<br><span class="invalid">❌ عملیات متوقف شد. خطای امضا را در بخش وضعیت کلید بررسی کنید.</span>`;
-                return;
-            }
-            await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
-            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-HYBRID-512-${noteData.serial}.png`, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            resultDiv.innerHTML = `<span class="info">اسکناس ${i + 1} از ${quantity} با موفقیت ذخیره شد.</span>`;
-        }
-        resultDiv.innerHTML = `<span class="valid">✅ ${quantity} اسکناس با موفقیت در پوشه انتخابی شما ذخیره شد.</span>`;
-        await handleCreateNewNote();
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-             resultDiv.innerHTML = `<span class="invalid">❌ خطا: ${error.message}</span>`;
-        }
-    }
-}
-
-// Pre-loader and Initialization
-window.onload = () => {
-    updateKeyStatus('<span class="info">⏳ در حال بارگذاری و آماده‌سازی کتابخانه‌های رمزنگاری...</span>');
-    
-    setTimeout(() => {
-        const libsReady = typeof window.shake256 === 'function' && typeof window.ed25519 === 'object' && typeof window.falcon === 'object';
-        
-        if (!libsReady) {
-            updateKeyStatus(ErrorHandler.report('CRYPTO_LIBS_MISSING'));
-            // Keep buttons disabled
-            return;
-        }
-        
-        updateKeyStatus('<span class="valid">✅ کتابخانه‌های رمزنگاری آماده هستند.</span><br><span class="info">لطفاً یک زوج کلید جدید تولید کرده یا کلیدهای موجود را وارد نمایید.</span>');
-        document.getElementById('generate-keys-button').removeAttribute('disabled');
-        document.getElementById('import-public-label').removeAttribute('disabled');
-        document.getElementById('import-private-label').removeAttribute('disabled');
-
-    }, 500);
-};
-
-
-// ===================================================================================
-// == توابع کمکی و طراحی (بدون تغییر)
-// ===================================================================================
-const LSB = (() => { const t="00000000";function o(o){return o.split("").map(t=>t.charCodeAt(0).toString(2).padStart(8,"0")).join("")+t}return{encode:function(e,n){const r=o(n),c=e.getImageData(0,0,e.canvas.width,e.canvas.height),i=c.data;if(r.length>3*i.length/4)throw new Error("Message too long");let d=0;for(let t=0;t<r.length;t++)(d+1)%4===0&&d++,i[d]=(254&i[d])|parseInt(r[t],10),d++;e.putImageData(c,0,0)},decode:function(o){const e=o.getImageData(0,0,o.canvas.width,o.canvas.height).data;let n="",r="";for(let o=0;o<e.length;o++){if((o+1)%4===0)continue;const c=1&e[o];if(n+=c,8===n.length){if(n===t)return r;r+=String.fromCharCode(parseInt(n,2)),n=""}}return null}}}();
-function readQRCodeFromCanvas(canvasToCheck) { const context = canvasToCheck.getContext('2d'); const qrRegion = { x: 800, y: 210, width: 420, height: 420 }; const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { return JSON.parse(code.data); } catch { return null; } } return null; }
-async function drawNoteOnCanvas(targetCanvas,noteData,width,height,applySteganography=!0){return new Promise(async(resolve,reject)=>{if(Object.keys(noteData).length===0)return reject("No note data provided.");const ctx=targetCanvas.getContext("2d"),{amount:amount,verificationKey:verificationKey,serial:serial,visualHash:visualHash,signature:signature}=noteData,w=width,h=height,scale=w/1350,bgGradient=ctx.createLinearGradient(0,0,0,h),baseHue=H(visualHash,0,0,360);bgGradient.addColorStop(0,`hsl(${baseHue}, 50%, 6%)`),bgGradient.addColorStop(1,`hsl(${baseHue}, 40%, 4%)`),ctx.fillStyle=bgGradient,ctx.fillRect(0,0,w,h),drawWatermark(ctx,visualHash,w,h),drawKochGuilloche(ctx,visualHash,w,h),drawNoisePattern(ctx,visualHash,w,h),ctx.shadowColor="rgba(0, 0, 0, 0.7)",ctx.shadowBlur=8*scale,ctx.shadowOffsetX=2*scale,ctx.shadowOffsetY=2*scale,ctx.fillStyle="#EAEAEA",ctx.font=`bold ${80*scale}px 'Roboto Mono'`,ctx.textAlign="left",ctx.fillText(serial.substring(4),150*scale,160*scale),ctx.fillText(verificationKey.substring(4),150*scale,280*scale),ctx.font=`bold ${150*scale}px 'Roboto Mono'`,ctx.textAlign="right",ctx.shadowBlur=12*scale,ctx.shadowOffsetX=4*scale,ctx.shadowOffsetY=4*scale,ctx.fillText(amount.toString(),w-120*scale,190*scale),ctx.shadowColor="transparent";const qrDataString=JSON.stringify(noteData),qrCanvas=document.createElement("canvas"),qrSize=380*scale;QRCode.toCanvas(qrCanvas,qrDataString,{width:qrSize,errorCorrectionLevel:"H",color:{dark:"#000000",light:"#FFFFFF"}},err=>{if(err)return reject(err);const qrX=w-150*scale-qrSize,qrY=h-520*scale;ctx.drawImage(qrCanvas,qrX,qrY,qrSize,qrSize),ctx.font=`${30*scale}px 'Roboto Mono'`,ctx.fillStyle="rgba(255, 255, 255, 0.4)",ctx.textAlign="center",ctx.fillText("Digitally Signed by Sadat Bank Authority (PQC)",w/2,h-60*scale);if(applySteganography&&signature){try{const sigString=JSON.stringify(JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(signature))));LSB.encode(ctx,sigString)}catch(t){console.error("LSB Encoding Error:",t),reject(t)}}resolve()})})}
-const H=(text,index,min,max)=>min+(parseInt(text.substring(index,index+2),16)%(max-min+1));function drawKochGuilloche(g_ctx,hash,w,h){g_ctx.save(),g_ctx.translate(w/2,h/2);const scale=w/1350,iteration=H(hash,2,2,4),size=w*(H(hash,4,10,20)/100),angleOffset=H(hash,6,0,360)/360*2*Math.PI,numLines=H(hash,8,3,6),hueOffset=H(hash,10,0,360);function drawKochSegment(x1,y1,x2,y2,level){if(0===level)return void g_ctx.lineTo(x2,y2);const dx=x2-x1,dy=y2-y1,dist=Math.sqrt(dx*dx+dy*dy),unitVecX=dx/dist,unitVecY=dy/dist,p1x=x1+unitVecX*dist/3,p1y=y1+unitVecY*dist/3,p2x=x1+2*unitVecX*dist/3,p2y=y1+2*unitVecY*dist/3,p3x=p1x+unitVecX*dist/6-unitVecY*dist*Math.sqrt(3)/6,p3y=p1y+unitVecY*dist/6+unitVecX*dist*Math.sqrt(3)/6;drawKochSegment(x1,y1,p1x,p1y,level-1),drawKochSegment(p1x,p1y,p3x,p3y,level-1),drawKochSegment(p3x,p3y,p2x,p2y,level-1),drawKochSegment(p2x,p2y,x2,y2,level-1)}g_ctx.lineWidth=1*scale,g_ctx.lineJoin="bevel",g_ctx.lineCap="round";for(let i=0;i<numLines;i++){const hue=(hueOffset+i*(360/numLines))%360;g_ctx.strokeStyle=`hsla(${hue}, 70%, 60%, 0.15)`;const lineAngle=i/numLines*2*Math.PI+angleOffset,x1=Math.cos(lineAngle)*size,y1=Math.sin(lineAngle)*size,x2=Math.cos(lineAngle+Math.PI)*size,y2=Math.sin(lineAngle+Math.PI)*size;g_ctx.beginPath(),g_ctx.moveTo(x1,y1),drawKochSegment(x1,y1,x2,y2,iteration),g_ctx.stroke()}g_ctx.restore()}
-function drawWatermark(g_ctx,hash,w,h){g_ctx.save(),g_ctx.translate(w/2,h/2);const scale=w/1350,numSpirals=H(hash,16,3,6),spiralRadius=w*(H(hash,18,10,25)/100)*scale,hue=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hue}, 50%, 80%, 0.05)`,g_ctx.lineWidth=4*scale;for(let i=0;i<numSpirals;i++){g_ctx.beginPath();const startAngle=i/numSpirals*2*Math.PI+H(hash,22,0,100)/100,endAngle=startAngle+H(hash,24,6,12)*Math.PI;for(let t=startAngle;t<endAngle;t+=.05){const r=spiralRadius*(t-startAngle)/(endAngle-startAngle),x=r*Math.cos(t),y=r*Math.sin(t);t===startAngle?g_ctx.moveTo(x,y):g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore()}
-function drawNoisePattern(g_ctx,hash,w,h){g_ctx.save();for(let i=0;i<2e4;i++){const x=Math.random()*w,y=Math.random()*h,o=.15*Math.random(),hue=H(hash,4+i%30,0,360);g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`,g_ctx.fillRect(x,y,1,1)}g_ctx.restore()}
-
-</script>
+    initModules();
+  </script>
 </body>
 </html>
