@@ -75,10 +75,10 @@
     <div class="section">
         <h2>Bank Key Management</h2>
         <div class="controls-grid">
-            <button onclick="handleGenerateAndExportKeys()">🔑 Generate & Export Hybrid Keys</button>
-            <label for="import-public-key" class="sub-button">Import Public Key</label>
+            <button id="generate-keys-button" onclick="handleGenerateAndExportKeys()" disabled>🔑 Generate & Export Hybrid Keys</button>
+            <label for="import-public-key" class="sub-button" id="import-public-label" disabled>Import Public Key</label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
-            <label for="import-private-key" class="sub-button">Import Private Key</label>
+            <label for="import-private-key" class="sub-button" id="import-private-label" disabled>Import Private Key</label>
             <input type="file" id="import-private-key" accept=".json" style="display: none;">
         </div>
         <div id="key-status">Key pair status will be displayed here.</div>
@@ -86,7 +86,7 @@
 
     <div class="section" id="validator-section">
         <h2>Validate Banknote</h2>
-        <label for="validator-input">Select Image for Validation</label>
+        <label for="validator-input" id="validator-label" disabled>Select Image for Validation</label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
         <div id="validation-result">Validation result will be displayed here.</div>
     </div>
@@ -101,7 +101,7 @@ const ErrorHandler = (() => {
         'CRYPTO_LIBS_MISSING': {
             algorithm: "System",
             cause: "یک یا چند کتابخانه رمزنگاری (shake256.js, ed25519.js, falcon.js) بارگذاری نشده‌اند یا وجود ندارند.",
-            solution: "اطمینان حاصل کنید که فایل‌های .js کتابخانه‌ها در کنار این فایل HTML قرار دارند و نام آن‌ها صحیح است."
+            solution: "اطمینان حاصل کنید که فایل‌های .js کتابخانه‌ها در کنار این فایل HTML قرار دارند و نام آن‌ها صحیح است. کنسول مرورگر (F12) را برای خطاهای 404 بررسی کنید."
         },
         'KEY_GENERATION_ED25519': {
             algorithm: "Ed25519",
@@ -154,7 +154,7 @@ const ErrorHandler = (() => {
         const details = errorMap[errorCode] || {
             algorithm: "Unknown",
             cause: "یک خطای ناشناخته رخ داده است.",
-            solution: "کنسول مرورگر را برای اطلاعات بیشتر بررسی کنید."
+            solution: "کنسول مرورگر (F12) را برای اطلاعات بیشتر بررسی کنید."
         };
         console.error(`[CRITICAL ERROR] Code: ${errorCode}`, 'Details:', details, 'Original Error:', error);
         return `
@@ -172,12 +172,12 @@ const ErrorHandler = (() => {
 // == پل ارتباطی با کتابخانه های رمزنگاری (Ed25519, Falcon, SHAKE256)
 // ===================================================================================
 const CryptoBridge = (() => {
-    // هش با طول خروجی 1024 بیت (128 بایت)
     function hash(data) {
+        if (typeof window.shake256 !== 'function') throw new Error('HASH_FAILURE');
         try {
-            // فرض: کتابخانه شما تابعی به نام `shake256(data, outputLengthInBytes)` دارد.
-            return window.shake256(data, 128); 
+            return window.shake256(data, 128); // Generate a 1024-bit hash
         } catch (e) {
+            console.error("SHAKE256 Hashing failed:", e);
             throw new Error('HASH_FAILURE');
         }
     }
@@ -185,14 +185,17 @@ const CryptoBridge = (() => {
     async function generateNewKeyPair() {
         let ed25519_keys, falcon_keys;
         try {
+            if (typeof window.ed25519?.generateKeyPair !== 'function') throw new Error('KEY_GENERATION_ED25519');
             ed25519_keys = await window.ed25519.generateKeyPair();
         } catch (e) {
+            console.error("Ed25519 key generation failed:", e);
             throw new Error('KEY_GENERATION_ED25519');
         }
         try {
-            // انتظار می‌رود این تابع یک زوج کلید Falcon-512 تولید کند.
-            falcon_keys = await window.falcon.generateKeyPair(); 
+            if (typeof window.falcon?.generateKeyPair !== 'function') throw new Error('KEY_GENERATION_FALCON');
+            falcon_keys = await window.falcon.generateKeyPair();
         } catch (e) {
+            console.error("Falcon-512 key generation failed:", e);
             throw new Error('KEY_GENERATION_FALCON');
         }
         return {
@@ -209,23 +212,21 @@ const CryptoBridge = (() => {
     
     async function sign(dataToSign, privateKeys) {
         const messageHash = hash(dataToSign);
-
         let edSignature, falconSignature;
         try {
             const edPrivateKey = base64ToArrayBuffer(privateKeys.ed25519.privateKey);
             edSignature = await window.ed25519.sign(messageHash, edPrivateKey);
         } catch(e) {
+            console.error("Ed25519 signing failed:", e);
             throw new Error('SIGNATURE_FAILURE_ED25519');
         }
-
         try {
             const falconPrivateKey = base64ToArrayBuffer(privateKeys.falcon.privateKey);
-            // انتظار می‌رود این تابع از کلید خصوصی Falcon-512 برای امضا استفاده کند.
             falconSignature = await window.falcon.sign(messageHash, falconPrivateKey);
         } catch(e) {
+            console.error("Falcon-512 signing failed:", e);
             throw new Error('SIGNATURE_FAILURE_FALCON');
         }
-        
         return {
             ed25519_sig: arrayBufferToBase64(edSignature),
             falcon_sig: arrayBufferToBase64(falconSignature)
@@ -234,13 +235,13 @@ const CryptoBridge = (() => {
 
     async function verify(combinedSignature, dataToVerify, publicKeys) {
         const messageHash = hash(dataToVerify);
-        
         let isEd25519Valid = false;
         try {
             const edPublicKey = base64ToArrayBuffer(publicKeys.ed25519.publicKey);
             const edSignature = base64ToArrayBuffer(combinedSignature.ed25519_sig);
             isEd25519Valid = await window.ed25519.verify(edSignature, messageHash, edPublicKey);
         } catch (e) {
+             console.error("Ed25519 verification failed:", e);
              throw new Error('VERIFICATION_FAILURE_ED25519');
         }
         if (!isEd25519Valid) throw new Error('VERIFICATION_FAILURE_ED25519');
@@ -249,98 +250,29 @@ const CryptoBridge = (() => {
         try {
             const falconPublicKey = base64ToArrayBuffer(publicKeys.falcon.publicKey);
             const falconSignature = base64ToArrayBuffer(combinedSignature.falcon_sig);
-            // انتظار می‌رود این تابع امضای Falcon-512 را تایید کند.
             isFalconValid = await window.falcon.verify(falconSignature, messageHash, falconPublicKey);
         } catch(e) {
+             console.error("Falcon-512 verification failed:", e);
              throw new Error('VERIFICATION_FAILURE_FALCON');
         }
         if (!isFalconValid) throw new Error('VERIFICATION_FAILURE_FALCON');
-
         return isEd25519Valid && isFalconValid;
     }
 
-    return { generateNewKeyPair, sign, verify };
+    return { generateNewKeyPair, sign, verify, hash };
 })();
 
+
 // ===================================================================================
-// == منطق اصلی برنامه و مدیریت کلیدها (بازنویسی شده)
+// == منطق اصلی برنامه و مدیریت کلیدها
 // ===================================================================================
-const BankApp = (() => {
+const App = (() => {
     let activeKeys = { publicKeys: null, privateKeys: null };
     
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_HASH_ALGO = "SHA-256";
 
-    async function encryptKeys(privateKeys, password) { /* ... implementation unchanged ... */ }
-    async function decryptKeys(encryptedData, password) { /* ... implementation unchanged ... */ }
-    // NOTE: encryptKeys and decryptKeys are omitted for brevity, they are the same as the previous version.
-    // A production implementation would be here.
-
-    async function handleGenerateAndExport() {
-        const password = prompt("یک رمز عبور قوی برای رمزنگاری فایل کلید خصوصی ترکیبی خود وارد کنید:");
-        if (!password) {
-            updateKeyStatus('<span class="warning">⚠️ عملیات لغو شد. رمز عبور برای امنیت کلید خصوصی الزامی است.</span>');
-            return;
-        }
-        updateKeyStatus('<span class="info">⏳ در حال تولید زوج کلیدهای ترکیبی (Ed25519 & Falcon-512)... این فرآیند ممکن است کمی طول بکشد.</span>');
-        try {
-            const keyPair = await CryptoBridge.generateNewKeyPair();
-            activeKeys = keyPair;
-            const publicKeys = { ed25519: { publicKey: keyPair.ed25519.publicKey }, falcon: { publicKey: keyPair.falcon.publicKey } };
-            downloadFile(JSON.stringify(publicKeys, null, 2), 'Sadat-Hybrid-PublicKey-512.json', 'application/json');
-            const encryptedPrivate = await encryptKeys(keyPair, password);
-            downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Hybrid-PrivateKey-512.json', 'application/json');
-            updateKeyStatus('<span class="valid">✅ زوج کلیدهای ترکیبی با موفقیت تولید و صادر شدند. سیستم برای صدور اسکناس آماده است.</span>');
-            updateControlsState(true);
-            await handleCreateNewNote();
-        } catch (error) {
-            updateKeyStatus(ErrorHandler.report(error.message, error));
-        }
-    }
-
-    function importPublicKey(file) { /* ... implementation unchanged ... */ }
-    function importPrivateKey(file) { /* ... implementation unchanged ... */ }
-    // NOTE: Key import functions are omitted for brevity.
-    
-    async function getSignedNoteData(amount, index = 0) {
-        if (!activeKeys.privateKeys) {
-            alert("خطا: کلید خصوصی برای امضا فعال نیست.");
-            return null;
-        }
-        const now = Date.now();
-        const noteData = {
-            amount: parseInt(amount) || 0,
-            verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
-            serial: "SDT-" + (now + index).toString().slice(-8),
-            timestamp: now,
-            sig_scheme: "Ed25519+Falcon-512/SHAKE256" // *** UPDATED ***
-        };
-        const stringToSign = getStandardizedDataForSigning(noteData);
-        
-        try {
-            const combinedSignature = await CryptoBridge.sign(stringToSign, activeKeys);
-            noteData.signature = arrayBufferToBase64(new TextEncoder().encode(JSON.stringify(combinedSignature)));
-            noteData.visualHash = arrayBufferToHex(CryptoBridge.hash(noteData.signature));
-            return noteData;
-        } catch (error) {
-            updateKeyStatus(ErrorHandler.report(error.message, error));
-            return null;
-        }
-    }
-
-    async function validateNote(file) { /* ... implementation unchanged ... */ }
-    async function validateDigitalSignature(qrData) { /* ... implementation unchanged ... */ }
-    // NOTE: Validation logic is omitted for brevity.
-
-    function getStandardizedDataForSigning(noteData) {
-        const data = { ...noteData };
-        delete data.signature;
-        delete data.visualHash;
-        return JSON.stringify(data, Object.keys(data).sort());
-    }
-
-    // This is the full implementation for the omitted functions for completeness.
     async function encryptKeys(privateKeys, password) {
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -355,6 +287,7 @@ const BankApp = (() => {
             cipherText: arrayBufferToBase64(encrypted), salt: arrayBufferToBase64(salt), iv: arrayBufferToBase64(iv)
         };
     }
+
     async function decryptKeys(encryptedData, password) {
         try {
             const salt = base64ToArrayBuffer(encryptedData.salt);
@@ -371,6 +304,39 @@ const BankApp = (() => {
             throw new Error('KEY_DECRYPTION_FAILURE');
         }
     }
+
+    async function handleGenerateAndExport() {
+        const password = prompt("یک رمز عبور قوی برای رمزنگاری فایل کلید خصوصی ترکیبی خود وارد کنید:");
+        if (!password) {
+            updateKeyStatus('<span class="warning">⚠️ عملیات لغو شد. رمز عبور برای امنیت کلید خصوصی الزامی است.</span>');
+            return;
+        }
+
+        updateKeyStatus('<span class="info">⏳ در حال تولید زوج کلیدهای ترکیبی (Ed25519 & Falcon-512)... این فرآیند ممکن است کمی طول بکشد.</span>');
+        
+        try {
+            const keyPair = await CryptoBridge.generateNewKeyPair();
+            
+            // From this point on, we have a valid keypair.
+            activeKeys.privateKeys = keyPair;
+            activeKeys.publicKeys = {
+                 ed25519: { publicKey: keyPair.ed25519.publicKey },
+                 falcon: { publicKey: keyPair.falcon.publicKey }
+            };
+            
+            downloadFile(JSON.stringify(activeKeys.publicKeys, null, 2), 'Sadat-Hybrid-PublicKey-512.json', 'application/json');
+            
+            const encryptedPrivate = await encryptKeys(keyPair, password);
+            downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Hybrid-PrivateKey-512.json', 'application/json');
+
+            updateKeyStatus('<span class="valid">✅ زوج کلیدهای ترکیبی با موفقیت تولید و صادر شدند. سیستم برای صدور اسکناس آماده است.</span>');
+            updateControlsState(true);
+            await handleCreateNewNote();
+        } catch (error) {
+            updateKeyStatus(ErrorHandler.report(error.message, error));
+        }
+    }
+
     function importPublicKey(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -381,12 +347,14 @@ const BankApp = (() => {
                 }
                 activeKeys.publicKeys = keyData;
                 updateKeyStatus('<span class="valid">✅ کلید عمومی ترکیبی با موفقیت وارد شد. اکنون برای تأیید اسکناس‌ها فعال است.</span>');
+                document.getElementById('validator-label').removeAttribute('disabled');
             } catch (error) {
                 updateKeyStatus(ErrorHandler.report(error.message || 'KEY_IMPORT_INVALID_FORMAT', error));
             }
         };
         reader.readAsText(file);
     }
+    
     function importPrivateKey(file) {
         const password = prompt("رمز عبور فایل کلید خصوصی را برای رمزگشایی وارد کنید:");
         if (!password) {
@@ -399,22 +367,49 @@ const BankApp = (() => {
                 const encryptedData = JSON.parse(e.target.result);
                 updateKeyStatus('<span class="info">⏳ در حال رمزگشایی و وارد کردن کلید خصوصی...</span>');
                 const privateKeys = await decryptKeys(encryptedData, password);
-                 if (!privateKeys.ed25519?.privateKey || !privateKeys.falcon?.privateKey) {
+                if (!privateKeys.ed25519?.privateKey || !privateKeys.falcon?.privateKey) {
                     throw new Error('KEY_IMPORT_INVALID_FORMAT');
                 }
                 activeKeys.privateKeys = privateKeys;
-                // Also load the public keys if they exist in the file, or derive if possible
-                const publicKeysFromFile = { ed25519: { publicKey: privateKeys.ed25519.publicKey }, falcon: { publicKey: privateKeys.falcon.publicKey } };
-                activeKeys.publicKeys = publicKeysFromFile;
-
+                activeKeys.publicKeys = {
+                    ed25519: { publicKey: privateKeys.ed25519.publicKey },
+                    falcon: { publicKey: privateKeys.falcon.publicKey }
+                };
                 updateKeyStatus('<span class="valid">✅ کلید خصوصی ترکیبی با موفقیت وارد شد. اکنون برای امضای اسکناس‌ها فعال است.</span>');
                 updateControlsState(true);
             } catch (error) {
-                updateKeyStatus(ErrorHandler.report(error.message || 'KEY_DECRYPTION_FAILURE', error));
+                updateKeyStatus(ErrorHandler.report(error.message, error));
             }
         };
         reader.readAsText(file);
     }
+    
+    async function getSignedNoteData(amount, index = 0) {
+        if (!activeKeys.privateKeys) {
+            alert("خطا: کلید خصوصی برای امضا فعال نیست.");
+            return null;
+        }
+        const now = Date.now();
+        const noteData = {
+            amount: parseInt(amount) || 0,
+            verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
+            serial: "SDT-" + (now + index).toString().slice(-8),
+            timestamp: now,
+            sig_scheme: "Ed25519+Falcon-512/SHAKE256"
+        };
+        const stringToSign = getStandardizedDataForSigning(noteData);
+        
+        try {
+            const combinedSignature = await CryptoBridge.sign(stringToSign, activeKeys.privateKeys);
+            noteData.signature = arrayBufferToBase64(new TextEncoder().encode(JSON.stringify(combinedSignature)));
+            noteData.visualHash = arrayBufferToHex(await CryptoBridge.hash(noteData.signature));
+            return noteData;
+        } catch (error) {
+            updateKeyStatus(ErrorHandler.report(error.message, error));
+            return null;
+        }
+    }
+
     async function validateNote(file) {
         if (!activeKeys.publicKeys) {
             alert("خطا: کلید عمومی برای تأیید فعال نیست. لطفاً یک کلید عمومی وارد کنید.");
@@ -441,17 +436,16 @@ const BankApp = (() => {
                 }
                 resultHTML += `<span class="valid">✅ کد QR با موفقیت خوانده شد.</span>\n\n`;
 
-                resultHTML += `<span class="info">۲. تأیید امضای دیجیتال ترکیبی (${qrData.sig_scheme})...</span>\n`;
+                resultHTML += `<span class="info">۲. تأیید امضای دیجیتال ترکیبی (${qrData.sig_scheme || 'N/A'})...</span>\n`;
                 const isSignatureValid = await validateDigitalSignature(qrData);
                 if (isSignatureValid) {
                      resultHTML += `<span class="valid">✅ امضای دیجیتال ترکیبی معتبر است. اصالت و یکپارچگی داده‌ها تأیید شد.</span>\n\n`;
                 }
                 
                 resultHTML += `<span class="info">۳. استخراج و تطبیق داده‌های پنهان شده (Steganography)...</span>\n`;
+                const expectedSignatureString = JSON.stringify(JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(qrData.signature))));
                 const decodedSignature = LSB.decode(tempCtx);
-                const originalSigString = JSON.stringify(JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(qrData.raw_signature))));
-
-                if (decodedSignature && decodedSignature === originalSigString) {
+                if (decodedSignature && decodedSignature === expectedSignatureString) {
                     resultHTML += `<span class="valid">✅ داده‌های پنهان شده با موفقیت استخراج و با امضای اصلی تطبیق داده شد. یکپارچگی تصویر تأیید شد.</span>\n\n`;
                 } else {
                      resultHTML += `<span class="invalid">❌ خطای مهلک: داده‌های پنهان شده در تصویر با امضای دیجیتال مطابقت ندارد. تصویر اسکناس دستکاری شده است.</span>\n`;
@@ -469,13 +463,21 @@ const BankApp = (() => {
             }
         };
     }
+
     async function validateDigitalSignature(qrData) {
-        const { signature: raw_signature, ...dataToVerify } = qrData;
+        const { signature, ...dataToVerify } = qrData;
         const stringToVerify = getStandardizedDataForSigning(dataToVerify);
-        const combinedSignature = JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(raw_signature)));
+        const combinedSignature = JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(signature)));
         return await CryptoBridge.verify(combinedSignature, stringToVerify, activeKeys.publicKeys);
     }
     
+    function getStandardizedDataForSigning(noteData) {
+        const data = { ...noteData };
+        delete data.signature;
+        delete data.visualHash;
+        return JSON.stringify(data, Object.keys(data).sort());
+    }
+
     return { 
         handleGenerateAndExport, 
         importPublicKey, 
@@ -486,7 +488,7 @@ const BankApp = (() => {
 })();
 
 // ===================================================================================
-// == مقداردهی اولیه و کنترل های UI (بخش‌های باقی‌مانده بدون تغییر)
+// == مقداردهی اولیه و کنترل های UI
 // ===================================================================================
 // Global variables and utility functions
 let currentNoteData = {};
@@ -497,9 +499,12 @@ function updateKeyStatus(message) { document.getElementById('key-status').innerH
 function updateControlsState(isEnabled) {
     document.getElementById('create-note-button').disabled = !isEnabled;
     document.getElementById('download-batch-button').disabled = !isEnabled;
+    if (isEnabled) {
+        document.getElementById('validator-label').removeAttribute('disabled');
+    }
 }
 function downloadFile(data, filename, type) {
-    const blob = new Blob([data], { type });
+    const blob = new Blob([data], { type: type });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
@@ -525,15 +530,16 @@ function arrayBufferToHex(buffer) {
 }
 
 // UI Event Listeners
-document.getElementById('import-public-key').addEventListener('change', (e) => e.target.files[0] && BankApp.importPublicKey(e.target.files[0]));
-document.getElementById('import-private-key').addEventListener('change', (e) => e.target.files[0] && BankApp.importPrivateKey(e.target.files[0]));
-document.getElementById('validator-input').addEventListener('change', (e) => e.target.files[0] && BankApp.validateNote(e.target.files[0]));
-function handleGenerateAndExportKeys() { BankApp.handleGenerateAndExport(); }
+document.getElementById('import-public-key').addEventListener('change', (e) => e.target.files[0] && App.importPublicKey(e.target.files[0]));
+document.getElementById('import-private-key').addEventListener('change', (e) => e.target.files[0] && App.importPrivateKey(e.target.files[0]));
+document.getElementById('validator-input').addEventListener('change', (e) => e.target.files[0] && App.validateNote(e.target.files[0]));
+function handleGenerateAndExportKeys() { App.handleGenerateAndExport(); }
+
 
 async function handleCreateNewNote() {
     const amount = document.getElementById("amount-input").value;
     updateKeyStatus('<span class="info">⏳ در حال تولید طرح اسکناس جدید...</span>');
-    const noteData = await BankApp.getSignedNoteData(amount);
+    const noteData = await App.getSignedNoteData(amount);
     if (noteData) {
         currentNoteData = noteData;
         await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
@@ -557,7 +563,7 @@ async function handleDownloadBatch() {
         offscreenCanvas.height = canvas.height;
 
         for (let i = 0; i < quantity; i++) {
-            const noteData = await BankApp.getSignedNoteData(amount, i);
+            const noteData = await App.getSignedNoteData(amount, i);
             if (!noteData) {
                 resultDiv.innerHTML += `<br><span class="invalid">❌ عملیات متوقف شد. خطای امضا را در بخش وضعیت کلید بررسی کنید.</span>`;
                 return;
@@ -581,25 +587,32 @@ async function handleDownloadBatch() {
 
 // Pre-loader and Initialization
 window.onload = () => {
-    updateControlsState(false);
     updateKeyStatus('<span class="info">⏳ در حال بارگذاری و آماده‌سازی کتابخانه‌های رمزنگاری...</span>');
     
     setTimeout(() => {
-        if (typeof window.shake256 !== 'function' || typeof window.ed25519 !== 'object' || typeof window.falcon !== 'object') {
+        const libsReady = typeof window.shake256 === 'function' && typeof window.ed25519 === 'object' && typeof window.falcon === 'object';
+        
+        if (!libsReady) {
             updateKeyStatus(ErrorHandler.report('CRYPTO_LIBS_MISSING'));
+            // Keep buttons disabled
             return;
         }
         
-        updateKeyStatus('<span class="valid">✅ کتابخانه‌های رمزنگاری (Ed25519, Falcon-512, SHAKE256) با موفقیت بارگذاری شدند.</span><br><span class="info">لطفاً یک زوج کلید جدید تولید کرده یا کلیدهای موجود را وارد نمایید.</span>');
-        document.querySelector('button[onclick="handleGenerateAndExportKeys()"]').disabled = false;
-        document.querySelectorAll('label[for^="import-"]').forEach(l => l.classList.remove('disabled'));
+        updateKeyStatus('<span class="valid">✅ کتابخانه‌های رمزنگاری آماده هستند.</span><br><span class="info">لطفاً یک زوج کلید جدید تولید کرده یا کلیدهای موجود را وارد نمایید.</span>');
+        document.getElementById('generate-keys-button').removeAttribute('disabled');
+        document.getElementById('import-public-label').removeAttribute('disabled');
+        document.getElementById('import-private-label').removeAttribute('disabled');
 
-    }, 1000);
+    }, 500);
 };
 
+
+// ===================================================================================
+// == توابع کمکی و طراحی (بدون تغییر)
+// ===================================================================================
 const LSB = (() => { const t="00000000";function o(o){return o.split("").map(t=>t.charCodeAt(0).toString(2).padStart(8,"0")).join("")+t}return{encode:function(e,n){const r=o(n),c=e.getImageData(0,0,e.canvas.width,e.canvas.height),i=c.data;if(r.length>3*i.length/4)throw new Error("Message too long");let d=0;for(let t=0;t<r.length;t++)(d+1)%4===0&&d++,i[d]=(254&i[d])|parseInt(r[t],10),d++;e.putImageData(c,0,0)},decode:function(o){const e=o.getImageData(0,0,o.canvas.width,o.canvas.height).data;let n="",r="";for(let o=0;o<e.length;o++){if((o+1)%4===0)continue;const c=1&e[o];if(n+=c,8===n.length){if(n===t)return r;r+=String.fromCharCode(parseInt(n,2)),n=""}}return null}}}();
-function readQRCodeFromCanvas(canvasToCheck) { const context = canvasToCheck.getContext('2d'); const qrRegion = { x: 800, y: 210, width: 420, height: 420 }; const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { const data = JSON.parse(code.data); data.raw_signature = data.signature; return data; } catch(e) { console.error("QR decoding error:", e); return null; } } return null; }
-async function drawNoteOnCanvas(targetCanvas,noteData,width,height,applySteganography=!0){return new Promise(async(resolve,reject)=>{if(0===Object.keys(noteData).length)return reject("No note data");const ctx=targetCanvas.getContext("2d"),{amount:amount,verificationKey:verificationKey,serial:serial,visualHash:visualHash,signature:signature}=noteData,w=width,h=height,scale=w/1350,bgGradient=ctx.createLinearGradient(0,0,0,h),baseHue=H(visualHash,0,0,360);bgGradient.addColorStop(0,`hsl(${baseHue}, 50%, 6%)`),bgGradient.addColorStop(1,`hsl(${baseHue}, 40%, 4%)`),ctx.fillStyle=bgGradient,ctx.fillRect(0,0,w,h),drawWatermark(ctx,visualHash,w,h),drawKochGuilloche(ctx,visualHash,w,h),drawNoisePattern(ctx,visualHash,w,h),ctx.shadowColor="rgba(0, 0, 0, 0.7)",ctx.shadowBlur=8*scale,ctx.shadowOffsetX=2*scale,ctx.shadowOffsetY=2*scale,ctx.fillStyle="#EAEAEA",ctx.font=`bold ${80*scale}px 'Roboto Mono'`,ctx.textAlign="left",ctx.fillText(serial.substring(4),150*scale,160*scale),ctx.fillText(verificationKey.substring(4),150*scale,280*scale),ctx.font=`bold ${150*scale}px 'Roboto Mono'`,ctx.textAlign="right",ctx.shadowBlur=12*scale,ctx.shadowOffsetX=4*scale,ctx.shadowOffsetY=4*scale,ctx.fillText(amount.toString(),w-120*scale,190*scale),ctx.shadowColor="transparent";const qrDataString=JSON.stringify(noteData),qrCanvas=document.createElement("canvas"),qrSize=380*scale;QRCode.toCanvas(qrCanvas,qrDataString,{width:qrSize,errorCorrectionLevel:"H",color:{dark:"#000000",light:"#FFFFFF"}},err=>{if(err)return reject(err);const qrX=w-150*scale-qrSize,qrY=h-520*scale;ctx.drawImage(qrCanvas,qrX,qrY,qrSize,qrSize),ctx.font=`${30*scale}px 'Roboto Mono'`,ctx.fillStyle="rgba(255, 255, 255, 0.4)",ctx.textAlign="center",ctx.fillText("Digitally Signed by Sadat Bank Authority (PQC)",w/2,h-60*scale);if(applySteganography&&signature){const sigString=new TextDecoder().decode(base64ToArrayBuffer(signature));LSB.encode(ctx,JSON.stringify(JSON.parse(sigString)))}resolve()})})}
+function readQRCodeFromCanvas(canvasToCheck) { const context = canvasToCheck.getContext('2d'); const qrRegion = { x: 800, y: 210, width: 420, height: 420 }; const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { return JSON.parse(code.data); } catch { return null; } } return null; }
+async function drawNoteOnCanvas(targetCanvas,noteData,width,height,applySteganography=!0){return new Promise(async(resolve,reject)=>{if(Object.keys(noteData).length===0)return reject("No note data provided.");const ctx=targetCanvas.getContext("2d"),{amount:amount,verificationKey:verificationKey,serial:serial,visualHash:visualHash,signature:signature}=noteData,w=width,h=height,scale=w/1350,bgGradient=ctx.createLinearGradient(0,0,0,h),baseHue=H(visualHash,0,0,360);bgGradient.addColorStop(0,`hsl(${baseHue}, 50%, 6%)`),bgGradient.addColorStop(1,`hsl(${baseHue}, 40%, 4%)`),ctx.fillStyle=bgGradient,ctx.fillRect(0,0,w,h),drawWatermark(ctx,visualHash,w,h),drawKochGuilloche(ctx,visualHash,w,h),drawNoisePattern(ctx,visualHash,w,h),ctx.shadowColor="rgba(0, 0, 0, 0.7)",ctx.shadowBlur=8*scale,ctx.shadowOffsetX=2*scale,ctx.shadowOffsetY=2*scale,ctx.fillStyle="#EAEAEA",ctx.font=`bold ${80*scale}px 'Roboto Mono'`,ctx.textAlign="left",ctx.fillText(serial.substring(4),150*scale,160*scale),ctx.fillText(verificationKey.substring(4),150*scale,280*scale),ctx.font=`bold ${150*scale}px 'Roboto Mono'`,ctx.textAlign="right",ctx.shadowBlur=12*scale,ctx.shadowOffsetX=4*scale,ctx.shadowOffsetY=4*scale,ctx.fillText(amount.toString(),w-120*scale,190*scale),ctx.shadowColor="transparent";const qrDataString=JSON.stringify(noteData),qrCanvas=document.createElement("canvas"),qrSize=380*scale;QRCode.toCanvas(qrCanvas,qrDataString,{width:qrSize,errorCorrectionLevel:"H",color:{dark:"#000000",light:"#FFFFFF"}},err=>{if(err)return reject(err);const qrX=w-150*scale-qrSize,qrY=h-520*scale;ctx.drawImage(qrCanvas,qrX,qrY,qrSize,qrSize),ctx.font=`${30*scale}px 'Roboto Mono'`,ctx.fillStyle="rgba(255, 255, 255, 0.4)",ctx.textAlign="center",ctx.fillText("Digitally Signed by Sadat Bank Authority (PQC)",w/2,h-60*scale);if(applySteganography&&signature){try{const sigString=JSON.stringify(JSON.parse(new TextDecoder().decode(base64ToArrayBuffer(signature))));LSB.encode(ctx,sigString)}catch(t){console.error("LSB Encoding Error:",t),reject(t)}}resolve()})})}
 const H=(text,index,min,max)=>min+(parseInt(text.substring(index,index+2),16)%(max-min+1));function drawKochGuilloche(g_ctx,hash,w,h){g_ctx.save(),g_ctx.translate(w/2,h/2);const scale=w/1350,iteration=H(hash,2,2,4),size=w*(H(hash,4,10,20)/100),angleOffset=H(hash,6,0,360)/360*2*Math.PI,numLines=H(hash,8,3,6),hueOffset=H(hash,10,0,360);function drawKochSegment(x1,y1,x2,y2,level){if(0===level)return void g_ctx.lineTo(x2,y2);const dx=x2-x1,dy=y2-y1,dist=Math.sqrt(dx*dx+dy*dy),unitVecX=dx/dist,unitVecY=dy/dist,p1x=x1+unitVecX*dist/3,p1y=y1+unitVecY*dist/3,p2x=x1+2*unitVecX*dist/3,p2y=y1+2*unitVecY*dist/3,p3x=p1x+unitVecX*dist/6-unitVecY*dist*Math.sqrt(3)/6,p3y=p1y+unitVecY*dist/6+unitVecX*dist*Math.sqrt(3)/6;drawKochSegment(x1,y1,p1x,p1y,level-1),drawKochSegment(p1x,p1y,p3x,p3y,level-1),drawKochSegment(p3x,p3y,p2x,p2y,level-1),drawKochSegment(p2x,p2y,x2,y2,level-1)}g_ctx.lineWidth=1*scale,g_ctx.lineJoin="bevel",g_ctx.lineCap="round";for(let i=0;i<numLines;i++){const hue=(hueOffset+i*(360/numLines))%360;g_ctx.strokeStyle=`hsla(${hue}, 70%, 60%, 0.15)`;const lineAngle=i/numLines*2*Math.PI+angleOffset,x1=Math.cos(lineAngle)*size,y1=Math.sin(lineAngle)*size,x2=Math.cos(lineAngle+Math.PI)*size,y2=Math.sin(lineAngle+Math.PI)*size;g_ctx.beginPath(),g_ctx.moveTo(x1,y1),drawKochSegment(x1,y1,x2,y2,iteration),g_ctx.stroke()}g_ctx.restore()}
 function drawWatermark(g_ctx,hash,w,h){g_ctx.save(),g_ctx.translate(w/2,h/2);const scale=w/1350,numSpirals=H(hash,16,3,6),spiralRadius=w*(H(hash,18,10,25)/100)*scale,hue=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hue}, 50%, 80%, 0.05)`,g_ctx.lineWidth=4*scale;for(let i=0;i<numSpirals;i++){g_ctx.beginPath();const startAngle=i/numSpirals*2*Math.PI+H(hash,22,0,100)/100,endAngle=startAngle+H(hash,24,6,12)*Math.PI;for(let t=startAngle;t<endAngle;t+=.05){const r=spiralRadius*(t-startAngle)/(endAngle-startAngle),x=r*Math.cos(t),y=r*Math.sin(t);t===startAngle?g_ctx.moveTo(x,y):g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore()}
 function drawNoisePattern(g_ctx,hash,w,h){g_ctx.save();for(let i=0;i<2e4;i++){const x=Math.random()*w,y=Math.random()*h,o=.15*Math.random(),hue=H(hash,4+i%30,0,360);g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`,g_ctx.fillRect(x,y,1,1)}g_ctx.restore()}
