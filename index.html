@@ -295,10 +295,6 @@
 // Import cryptographic libraries as modules
 import pqcSignFalcon512 from './falcon.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-// argon2 به عنوان یک ماژول ESM نیست، پس به صورت سنتی بارگذاری می‌شود.
-// در اینجا، از متغیر سراسری Module استفاده می‌شود.
-const argon2 = Module;
-
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
@@ -353,7 +349,8 @@ const BankCrypto = (() => {
     async function encryptPrivateKey(privateKeyBytes, password) {
         const argonParams = {
             time: 2, mem: 65536, parallelism: 4,
-            type: argon2.ArgonType.Argon2id, hashLen: 32
+            // نام صحیح ثابت به Argon2Type.Argon2id تغییر یافته است
+            type: argon2.Argon2Type.Argon2id, hashLen: 32
         };
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
