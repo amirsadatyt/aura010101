@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/argon2-browser/dist/argon2.min.js"></script>
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -320,13 +321,16 @@ const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).pad
 
 const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
-    const PBKDF2_ITERATIONS = 100000;
-    const PBKDF2_HASH_ALGO = "SHA-256";
-    const AES_KEY_LENGTH = 256;
+    // Argon2 parameters for key derivation
+    const ARGON2_SALT_LENGTH = 16;
+    const ARGON2_ITERATIONS = 2; // Time cost (t)
+    const ARGON2_MEMORY_COST = 19456; // Memory cost in KiB (m)
+    const ARGON2_PARALLELISM = 1; // Parallelism (p)
+    const ARGON2_HASH_LENGTH = 32; // 32 bytes = 256 bits for AES-256 key
+    const ARGON2_TYPE = argon2.ArgonType.Argon2id;
 
     function hashMessage(message) {
         // Use SHAKE256 to produce a 1024-bit (128-byte) hash.
-        // js-sha3's shake256 function takes a string and returns a hex string.
         const hexHash = shake256(message, 1024);
         return hexToUint8Array(hexHash);
     }
@@ -339,8 +343,7 @@ const BankCrypto = (() => {
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
         if (!falconApi) throw new Error("Falcon API not initialized.");
-        
-        const dataHash = hashMessage(data); // Now synchronous
+        const dataHash = hashMessage(data); 
         const { signature } = await falconApi.sign(dataHash, privateKey);
         return signature;
     }
@@ -349,64 +352,74 @@ const BankCrypto = (() => {
         if (!publicKey) throw new Error("Public key is not available for verification.");
         if (!falconApi) throw new Error("Falcon API not initialized.");
         
-        const dataHash = hashMessage(data); // Now synchronous
+        const dataHash = hashMessage(data);
         return await falconApi.verify(signature, dataHash, publicKey);
     }
     
     async function encryptPrivateKey(privateKeyBytes, password) {
-        const passwordBuffer = new TextEncoder().encode(password);
-        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const salt = window.crypto.getRandomValues(new Uint8Array(ARGON2_SALT_LENGTH));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        
-        const keyMaterial = await window.crypto.subtle.importKey(
-            "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
+
+        // Derive key using Argon2
+        const argon2Result = await argon2.hash({
+            pass: password,
+            salt: salt,
+            time: ARGON2_ITERATIONS,
+            mem: ARGON2_MEMORY_COST,
+            hashLen: ARGON2_HASH_LENGTH,
+            parallelism: ARGON2_PARALLELISM,
+            type: ARGON2_TYPE,
+            raw: true
+        });
+        const derivedKeyBytes = argon2Result.hash;
+
+        const derivedKey = await window.crypto.subtle.importKey(
+            "raw", derivedKeyBytes, { name: AES_ALGO }, true, ["encrypt", "decrypt"]
         );
-        
-        const derivedKey = await window.crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
-            keyMaterial,
-            { name: AES_ALGO, length: AES_KEY_LENGTH },
-            true,
-            ["encrypt", "decrypt"]
-        );
-        
+
         const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
         const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
-        
+
         const encryptedKey = await window.crypto.subtle.encrypt(
             { name: AES_ALGO, iv: iv },
             derivedKey,
             encodedKey
         );
-        
+
         return {
             cipherText: arrayBufferToBase64(encryptedKey),
             salt: arrayBufferToBase64(salt),
             iv: arrayBufferToBase64(iv),
             algo: AES_ALGO,
-            hash: PBKDF2_HASH_ALGO,
-            iterations: PBKDF2_ITERATIONS
+            hash: 'Argon2id',
+            t: ARGON2_ITERATIONS,
+            m: ARGON2_MEMORY_COST,
+            p: ARGON2_PARALLELISM
         };
     }
     
     async function decryptPrivateKey(encryptedData, password) {
-        const passwordBuffer = new TextEncoder().encode(password);
         const salt = base64ToUint8Array(encryptedData.salt);
         const iv = base64ToUint8Array(encryptedData.iv);
         const cipherText = base64ToUint8Array(encryptedData.cipherText);
+
+        // Re-derive key using Argon2 with the same parameters
+        const argon2Result = await argon2.hash({
+            pass: password,
+            salt: salt,
+            time: encryptedData.t,
+            mem: encryptedData.m,
+            hashLen: ARGON2_HASH_LENGTH,
+            parallelism: encryptedData.p,
+            type: ARGON2_TYPE,
+            raw: true
+        });
+        const derivedKeyBytes = argon2Result.hash;
         
-        const keyMaterial = await window.crypto.subtle.importKey(
-            "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
+        const derivedKey = await window.crypto.subtle.importKey(
+            "raw", derivedKeyBytes, { name: AES_ALGO }, true, ["encrypt", "decrypt"]
         );
-        
-        const derivedKey = await window.crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt: salt, iterations: encryptedData.iterations, hash: encryptedData.hash },
-            keyMaterial,
-            { name: AES_ALGO, length: AES_KEY_LENGTH },
-            true,
-            ["encrypt", "decrypt"]
-        );
-        
+
         const decryptedKeyBuffer = await window.crypto.subtle.decrypt(
             { name: AES_ALGO, iv: iv },
             derivedKey,
@@ -563,7 +576,6 @@ const LSB = (() => {
         let binaryMessage = "";
         let byte = "";
         let decodedMessage = "";
-
         for (let i = 0; i < data.length; i++) {
             if ((i + 1) % 4 === 0) continue;
             const lsb = data[i] & 1;
@@ -575,7 +587,7 @@ const LSB = (() => {
                 byte = "";
             }
         }
-        return null;
+        return null; 
     }
     return { encode, decode };
 })();
@@ -586,7 +598,6 @@ const LSB = (() => {
 async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     if (!activeKeys.publicKey) {
         alert("Error: No public key is active for validation. Please generate or import one.");
         return;
@@ -598,19 +609,19 @@ async function handleFileSelect(event) {
 
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
-
     img.onload = async () => {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = 1350;
         tempCanvas.height = 750;
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-
+        
         // --- VALIDATION PIPELINE ---
         resultDiv.innerHTML = `<span class="info">1. Reading digital data from QR Code...</span>`;
         const qrData = await readQRCodeFromCanvas(tempCanvas);
         if (!qrData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`; return;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`;
+            return;
         }
         let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
         
@@ -631,7 +642,7 @@ async function handleFileSelect(event) {
             resultDiv.innerHTML = resultHTML; isFullyValid = false; return;
         }
         resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature matched. Image integrity confirmed.</span>`;
-
+        
         resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
         resultDiv.innerHTML = resultHTML;
         const expectedVisualHash = uint8ArrayToHex(BankCrypto.hashMessage(qrData.signature));
@@ -653,6 +664,7 @@ async function handleFileSelect(event) {
             const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
             const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
             resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n`;
+            
             resultHTML += `\n<div class="data-heading">Final Security Cross-Check</div>`;
             const comparison = compareQRAndOCR(qrData, ocrResult);
             resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
@@ -731,7 +743,6 @@ function compareQRAndOCR(qrData, ocrResult) {
 // Banknote Creation Logic
 // ===================================================================================
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
-
 async function createNoteData(amount, index = 0) {
     if (!activeKeys.privateKey) {
         alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
@@ -744,14 +755,12 @@ async function createNoteData(amount, index = 0) {
         serial: "SDT-" + (now + index).toString().slice(-8),
         timestamp: now
     };
-
     const stringToSign = getStandardizedDataForSigning(noteData);
     const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
     noteData.signature = arrayBufferToBase64(signatureBytes);
     
     const hashBytes = BankCrypto.hashMessage(noteData.signature);
     noteData.visualHash = uint8ArrayToHex(hashBytes);
-
     return noteData;
 }
 
@@ -770,7 +779,8 @@ async function handleCreateNewNote() {
 
 async function handleDownloadBatch() {
     if (!activeKeys.privateKey) {
-        alert("Error: No private key is active for signing banknotes. Please generate or import a private key."); return;
+        alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
+        return;
     }
     if (!window.showDirectoryPicker) {
         alert("Your browser does not support the File System Access API. Downloading a single note as a fallback.");
@@ -789,7 +799,6 @@ async function handleDownloadBatch() {
         const offscreenCanvas = document.createElement('canvas');
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
-
         for (let i = 0; i < quantity; i++) {
             let noteData = null, isNoteValid = false, attempts = 0;
             while (!isNoteValid && attempts < 10) {
@@ -841,7 +850,8 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         ctx.shadowColor="rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; ctx.shadowOffsetX=2*scale; ctx.shadowOffsetY=2*scale;
         ctx.fillStyle="#EAEAEA"; ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='left';
         ctx.fillText(serial.substring(4),150*scale,160*scale); ctx.fillText(verificationKey.substring(4),150*scale,280*scale);
-        ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right"; ctx.shadowBlur=12*scale; ctx.shadowOffsetX=4*scale; ctx.shadowOffsetY=4*scale;
+        ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right";
+        ctx.shadowBlur=12*scale; ctx.shadowOffsetX=4*scale; ctx.shadowOffsetY=4*scale;
         ctx.fillText(amount.toString(),w-(120*scale),190*scale); ctx.shadowColor="transparent";
 
         const qrCanvas = document.createElement("canvas");
