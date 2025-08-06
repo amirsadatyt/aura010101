@@ -3,6 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>Sadat Digital Banknote (Triple Signature Security)</title>
+    
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self'; 
+        script-src 'self' https://cdn.skypack.dev; 
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+        font-src 'self' https://fonts.gstatic.com;
+        worker-src 'blob:';
+        child-src 'blob:';
+    ">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -26,7 +36,9 @@
             margin: 0;
             font-family: var(--primary-font);
             background-color: var(--dark-bg);
-            background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%);
+            background-image:
+                radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%);
             color: var(--text-color);
             text-align: center;
             padding: 24px;
@@ -64,7 +76,7 @@
             border-radius: 24px;
             border: 1px solid var(--border-color);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-            display: none; /* Hidden by default */
+            display: none; /* Hidden by default, made visible by script */
         }
         .container.loaded {
             display: block;
@@ -117,7 +129,6 @@
             justify-content: center;
             gap: 8px;
         }
-        
         input[type="number"] {
             font-family: var(--mono-font);
             font-weight: 700;
@@ -138,7 +149,6 @@
             background: var(--light-bg);
             border: 1px solid var(--border-color);
         }
-        
         button[disabled], label[disabled] {
             cursor: not-allowed;
             opacity: 0.5;
@@ -194,24 +204,6 @@
         .valid { color: var(--success-color); }
         .invalid { color: var(--error-color); }
         .info { color: var(--info-color); }
-        
-        .key-info {
-            text-align: left;
-            padding: 10px;
-        }
-        .key-info p {
-            margin: 5px 0;
-            color: var(--text-muted);
-        }
-        .key-info code {
-            display: block;
-            margin-top: 5px;
-            font-size: 0.8rem;
-            word-break: break-all;
-            background: var(--light-bg);
-            padding: 5px;
-            border-radius: 4px;
-        }
         .data-heading {
             color: var(--accent-color-1);
             margin-top: 15px;
@@ -261,8 +253,8 @@
             <input type="number" id="amount-input" value="50000">
             <span class="input-label">Quantity:</span>
             <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 Redesign Banknote</button>
-            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 Download Batch</button>
+            <button id="create-note-button" disabled>🎨 Redesign Banknote</button>
+            <button id="download-batch-button" disabled>📥 Download Batch</button>
         </div>
     </div>
     <div class="section">
@@ -299,22 +291,17 @@
     // ===================================================================================
     const loadingStatus = document.getElementById('loadingStatus');
 
-    loadingStatus.textContent = 'در حال بارگذاری: کتابخانه‌های ضروری...';
-    // Essential utilities
+    loadingStatus.textContent = 'Loading Essential Libraries...';
     import QRCode from 'https://cdn.skypack.dev/qrcode';
     import jsQR from 'https://cdn.skypack.dev/jsqr';
 
-    // Cryptographic libraries
-    loadingStatus.textContent = 'در حال بارگذاری: کتابخانه‌های رمزنگاری...';
+    loadingStatus.textContent = 'Loading Cryptographic Libraries...';
     import * as nobleEd25519 from 'https://cdn.skypack.dev/@noble/ed25519';
-    // IMPORTANT: Make sure the 'falcon.js' file (from the Dashlane pqc-sign-falcon-512-browser library) is in the same directory as this HTML file.
     import pqcSignFalcon512 from './falcon.js';
-    import { shake256 as sha3_shake256 } from 'https://cdn.skypack.dev/js-sha3';
+    import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
     
-    // OCR Library
-    loadingStatus.textContent = 'در حال بارگذاری: موتور تشخیص متن...';
+    loadingStatus.textContent = 'Loading OCR Engine (Tesseract)...';
     import Tesseract from 'https://cdn.skypack.dev/tesseract.js';
-    
 
     // ===================================================================================
     // 2. GLOBAL VARIABLES & DOM ELEMENTS INITIALIZATION
@@ -340,12 +327,10 @@
         validatorInput: document.getElementById('validator-input')
     };
 
-    // Helper functions for hex/byte conversion
-    const hexToBytes = (hex) => nobleEd25519.utils.hexToBytes(hex);
     const bytesToHex = (bytes) => nobleEd25519.utils.bytesToHex(bytes);
 
     // ===================================================================================
-    // 3. CORE CRYPTOGRAPHY LOGIC (BankCrypto Module)
+    // 3. CORE CRYPTOGRAPHY LOGIC (BankCrypto Module) - UPGRADED
     // ===================================================================================
     const BankCrypto = (() => {
         const AES_ALGO = "AES-GCM";
@@ -358,7 +343,7 @@
             const ed25519_private = nobleEd25519.utils.randomPrivateKey();
             const ed25519_public = await nobleEd25519.getPublicKey(ed25519_private);
 
-            // Falcon key pair (using the initialized API)
+            // Falcon key pair
             const falcon_keys = await falconApi.keypair();
 
             return {
@@ -379,14 +364,9 @@
             }
             const encodedData = new TextEncoder().encode(data);
             
-            // 1. Ed25519 Signature
             const ed25519_sig = await nobleEd25519.sign(encodedData, privateKeys.ed25519);
-
-            // 2. Falcon Signature (using the new API)
-            const { signature: falcon_sig } = await falconApi.sign(encodedData, hexToBytes(privateKeys.falcon));
-
-            // 3. SHAKE256 Hash (1024-bit output)
-            const shake_hash = sha3_shake256.create().update(data).hex(128); // 128 bytes = 1024 bits
+            const { signature: falcon_sig } = await falconApi.sign(encodedData, nobleEd25519.utils.hexToBytes(privateKeys.falcon));
+            const shake_hash = shake256(data, 1024); // 1024-bit hash as hex
 
             return {
                 ed25519Sig: bytesToHex(ed25519_sig),
@@ -404,19 +384,16 @@
             const { ed25519Sig, falconSig, shake256Hash } = compositeSignature;
             let verificationLog = [];
 
-            // 1. Verify SHAKE256 Hash
-            const calculated_shake = sha3_shake256.create().update(data).hex(128);
+            const calculated_shake = shake256(data, 1024);
             const isShakeValid = (calculated_shake === shake256Hash);
             verificationLog.push(`<span class="${isShakeValid ? 'valid' : 'invalid'}">${isShakeValid ? '✅' : '❌'} SHAKE256 Hash... OK</span>`);
             if (!isShakeValid) return { isValid: false, log: verificationLog.join('\n') };
 
-            // 2. Verify Ed25519 Signature
             const isEd25519Valid = await nobleEd25519.verify(ed25519Sig, encodedData, publicKeys.ed25519);
             verificationLog.push(`<span class="${isEd25519Valid ? 'valid' : 'invalid'}">${isEd25519Valid ? '✅' : '❌'} Ed25519 Signature... OK</span>`);
             if (!isEd25519Valid) return { isValid: false, log: verificationLog.join('\n') };
 
-            // 3. Verify Falcon Signature (using new API with correct argument order)
-            const isFalconValid = await falconApi.verify(hexToBytes(falconSig), encodedData, hexToBytes(publicKeys.falcon));
+            const isFalconValid = await falconApi.verify(nobleEd25519.utils.hexToBytes(falconSig), encodedData, nobleEd25519.utils.hexToBytes(publicKeys.falcon));
             verificationLog.push(`<span class="${isFalconValid ? 'valid' : 'invalid'}">${isFalconValid ? '✅' : '❌'} Falcon PQC Signature... OK</span>`);
 
             return { isValid: isFalconValid, log: verificationLog.join('\n') };
@@ -468,15 +445,7 @@
         return { generateNewKeyPair, signData, verifySignature, encryptPrivateKey, decryptPrivateKey, hashMessage };
     })();
     
-    // Make functions available in the global scope so inline onclick handlers work
-    window.handleCreateNewNote = handleCreateNewNote;
-    window.handleDownloadBatch = handleDownloadBatch;
-    window.handleGenerateAndExportKeys = handleGenerateAndExportKeys;
-
-    // The rest of the application logic remains largely the same...
-    // All functions from the original file from this point on are included,
-    // but adapted to use the module-scoped variables.
-
+    // The rest of the application logic remains largely the same, but adapted for the new crypto module.
     function getStandardizedDataForSigning(noteData) {
         const dataToSign = {
             amount: noteData.amount,
@@ -496,9 +465,6 @@
         dom.downloadBatchButton.disabled = !isEnabled;
     }
 
-    // ===================================================================================
-    // UI Handlers for Key Management
-    // ===================================================================================
     async function handleGenerateAndExportKeys() {
         const password = prompt("Enter a strong password to encrypt your private key file:");
         if (!password) {
@@ -506,21 +472,22 @@
             return;
         }
 
-        updateKeyStatus('<span class="info">⏳ Generating new key pairs (Ed25519 & Falcon) and encrypting... Please wait. This may take a moment.</span>');
-        const keyPair = await BankCrypto.generateNewKeyPair();
-        if (keyPair) {
+        updateKeyStatus('<span class="info">⏳ Generating new key pairs (Ed25519 & Falcon) and encrypting... Please wait.</span>');
+        try {
+            const keyPair = await BankCrypto.generateNewKeyPair();
             activeKeys = keyPair;
 
             downloadFile(JSON.stringify(keyPair.publicKey, null, 2), 'Sadat-public-keys.json', 'application/json');
 
             const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
-            downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-keys.json', 'application/json');
+            downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-keys-encrypted.json', 'application/json');
 
-            updateKeyStatus('<span class="valid">✅ New key pairs generated and exported! The new public keys are active for validation, and the encrypted private keys are active for signing.</span>');
+            updateKeyStatus('<span class="valid">✅ New key pairs generated & exported! New keys are active.</span>');
             updateControlsState(true);
             await handleCreateNewNote();
-        } else {
-            updateKeyStatus('<span class="invalid">❌ Failed to generate keys.</span>');
+        } catch (error) {
+            console.error("Key generation failed:", error);
+            updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${error.message}</span>`);
         }
     }
 
@@ -533,7 +500,7 @@
                 const publicKeys = JSON.parse(e.target.result);
                 if (!publicKeys.ed25519 || !publicKeys.falcon) throw new Error("Invalid public key file format.");
                 activeKeys.publicKey = publicKeys;
-                updateKeyStatus('<span class="valid">✅ Public keys (Ed25519 & Falcon) imported successfully. They are now active for banknote validation.</span>');
+                updateKeyStatus('<span class="valid">✅ Public keys imported and active for validation.</span>');
             } catch (error) {
                 updateKeyStatus(`<span class="invalid">❌ Error importing public keys: ${error.message}</span>`);
             }
@@ -546,21 +513,21 @@
         if (!file) return;
         const password = prompt("Enter the password to decrypt the private keys file:");
         if (!password) {
-            updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required to decrypt.</span>');
+            updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required.</span>');
             return;
         }
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
                 const encryptedData = JSON.parse(e.target.result);
-                updateKeyStatus('<span class="info">⏳ Decrypting and importing private keys...</span>');
+                updateKeyStatus('<span class="info">⏳ Decrypting private keys...</span>');
                 const privateKeys = await BankCrypto.decryptPrivateKey(encryptedData, password);
                 if (!privateKeys.ed25519 || !privateKeys.falcon) throw new Error("Invalid private key file format.");
                 activeKeys.privateKey = privateKeys;
-                updateKeyStatus('<span class="valid">✅ Private keys (Ed25519 & Falcon) imported successfully. They are now active for banknote signing.</span>');
+                updateKeyStatus('<span class="valid">✅ Private keys imported and active for signing.</span>');
                 updateControlsState(true);
             } catch (error) {
-                updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private keys. Check your password and file: ${error.message}</span>`);
+                updateKeyStatus(`<span class="invalid">❌ Decryption/Import failed. Check password/file: ${error.message}</span>`);
             }
         };
         reader.readAsText(file);
@@ -578,72 +545,45 @@
         URL.revokeObjectURL(url);
     }
 
-
     const LSB = (() => {
         const MESSAGE_TERMINATOR = "00000000";
-
-        function messageToBinary(message) {
-            return message.split('').map(char => {
-                return char.charCodeAt(0).toString(2).padStart(8, '0');
-            }).join('') + MESSAGE_TERMINATOR;
-        }
-
-        function encode(ctx, message) {
-            const binaryMessage = messageToBinary(message);
-            const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-            const data = imageData.data;
-            
-            if (binaryMessage.length > data.length / 4 * 3) {
-                throw new Error("Message is too long to be encoded in the image.");
-            }
-
-            let dataIndex = 0;
-            for (let i = 0; i < binaryMessage.length; i++) {
-                if ((dataIndex + 1) % 4 === 0) {
-                    dataIndex++;
+        const messageToBinary = msg => msg.split('').map(c => c.charCodeAt(0).toString(2).padStart(8, '0')).join('') + MESSAGE_TERMINATOR;
+        
+        return {
+            encode: (ctx, msg) => {
+                const binaryMessage = messageToBinary(msg);
+                const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+                const data = imageData.data;
+                if (binaryMessage.length > data.length / 4 * 3) throw new Error("Message too long for image.");
+                for (let i = 0, dataIndex = 0; i < binaryMessage.length; i++, dataIndex++) {
+                    if ((dataIndex + 1) % 4 === 0) dataIndex++;
+                    data[dataIndex] = (data[dataIndex] & 0xFE) | parseInt(binaryMessage[i], 10);
                 }
-                const bit = parseInt(binaryMessage[i], 10);
-                data[dataIndex] = (data[dataIndex] & 0xFE) | bit;
-                dataIndex++;
-            }
-            
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        function decode(ctx) {
-            const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-            const data = imageData.data;
-            let binaryMessage = "";
-            let byte = "";
-            let decodedMessage = "";
-
-            for (let i = 0; i < data.length; i++) {
-                if ((i + 1) % 4 === 0) continue;
-                const lsb = data[i] & 1;
-                byte += lsb;
-                
-                if (byte.length === 8) {
-                    if (byte === MESSAGE_TERMINATOR) {
-                        return decodedMessage;
+                ctx.putImageData(imageData, 0, 0);
+            },
+            decode: (ctx) => {
+                const data = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height).data;
+                let byte = "", decodedMessage = "";
+                for (let i = 0; i < data.length; i++) {
+                    if ((i + 1) % 4 === 0) continue;
+                    byte += data[i] & 1;
+                    if (byte.length === 8) {
+                        if (byte === MESSAGE_TERMINATOR) return decodedMessage;
+                        decodedMessage += String.fromCharCode(parseInt(byte, 2));
+                        byte = "";
                     }
-                    decodedMessage += String.fromCharCode(parseInt(byte, 2));
-                    byte = "";
                 }
+                return null;
             }
-            return null;
-        }
-
-        return { encode, decode };
+        };
     })();
-
 
     dom.validatorInput.addEventListener('change', handleFileSelect);
 
     function base64ToArrayBuffer(base64) {
         const binary_string = window.atob(base64);
-        const len = binary_string.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
+        const bytes = new Uint8Array(binary_string.length);
+        for (let i = 0; i < binary_string.length; i++) {
             bytes[i] = binary_string.charCodeAt(i);
         }
         return bytes.buffer;
@@ -652,9 +592,7 @@
     function arrayBufferToBase64(buffer) {
         let binary = '';
         const bytes = new Uint8Array(buffer);
-        for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
+        bytes.forEach((byte) => binary += String.fromCharCode(byte));
         return window.btoa(binary);
     }
 
@@ -663,7 +601,7 @@
         if (!file) return;
 
         if (!activeKeys.publicKey) {
-            alert("Error: No public key is active for validation. Please generate or import one.");
+            alert("Error: No public key is active for validation. Please import one.");
             return;
         }
 
@@ -676,75 +614,66 @@
 
         img.onload = async () => {
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 1350;
-            tempCanvas.height = 750;
+            tempCanvas.width = 1350; tempCanvas.height = 750;
             const tempCtx = tempCanvas.getContext('2d');
             tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
 
             resultDiv.innerHTML = `<span class="info">1. Reading digital data from QR Code...</span>`;
             const qrData = await readQRCodeFromCanvas(tempCanvas);
-
             if (!qrData) {
-                resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable. Validation stopped.</span>`;
+                resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`;
                 return;
             }
             let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
-            
-            resultHTML += `\n\n<span class="info">2. Verifying Triple Signature (SHAKE256 -> Ed25519 -> Falcon)...</span>`;
+
+            resultHTML += `\n\n<span class="info">2. Verifying Triple Signature...</span>`;
             resultDiv.innerHTML = resultHTML;
             const signatureValidation = await validateDigitalSignature(qrData);
 
             if (!signatureValidation.isValid) {
                 resultHTML += `\n${signatureValidation.log}`;
-                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. The banknote data is forged or has been tampered with.</span>`;
+                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Data is forged or tampered.</span>`;
                 resultDiv.innerHTML = resultHTML;
                 return;
             }
             resultHTML += `\n${signatureValidation.log}`;
-            resultHTML += `\n<span class="valid">✅ 2. Triple Signature confirmed. Authenticity verified by the issuing bank's public keys.</span>`;
+            resultHTML += `\n<span class="valid">✅ 2. Triple Signature confirmed. Authenticity verified.</span>`;
 
-            resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
+            resultHTML += `\n\n<span class="info">3. Verifying hidden LSB data...</span>`;
             resultDiv.innerHTML = resultHTML;
             const decodedSignature = LSB.decode(tempCtx);
-
             if (!decodedSignature || decodedSignature !== qrData.signature) {
-                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature is missing or does not match the QR data. The banknote's image has been modified or replaced.</span>`;
+                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature does not match. Image has been modified.</span>`;
                 resultDiv.innerHTML = resultHTML;
                 isFullyValid = false;
                 return;
             }
-            resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature extracted and successfully matched. Integrity of the image is confirmed.</span>`;
+            resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature matched. Image integrity confirmed.</span>`;
 
             resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
             resultDiv.innerHTML = resultHTML;
-            
             const compositeSigString = JSON.stringify(JSON.parse(atob(qrData.signature)))
             const expectedVisualHash = await BankCrypto.hashMessage(compositeSigString);
             const referenceCanvas = document.createElement('canvas');
-            referenceCanvas.width = tempCanvas.width;
-            referenceCanvas.height = tempCanvas.height;
+            referenceCanvas.width = tempCanvas.width; referenceCanvas.height = tempCanvas.height;
             await drawNoteOnCanvas(referenceCanvas, {...qrData, visualHash: expectedVisualHash}, referenceCanvas.width, referenceCanvas.height, false);
-            
-            const differencePercentage = compareImages(tempCanvas, referenceCanvas, 35);
-            
-            if (differencePercentage > 0.15) {
-                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}% from original (Threshold: >0.15%).</span>`;
+            const diff = compareImages(tempCanvas, referenceCanvas, 35);
+            if (diff > 0.15) {
+                resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${diff.toFixed(2)}%.</span>`;
                 isFullyValid = false;
             } else {
-                resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
+                resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${diff.toFixed(2)}% difference).</span>`;
             }
             
             if (isFullyValid) {
-                resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
+                resultHTML += `\n\n<span class="info">5. Performing OCR Cross-Check...</span>`;
                 resultDiv.innerHTML = resultHTML;
-                const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-                const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
-                resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n`;
-                resultHTML += `\n<div class="data-heading">Final Security Cross-Check</div>`;
+                const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:' });
+                resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n<div class="data-heading">Final Security Cross-Check</div>`;
                 const comparison = compareQRAndOCR(qrData, ocrResult);
-                resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+                resultHTML += `<div class="comparison-item"><strong>Amount:</strong> Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '✅' : '❌'}</div>`;
                 if (!comparison.match.amount) isFullyValid = false;
-                resultHTML += `<div class="comparison-item"><strong>Serial & Key:</strong>\n  Serial Match: ${comparison.match.serial ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}, Key Match: ${comparison.match.key ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+                resultHTML += `<div class="comparison-item"><strong>Serial & Key:</strong> Serial Match: ${comparison.match.serial ? '✅' : '❌'}, Key Match: ${comparison.match.key ? '✅' : '❌'}</div>`;
                 if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
             }
 
@@ -758,69 +687,50 @@
         try {
             const { signature } = qrData;
             if (!signature || !activeKeys.publicKey) return { isValid: false, log: "No public key loaded." };
-            
             const compositeSignature = JSON.parse(atob(signature));
             const stringToVerify = getStandardizedDataForSigning(qrData);
-
             return await BankCrypto.verifySignature(compositeSignature, stringToVerify, activeKeys.publicKey);
         } catch (e) {
-            console.error("Signature verification error:", e);
-            return { isValid: false, log: `<span class="invalid">❌ Critical validation error: ${e.message}</span>` };
+            return { isValid: false, log: `<span class="invalid">❌ Validation error: ${e.message}</span>` };
         }
     }
 
     function compareImages(canvas1, canvas2, tolerance = 30) {
-        const ctx1 = canvas1.getContext('2d');
-        const ctx2 = canvas2.getContext('2d');
-        const imageData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height);
-        const imageData2 = ctx2.getImageData(0, 0, canvas1.width, canvas2.height);
-        const data1 = imageData1.data;
-        const data2 = imageData2.data;
+        const ctx1 = canvas1.getContext('2d'), ctx2 = canvas2.getContext('2d');
+        const data1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height).data;
+        const data2 = ctx2.getImageData(0, 0, canvas1.width, canvas2.height).data;
         let diffPixels = 0;
-        const totalPixels = canvas1.width * canvas1.height;
         for (let i = 0; i < data1.length; i += 4) {
             const r1 = data1[i] & 0xFE, g1 = data1[i+1] & 0xFE, b1 = data1[i+2] & 0xFE;
             const r2 = data2[i] & 0xFE, g2 = data2[i+1] & 0xFE, b2 = data2[i+2] & 0xFE;
-            if (Math.abs(r1 - r2) > tolerance || Math.abs(g1 - g2) > tolerance || Math.abs(b1 - b2) > tolerance) {
-                diffPixels++;
-            }
+            if (Math.abs(r1 - r2) > tolerance || Math.abs(g1 - g2) > tolerance || Math.abs(b1 - b2) > tolerance) diffPixels++;
         }
-        return (diffPixels / totalPixels) * 100;
+        return (diffPixels / (canvas1.width * canvas1.height)) * 100;
     }
-
 
     function readQRCodeFromCanvas(canvasToCheck) {
         const context = canvasToCheck.getContext('2d');
         const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
         const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) {
-            try { return JSON.parse(code.data); } catch { return null; }
-        }
-        return null;
+        return code ? JSON.parse(code.data) : null;
     }
 
     async function validateNoteForCreation(noteData, targetCanvas) {
-        const tempCtx = targetCanvas.getContext('2d');
         await drawNoteOnCanvas(targetCanvas, noteData, targetCanvas.width, targetCanvas.height, true);
         const qrData = await readQRCodeFromCanvas(targetCanvas);
         if (!qrData || JSON.stringify(qrData) !== JSON.stringify(noteData)) return false;
-        
-        const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-        const ocrResult = await Tesseract.recognize(targetCanvas, 'eng', { tessedit_char_whitelist: whitelist });
+        const ocrResult = await Tesseract.recognize(targetCanvas, 'eng', { tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:' });
         const comparison = compareQRAndOCR(qrData, ocrResult);
         return comparison.match.amount && comparison.match.serial && comparison.match.key;
     }
 
     function compareQRAndOCR(qrData, ocrResult) {
         const text = ocrResult.data.text.replace(/[\s,:.-]/g, '').toUpperCase();
-        const expectedAmount = String(qrData.amount);
-        const expectedSerial = qrData.serial.substring(4); 
-        const expectedKey = qrData.verificationKey.substring(4);
         return {
-            expected: { amount: expectedAmount },
+            expected: { amount: String(qrData.amount) },
             found: { amount: text.match(/\d+/g)?.join('') },
-            match: { amount: text.includes(expectedAmount), serial: text.includes(expectedSerial), key: text.includes(expectedKey) }
+            match: { amount: text.includes(String(qrData.amount)), serial: text.includes(qrData.serial.substring(4)), key: text.includes(qrData.verificationKey.substring(4)) }
         };
     }
 
@@ -844,7 +754,6 @@
         const compositeSignatureString = JSON.stringify(compositeSignature);
         noteData.signature = btoa(compositeSignatureString);
         noteData.visualHash = await BankCrypto.hashMessage(compositeSignatureString);
-
         return noteData;
     }
 
@@ -882,13 +791,10 @@
             const dirHandle = await window.showDirectoryPicker();
             resultDiv.innerHTML = `<span class="info">Processing ${quantity} banknote(s)... Please wait.</span>`;
             const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = canvas.width;
-            offscreenCanvas.height = canvas.height;
+            offscreenCanvas.width = canvas.width; offscreenCanvas.height = canvas.height;
 
             for (let i = 0; i < quantity; i++) {
-                let noteData = null;
-                let isNoteValid = false;
-                let attempts = 0;
+                let noteData = null, isNoteValid = false, attempts = 0;
                 while (!isNoteValid && attempts < 10) {
                     noteData = await createNoteData(amount, i);
                     if (!noteData) {
@@ -896,9 +802,7 @@
                         return;
                     }
                     isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
-                    if (!isNoteValid) {
-                        resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR check on attempt ${attempts + 1}. Regenerating...</span>`;
-                    }
+                    if (!isNoteValid) resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR check on attempt ${attempts + 1}. Regenerating...</span>`;
                     attempts++;
                 }
                 
@@ -925,10 +829,8 @@
     async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
         return new Promise(async (resolve, reject) => {
             if (Object.keys(noteData).length === 0) return reject("No note data provided.");
-
             const ctx = targetCanvas.getContext("2d");
             const { amount, verificationKey, serial, visualHash, signature } = noteData;
-
             const w = width, h = height, scale = w / 1350;
 
             const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
@@ -964,57 +866,37 @@
             const qrSize = 380 * scale;
             try {
                 await QRCode.toCanvas(qrCanvas, qrDataString, { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } });
-                const qrX = w - (150 * scale) - qrSize;
-                const qrY = h - (520 * scale);
-                ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
-
+                ctx.drawImage(qrCanvas, w - (150 * scale) - qrSize, h - (520 * scale), qrSize, qrSize);
                 ctx.font = `${30 * scale}px 'Roboto Mono'`;
                 ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
                 ctx.textAlign = "center";
                 ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
-
-                if (applySteganography && signature) {
-                    LSB.encode(ctx, signature);
-                }
+                if (applySteganography && signature) LSB.encode(ctx, signature);
                 resolve();
-            } catch (err) {
-                reject(err);
-            }
+            } catch (err) { reject(err); }
         });
     }
 
     function drawKochGuilloche(g_ctx, hash, w, h) {
         g_ctx.save();
         g_ctx.translate(w / 2, h / 2);
-        const scale = w / 1350;
-        const iteration = H(hash, 2, 2, 4);
-        const size = w * (H(hash, 4, 10, 20) / 100);
-        const angleOffset = (H(hash, 6, 0, 360) / 360) * Math.PI * 2;
-        const numLines = H(hash, 8, 3, 6);
-        const hueOffset = H(hash, 10, 0, 360);
-        function drawKochSegment(x1, y1, x2, y2, level) {
+        const scale = w / 1350, iteration = H(hash, 2, 2, 4), size = w * (H(hash, 4, 10, 20) / 100);
+        const angleOffset = (H(hash, 6, 0, 360) / 360) * Math.PI * 2, numLines = H(hash, 8, 3, 6), hueOffset = H(hash, 10, 0, 360);
+        const drawKochSegment = (x1, y1, x2, y2, level) => {
             if (level === 0) { g_ctx.lineTo(x2, y2); return; }
-            const dx = x2 - x1, dy = y2 - y1, dist = Math.sqrt(dx * dx + dy * dy);
-            const unitVecX = dx / dist, unitVecY = dy / dist;
-            const p1x = x1 + unitVecX * dist / 3, p1y = y1 + unitVecY * dist / 3;
-            const p2x = x1 + unitVecX * dist * 2 / 3, p2y = y1 + unitVecY * dist * 2 / 3;
-            const p3x = p1x + unitVecX * dist / 6 - unitVecY * dist * Math.sqrt(3) / 6;
-            const p3y = p1y + unitVecY * dist / 6 + unitVecX * dist * Math.sqrt(3) / 6;
-            drawKochSegment(x1, y1, p1x, p1y, level - 1);
-            drawKochSegment(p1x, p1y, p3x, p3y, level - 1);
-            drawKochSegment(p3x, p3y, p2x, p2y, level - 1);
-            drawKochSegment(p2x, p2y, x2, y2, level - 1);
-        }
+            const dx = x2 - x1, dy = y2 - y1, dist = Math.sqrt(dx * dx + dy * dy), ux = dx / dist, uy = dy / dist;
+            const p1x = x1 + ux * dist / 3, p1y = y1 + uy * dist / 3, p2x = x1 + ux * dist * 2 / 3, p2y = y1 + uy * dist * 2 / 3;
+            const p3x = p1x + ux * dist / 6 - uy * dist * Math.sqrt(3) / 6, p3y = p1y + uy * dist / 6 + ux * dist * Math.sqrt(3) / 6;
+            drawKochSegment(x1, y1, p1x, p1y, level - 1); drawKochSegment(p1x, p1y, p3x, p3y, level - 1);
+            drawKochSegment(p3x, p3y, p2x, p2y, level - 1); drawKochSegment(p2x, p2y, x2, y2, level - 1);
+        };
         g_ctx.lineWidth = 1 * scale; g_ctx.lineJoin = 'bevel'; g_ctx.lineCap = 'round';
         for (let i = 0; i < numLines; i++) {
-            const hue = (hueOffset + i * (360 / numLines)) % 360;
-            g_ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.15)`;
-            const lineAngle = (i / numLines) * Math.PI * 2 + angleOffset;
-            const x1 = Math.cos(lineAngle) * size, y1 = Math.sin(lineAngle) * size;
-            const x2 = Math.cos(lineAngle + Math.PI) * size, y2 = Math.sin(lineAngle + Math.PI) * size;
-            g_ctx.beginPath(); g_ctx.moveTo(x1, y1);
-            drawKochSegment(x1, y1, x2, y2, iteration);
-            g_ctx.stroke();
+            g_ctx.strokeStyle = `hsla(${(hueOffset + i * (360 / numLines)) % 360}, 70%, 60%, 0.15)`;
+            const angle = (i / numLines) * Math.PI * 2 + angleOffset;
+            const x1 = Math.cos(angle) * size, y1 = Math.sin(angle) * size;
+            const x2 = Math.cos(angle + Math.PI) * size, y2 = Math.sin(angle + Math.PI) * size;
+            g_ctx.beginPath(); g_ctx.moveTo(x1, y1); drawKochSegment(x1, y1, x2, y2, iteration); g_ctx.stroke();
         }
         g_ctx.restore();
     }
@@ -1022,11 +904,8 @@
     function drawWatermark(g_ctx, hash, w, h) {
         g_ctx.save();
         g_ctx.translate(w / 2, h / 2);
-        const scale = w / 1350;
-        const numSpirals = H(hash, 16, 3, 6);
-        const spiralRadius = w * (H(hash, 18, 10, 25) / 100) * scale;
-        const hue = H(hash, 20, 0, 360);
-        g_ctx.strokeStyle = `hsla(${hue}, 50%, 80%, 0.05)`;
+        const scale = w / 1350, numSpirals = H(hash, 16, 3, 6), spiralRadius = w * (H(hash, 18, 10, 25) / 100) * scale;
+        g_ctx.strokeStyle = `hsla(${H(hash, 20, 0, 360)}, 50%, 80%, 0.05)`;
         g_ctx.lineWidth = 4 * scale;
         for (let i = 0; i < numSpirals; i++) {
             g_ctx.beginPath();
@@ -1042,24 +921,22 @@
         g_ctx.restore();
     }
 
-    function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
+    function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15; g_ctx.fillStyle=`hsla(${H(hash,(i%30)+4,0,360)},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
     
     // ===================================================================================
     // 5. APPLICATION INITIALIZATION
     // ===================================================================================
     async function main() {
-        // Initialize Falcon API
-        loadingStatus.textContent = 'آماده‌سازی ماژول Falcon (WebAssembly)...';
+        loadingStatus.textContent = 'Initializing Falcon PQC Module (WebAssembly)...';
         falconApi = await pqcSignFalcon512();
 
-        // Attach event listeners that are not inline
         dom.generateKeysBtn.addEventListener('click', handleGenerateAndExportKeys);
+        dom.createNoteButton.addEventListener('click', handleCreateNewNote);
+        dom.downloadBatchButton.addEventListener('click', handleDownloadBatch);
 
-        // Final setup
         updateControlsState(false);
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
 
-        // Hide loading screen and show main content
         dom.loadingScreen.style.opacity = '0';
         setTimeout(() => {
             dom.loadingScreen.style.display = 'none';
@@ -1067,10 +944,9 @@
         }, 500);
     }
     
-    // Run the main application logic
     main().catch(err => {
         console.error("Fatal error during initialization:", err);
-        loadingStatus.textContent = `خطای حیاتی: ${err.message}. لطفا صفحه را رفرش کنید.`;
+        loadingStatus.textContent = `Fatal Error: ${err.message}. Please refresh the page.`;
         loadingStatus.style.color = 'var(--error-color)';
     });
 
