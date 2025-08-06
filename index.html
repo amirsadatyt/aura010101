@@ -9,6 +9,9 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    
+    <script src='./argon2.js'></script>
+
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -292,7 +295,10 @@
 // Import cryptographic libraries as modules
 import pqcSignFalcon512 from './falcon.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-import argon2 from './argon2.js';
+// argon2 به عنوان یک ماژول ESM نیست، پس به صورت سنتی بارگذاری می‌شود.
+// در اینجا، از متغیر سراسری Module استفاده می‌شود.
+const argon2 = Module;
+
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
@@ -871,6 +877,16 @@ async function main() {
     updateKeyStatus('<span class="info">⏳ Loading Cryptographic Modules...</span>');
     
     try {
+        // پیکربندی برای Argon2 جهت یافتن فایل wasm در همان پوشه
+        Module.locateFile = function(path) {
+            if (path.endsWith('.wasm')) {
+                return `./${path}`;
+            }
+            return path;
+        };
+
+        // Argon2 به صورت خودکار با بارگذاری اسکریپت در دسترس قرار می‌گیرد.
+        // Falcon API را بارگذاری کنید.
         falconApi = await pqcSignFalcon512();
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
