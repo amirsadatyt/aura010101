@@ -2,10 +2,15 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Hybrid Post-Quantum Security)</title>
+    <title>Sadat Digital Banknote (Hybrid PQC Security)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.skypack.dev/tweetnacl@1.0.3"></script>
+    <script src="https://cdn.skypack.dev/js-sha3@0.9.3"></script>
+    <script src="https://bundle.run/pqc-sign-falcon-512@1.0.1"></script> 
+    
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
@@ -27,446 +32,689 @@
         }
         body { margin: 0; font-family: var(--primary-font); background-color: var(--dark-bg); background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%); color: var(--text-color); text-align: center; padding: 24px; }
         .container { max-width: 900px; margin: 0 auto; background: rgba(26, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
+        .header { border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 24px; }
         h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header p { font-size: 1rem; color: var(--text-muted); margin: 0; }
         canvas { border-radius: 16px; margin-top: 24px; background: #050508; cursor: default; box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); width: 100%; max-width: 900px; height: auto; border: 1px solid var(--border-color); }
         input[type="number"], button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
         input[type="number"] { font-family: var(--mono-font); font-weight: 700; text-align: center; width: 150px; }
+        input[type="number"]:focus { border-color: var(--accent-color-2); box-shadow: 0 0 15px rgba(124, 77, 255, 0.5); }
         button:not([disabled]), label:not([disabled]) { font-weight: 600; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        button.sub-button, label.sub-button { background: var(--light-bg); border: 1px solid var(--border-color); }
         button[disabled], label[disabled] { cursor: not-allowed; opacity: 0.5; background: var(--light-bg); border: 1px solid var(--border-color); }
+        button.sub-button:hover:not([disabled]), label.sub-button:hover:not([disabled]) { box-shadow: 0 2px 8px rgba(0,0,0,0.2); transform: translateY(-1px); }
         button:hover:not([disabled]), label:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); }
         .section { background: rgba(16, 16, 26, 0.5); padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); }
         h2 { font-size: 1.5rem; color: var(--text-color); margin-top: 0; margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        #validation-result, #key-status { margin-top: 20px; font-size: 12px; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); }
+        .controls-grid { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px; }
+        #validation-result, #key-status { margin-top: 20px; font-size: 12px; font-weight: normal; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); border: 1px solid var(--border-color); transition: all 0.3s ease; }
         .valid { color: var(--success-color); }
         .invalid { color: var(--error-color); }
         .info { color: var(--info-color); }
-        code { background: var(--medium-bg); padding: 2px 6px; border-radius: 4px; }
+        .data-heading { color: var(--accent-color-1); margin-top: 15px; margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; font-weight: 600; font-family: var(--primary-font); }
+        .comparison-item { margin-top: 10px; padding: 8px 10px; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid var(--accent-color-2); }
+        code { background: var(--medium-bg); padding: 2px 6px; border-radius: 4px; font-size: 1em; }
+        .input-label { font-size: 0.9rem; color: var(--text-muted); margin-right: -10px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>Full Suite: Hybrid Post-Quantum Signatures (Ed25519+Falcon512), Advanced Steganography & Multi-Layer Validation.</p>
+        <p>A secure, verifiable digital currency concept using Ed25519 + Falcon-512 Hybrid Signatures and LSB Steganography.</p>
     </div>
+
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
+
     <div class="section">
         <h2>Banknote Controls</h2>
-        Amount: <input type="number" id="amount-input" value="50000">
-        Quantity: <input type="number" id="quantity-input" value="1" min="1" max="100">
-        <button id="create-note-button" disabled>🎨 Redesign Banknote</button>
-        <button id="download-batch-button" disabled>📥 Download Batch</button>
+        <div class="controls-grid">
+            <span class="input-label">Amount:</span>
+            <input type="number" id="amount-input" value="50000">
+            <span class="input-label">Quantity:</span>
+            <input type="number" id="quantity-input" value="1" min="1" max="100">
+            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 Redesign Banknote</button>
+            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 Download Batch</button>
+        </div>
     </div>
+
     <div class="section">
-        <h2>Bank Key Management (Post-Quantum)</h2>
-        <button id="generate-keys-button">🔑 Generate & Export Hybrid Keys</button>
-        <label for="import-public-key">Import Public Keys</label>
-        <input type="file" id="import-public-key" accept=".json" style="display: none;">
-        <label for="import-private-key">Import Encrypted Private Keys</label>
-        <input type="file" id="import-private-key" accept=".json" style="display: none;">
+        <h2>Bank Key Management</h2>
+        <div class="controls-grid">
+            <button onclick="handleGenerateAndExportKeys()">🔑 Generate & Export Keys</button>
+            <label for="import-public-key" class="sub-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Import Public Keys
+            </label>
+            <input type="file" id="import-public-key" accept=".json" style="display: none;">
+            <label for="import-private-key" class="sub-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Import Private Keys
+            </label>
+            <input type="file" id="import-private-key" accept=".json" style="display: none;">
+        </div>
         <div id="key-status">Key pair status will be displayed here.</div>
     </div>
+
     <div class="section" id="validator-section">
         <h2>Validate Banknote</h2>
-        <label for="validator-input">Select Image for Validation</label>
+        <label for="validator-input">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Select Image for Validation
+        </label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
         <div id="validation-result">Validation result will be displayed here.</div>
     </div>
 </div>
 
-<script type="module">
-    // ===================================================================================
-    // MODULE IMPORTS
-    // ===================================================================================
-    import nacl from 'https://esm.sh/tweetnacl@1.0.3';
-    import { shake256 } from 'https://esm.sh/js-sha3@0.9.3';
-    import pqcSignFalcon512 from './falcon.js';
+<script>
+const canvas = document.getElementById("noteCanvas");
+const ctx = canvas.getContext("2d");
+let currentNoteData = {};
+let activeKeys = { ed25519: null, falcon: null }; // Will hold { publicKey, secretKey } for each
+let falconApi = null;
 
-    // ===================================================================================
-    // GLOBAL STATE & DOM ELEMENTS
-    // ===================================================================================
-    const dom = {
-        canvas: document.getElementById("noteCanvas"),
-        amountInput: document.getElementById("amount-input"),
-        quantityInput: document.getElementById("quantity-input"),
-        createNoteButton: document.getElementById("create-note-button"),
-        downloadBatchButton: document.getElementById("download-batch-button"),
-        generateKeysButton: document.getElementById("generate-keys-button"),
-        importPublicKey: document.getElementById("import-public-key"),
-        importPrivateKey: document.getElementById("import-private-key"),
-        validatorInput: document.getElementById("validator-input"),
-        keyStatus: document.getElementById("key-status"),
-        validationResult: document.getElementById("validation-result"),
-    };
+// ===================================================================================
+// UTILITY FUNCTIONS
+// ===================================================================================
+const bytesToBase64 = (bytes) => btoa(String.fromCharCode(...bytes));
+const base64ToBytes = (base64) => Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+const hexToBytes = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 
-    let activeKeys = { publicKey: null, privateKey: null };
-    let falconApi = null;
-    let currentNoteData = {};
 
-    // ===================================================================================
-    // UTILITY FUNCTIONS
-    // ===================================================================================
-    const bytesToBase64 = (bytes) => btoa(String.fromCharCode(...bytes));
-    const base64ToBytes = (base64) => Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-    const hexToBytes = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-    const downloadFile = (data, filename, type) => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([data], { type }));
-        a.download = filename;
-        a.click();
-    };
+// ===================================================================================
+// HYBRID CRYPTO LOGIC (Ed25519 + Falcon-512 + SHAKE256)
+// ===================================================================================
 
-    // ===================================================================================
-    // HYBRID CRYPTO MODULE (Ed25519 + Falcon-512 + SHAKE256 + AES-GCM)
-    // ===================================================================================
-    const BankCrypto = (() => {
-        const AES_ALGO = "AES-GCM";
-        const PBKDF2_ITERATIONS = 100000;
-        const PBKDF2_HASH_ALGO = "SHA-256";
+const HybridCrypto = (() => {
+    // Encryption settings for private key export
+    const AES_ALGO = "AES-GCM";
+    const PBKDF2_ITERATIONS = 100000;
+    const PBKDF2_HASH_ALGO = "SHA-256";
+    const AES_KEY_LENGTH = 256;
 
-        const hashMessage = (message) => shake256(message, 1024);
+    async function generateNewKeyPairs() {
+        try {
+            // Generate Ed25519 keys
+            const ed25519KeyPair = nacl.sign.keyPair();
+            
+            // Generate Falcon-512 keys
+            const falconKeyPair = await falconApi.keypair();
 
-        async function generateNewKeyPair() {
-            if (!falconApi) throw new Error("Falcon-512 module not loaded.");
-            const ed25519 = nacl.sign.keyPair();
-            const falcon = await falconApi.keypair();
-            return {
-                publicKey: { ed25519: ed25519.publicKey, falcon: falcon.publicKey },
-                privateKey: { ed25519: ed25519.secretKey, falcon: falcon.privateKey }
-            };
-        }
-
-        async function signData(data, privateKeys) {
-            if (!privateKeys) throw new Error("Private keys not available.");
-            const messageHash = hexToBytes(hashMessage(data));
-            const edSig = nacl.sign.detached(messageHash, privateKeys.ed25519);
-            const { signature: falSig } = await falconApi.sign(messageHash, privateKeys.falcon);
-            return { ed25519: edSig, falcon: falSig };
-        }
-
-        async function verifySignatures(signatures, data, publicKeys) {
-            if (!publicKeys) throw new Error("Public keys not available.");
-            const messageHash = hexToBytes(hashMessage(data));
-            const isEd25519Valid = nacl.sign.detached.verify(messageHash, signatures.ed25519, publicKeys.ed25519);
-            const isFalconValid = await falconApi.verify(signatures.falcon, messageHash, publicKeys.falcon);
-            return { isEd25519Valid, isFalconValid };
-        }
-
-        async function encryptPrivateKeyBundle(privateKeyBundle, password) {
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            const keyMaterial = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
-            const derivedKey = await window.crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
-                keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt"]
-            );
-            const privateKeysJson = JSON.stringify({
-                ed25519: bytesToBase64(privateKeyBundle.ed25519),
-                falcon: bytesToBase64(privateKeyBundle.falcon)
-            });
-            const encryptedData = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv }, derivedKey, new TextEncoder().encode(privateKeysJson));
-            return { cipherText: bytesToBase64(new Uint8Array(encryptedData)), salt: bytesToBase64(salt), iv: bytesToBase64(iv) };
-        }
-
-        async function decryptPrivateKeyBundle(encryptedPayload, password) {
-            const salt = base64ToBytes(encryptedPayload.salt);
-            const iv = base64ToBytes(encryptedPayload.iv);
-            const keyMaterial = await window.crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
-            const derivedKey = await window.crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
-                keyMaterial, { name: "AES-GCM", length: 256 }, true, ["decrypt"]
-            );
-            const decryptedJson = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv }, derivedKey, base64ToBytes(encryptedPayload.cipherText));
-            const decodedBundle = JSON.parse(new TextDecoder().decode(decryptedJson));
-            return {
-                ed25519: base64ToBytes(decodedBundle.ed25519),
-                falcon: base64ToBytes(decodedBundle.falcon)
-            };
-        }
-
-        return { generateNewKeyPair, signData, verifySignatures, encryptPrivateKeyBundle, decryptPrivateKeyBundle, hashMessage };
-    })();
-
-    // LSB Steganography, unchanged from original file
-    const LSB = (() => {
-        const MESSAGE_TERMINATOR = "00000000";
-        function messageToBinary(message) { return message.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('') + MESSAGE_TERMINATOR; }
-        function encode(ctx, message) {
-            const binaryMessage = messageToBinary(message);
-            const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-            const data = imageData.data;
-            if (binaryMessage.length > data.length / 4 * 3) throw new Error("Message too long for LSB encoding.");
-            let dataIndex = 0;
-            for (let i = 0; i < binaryMessage.length; i++) {
-                if ((dataIndex + 1) % 4 === 0) dataIndex++;
-                data[dataIndex] = (data[dataIndex] & 0xFE) | parseInt(binaryMessage[i], 10);
-                dataIndex++;
-            }
-            ctx.putImageData(imageData, 0, 0);
-        }
-        function decode(ctx) {
-            const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-            const data = imageData.data;
-            let byte = "", decodedMessage = "";
-            for (let i = 0; i < data.length; i++) {
-                if ((i + 1) % 4 === 0) continue;
-                byte += (data[i] & 1);
-                if (byte.length === 8) {
-                    if (byte === MESSAGE_TERMINATOR) return decodedMessage;
-                    decodedMessage += String.fromCharCode(parseInt(byte, 2));
-                    byte = "";
-                }
-            }
+            return { ed25519: ed25519KeyPair, falcon: falconKeyPair };
+        } catch (e) {
+            console.error("Crypto key generation failed:", e);
+            alert("Error: Could not generate cryptographic keys. Please use a modern browser.");
             return null;
         }
-        return { encode, decode };
-    })();
+    }
+
+    async function hashMessage(data) {
+        // Use SHAKE256 with a 1024-bit (128-byte) output
+        const hashHex = sha3.shake256(data, 1024);
+        return hexToBytes(hashHex);
+    }
+
+    async function signData(messageHash, privateKeys) {
+        if (!privateKeys.ed25519 || !privateKeys.falcon) throw new Error("Both private keys are required for signing.");
+        
+        // Ed25519 signature
+        const edSig = nacl.sign.detached(messageHash, privateKeys.ed25519);
+
+        // Falcon-512 signature
+        const { signature: falSig } = await falconApi.sign(messageHash, privateKeys.falcon);
+        
+        return {
+            ed25519: bytesToBase64(edSig),
+            falcon: bytesToBase64(falSig)
+        };
+    }
+
+    async function verifySignatures(messageHash, signatures, publicKeys) {
+        if (!publicKeys.ed25519 || !publicKeys.falcon) throw new Error("Both public keys are required for verification.");
+        
+        const edSigBytes = base64ToBytes(signatures.ed25519);
+        const falSigBytes = base64ToBytes(signatures.falcon);
+
+        // Verify Ed25519
+        const isEdValid = nacl.sign.detached.verify(messageHash, edSigBytes, publicKeys.ed25519);
+        if (!isEdValid) return false;
+
+        // Verify Falcon-512
+        const isFalValid = await falconApi.verify(falSigBytes, messageHash, publicKeys.falcon);
+        
+        return isFalValid;
+    }
     
-    // ===================================================================================
-    // UI HANDLERS & WORKFLOW
-    // ===================================================================================
-    // All handlers from original file, adapted for hybrid crypto
-    const updateKeyStatus = (message, type = 'info') => { dom.keyStatus.innerHTML = `<span class="${type}">${message}</span>`; };
-    const updateValidationResult = (message) => { dom.validationResult.innerHTML = message; };
-    const updateControlsState = (isEnabled) => {
-        dom.createNoteButton.disabled = !isEnabled;
-        dom.downloadBatchButton.disabled = !isEnabled;
-    };
+    // --- Key Encryption/Decryption for Export ---
+    async function encryptPrivateKeys(privateKeys, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        
+        const keyMaterial = await window.crypto.subtle.importKey(
+            "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
+        );
+        
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt"]
+        );
+        
+        const keysToExport = {
+            ed25519SecretKey: bytesToBase64(privateKeys.ed25519),
+            falconPrivateKey: bytesToBase64(privateKeys.falcon)
+        };
+        const encodedKeys = new TextEncoder().encode(JSON.stringify(keysToExport));
+        
+        const encryptedData = await window.crypto.subtle.encrypt(
+            { name: AES_ALGO, iv: iv }, derivedKey, encodedKeys
+        );
+        
+        return {
+            cipherText: bytesToBase64(new Uint8Array(encryptedData)),
+            salt: bytesToBase64(salt),
+            iv: bytesToBase64(iv)
+        };
+    }
     
-    // Key Management
-    async function handleGenerateAndExportKeys() { /* Adapted for hybrid */ }
-    async function handleImportKeys(file, isPrivate) { /* Adapted for hybrid */ }
+    async function decryptPrivateKeys(encryptedData, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const salt = base64ToBytes(encryptedData.salt);
+        const iv = base64ToBytes(encryptedData.iv);
+        const cipherText = base64ToBytes(encryptedData.cipherText);
+        
+        const keyMaterial = await window.crypto.subtle.importKey(
+            "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
+        );
+        
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["decrypt"]
+        );
+        
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+            { name: AES_ALGO, iv: iv }, derivedKey, cipherText
+        );
+        
+        const decryptedJson = new TextDecoder().decode(decryptedBuffer);
+        const importedKeys = JSON.parse(decryptedJson);
 
-    // Note Creation
-    async function handleCreateNewNote() { /* Adapted for hybrid */ }
-    async function handleDownloadBatch() { /* Adapted for hybrid */ }
+        return {
+            ed25519: base64ToBytes(importedKeys.ed25519SecretKey),
+            falcon: base64ToBytes(importedKeys.falconPrivateKey)
+        };
+    }
 
-    // Validation
-    async function handleFileSelect(event) { /* Adapted for hybrid */ }
-    
-    // --- Detailed Implementations ---
-    
-    Object.assign(window, { handleGenerateAndExportKeys, handleCreateNewNote, handleDownloadBatch });
+    return { generateNewKeyPairs, hashMessage, signData, verifySignatures, encryptPrivateKeys, decryptPrivateKeys };
+})();
 
-    handleGenerateAndExportKeys = async () => {
-        if (!falconApi) { alert("Error: Core cryptographic modules are not loaded."); return; }
-        const password = prompt("Enter a strong password to encrypt your new private key file:");
-        if (!password) { updateKeyStatus('❌ Key generation cancelled. Password required.', 'invalid'); return; }
-
-        updateKeyStatus('⏳ Generating hybrid key pairs...', 'info');
-        try {
-            const keyPairs = await BankCrypto.generateNewKeyPair();
-            activeKeys = keyPairs;
-            
-            const publicKeysExport = {
-                ed25519: bytesToBase64(activeKeys.publicKey.ed25519),
-                falcon: bytesToBase64(activeKeys.publicKey.falcon)
-            };
-            downloadFile(JSON.stringify(publicKeysExport, null, 2), 'Sadat-hybrid-public-keys.json', 'application/json');
-
-            const encryptedPayload = await BankCrypto.encryptPrivateKeyBundle(activeKeys.privateKey, password);
-            downloadFile(JSON.stringify(encryptedPayload, null, 2), 'Sadat-hybrid-private-keys-ENCRYPTED.json', 'application/json');
-            
-            updateKeyStatus('✅ Hybrid keys generated, exported, and now active.', 'valid');
-            updateControlsState(true);
-            await handleCreateNewNote();
-        } catch (e) {
-            updateKeyStatus(`❌ Key generation error: ${e.message}`, 'invalid');
-        }
-    };
-    
-    handleImportKeys = async (file, isPrivate) => {
-        if (!file) return;
-        const fileContent = await file.text();
-        try {
-            if (isPrivate) {
-                const password = prompt("Enter the password to decrypt the private key file:");
-                if (!password) { updateKeyStatus('❌ Import cancelled.', 'invalid'); return; }
-                updateKeyStatus('⏳ Decrypting private keys...', 'info');
-                const encryptedData = JSON.parse(fileContent);
-                activeKeys.privateKey = await BankCrypto.decryptPrivateKeyBundle(encryptedData, password);
-                updateKeyStatus('✅ Private keys imported. Ready for signing.', 'valid');
-                updateControlsState(true);
-            } else {
-                 const publicData = JSON.parse(fileContent);
-                 activeKeys.publicKey = {
-                     ed25519: base64ToBytes(publicData.ed25519),
-                     falcon: base64ToBytes(publicData.falcon)
-                 };
-                 updateKeyStatus('✅ Public keys imported. Ready for validation.', 'valid');
-            }
-        } catch (e) {
-            updateKeyStatus(`❌ Error importing keys. Check password or file. ${e.message}`, 'invalid');
-        }
-    };
-
-    const getStandardizedDataForSigning = (noteData) => JSON.stringify({
+function getStandardizedDataForSigning(noteData) {
+    const dataToSign = {
         amount: noteData.amount,
         serial: noteData.serial,
         timestamp: noteData.timestamp,
         verificationKey: noteData.verificationKey
-    });
+    };
+    return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
+}
 
-    async function createNoteData(amount, index = 0) {
-        if (!activeKeys.privateKey) { alert("Private key not active."); return null; }
-        const now = Date.now();
-        const noteData = {
-            amount: parseInt(amount) || 0,
-            verificationKey: "PQK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
-            serial: "SDT-HY-" + (now + index).toString().slice(-8),
-            timestamp: new Date(now).toISOString()
-        };
-        const stringToSign = getStandardizedDataForSigning(noteData);
-        const signatures = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
-        noteData.signatures = {
-            ed25519: bytesToBase64(signatures.ed25519),
-            falcon: bytesToBase64(signatures.falcon)
-        };
-        noteData.visualHash = BankCrypto.hashMessage(JSON.stringify(noteData.signatures));
-        return noteData;
+function updateKeyStatus(message) {
+    document.getElementById('key-status').innerHTML = message;
+}
+
+function updateControlsState(isEnabled) {
+    document.getElementById('create-note-button').disabled = !isEnabled;
+    document.getElementById('download-batch-button').disabled = !isEnabled;
+}
+
+// ===================================================================================
+// UI Handlers for Key Management
+// ===================================================================================
+async function handleGenerateAndExportKeys() {
+    const password = prompt("Enter a strong password to encrypt your private key file:");
+    if (!password) {
+        updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>');
+        return;
     }
 
-    handleCreateNewNote = async () => {
-        const noteData = await createNoteData(dom.amountInput.value, 0);
-        if (noteData) {
-            currentNoteData = noteData;
-            await drawNoteOnCanvas(dom.canvas, currentNoteData, true);
-            updateKeyStatus('✅ New banknote design is ready.', 'valid');
+    updateKeyStatus('<span class="info">⏳ Generating new Ed25519 + Falcon-512 key pairs...</span>');
+    const keyPairs = await HybridCrypto.generateNewKeyPairs();
+    if (keyPairs) {
+        activeKeys.ed25519 = keyPairs.ed25519;
+        activeKeys.falcon = keyPairs.falcon;
+        
+        // Export public keys (unencrypted)
+        const publicKeysToExport = {
+            ed25519PublicKey: bytesToBase64(keyPairs.ed25519.publicKey),
+            falconPublicKey: bytesToBase64(keyPairs.falcon.publicKey)
+        };
+        downloadFile(JSON.stringify(publicKeysToExport, null, 2), 'Sadat-public-keys.json', 'application/json');
+
+        // Encrypt and export private keys
+        const privateKeys = {
+            ed25519: keyPairs.ed25519.secretKey,
+            falcon: keyPairs.falcon.privateKey
+        };
+        const encryptedPrivate = await HybridCrypto.encryptPrivateKeys(privateKeys, password);
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-keys.json', 'application/json');
+
+        updateKeyStatus('<span class="valid">✅ New key pairs generated and exported! Keys are now active.</span>');
+        updateControlsState(true);
+        await handleCreateNewNote();
+    } else {
+        updateKeyStatus('<span class="invalid">❌ Failed to generate keys.</span>');
+    }
+}
+
+document.getElementById('import-public-key').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+        const content = await file.text();
+        const jwk = JSON.parse(content);
+        if (!jwk.ed25519PublicKey || !jwk.falconPublicKey) throw new Error("Invalid public key file format.");
+        
+        activeKeys.ed25519 = { ...activeKeys.ed25519, publicKey: base64ToBytes(jwk.ed25519PublicKey) };
+        activeKeys.falcon = { ...activeKeys.falcon, publicKey: base64ToBytes(jwk.falconPublicKey) };
+        
+        updateKeyStatus('<span class="valid">✅ Public keys imported successfully. Active for banknote validation.</span>');
+    } catch (error) {
+        updateKeyStatus(`<span class="invalid">❌ Error importing public keys: ${error.message}</span>`);
+    }
+});
+
+document.getElementById('import-private-key').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const password = prompt("Enter the password to decrypt the private key file:");
+    if (!password) {
+        updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required.</span>');
+        return;
+    }
+    try {
+        const content = await file.text();
+        const encryptedData = JSON.parse(content);
+        updateKeyStatus('<span class="info">⏳ Decrypting and importing private keys...</span>');
+        const privateKeys = await HybridCrypto.decryptPrivateKeys(encryptedData, password);
+        
+        // We only have the private part, need to derive public part for Ed25519
+        const edKeyPair = nacl.sign.keyPair.fromSecretKey(privateKeys.ed25519);
+        
+        activeKeys.ed25519 = edKeyPair;
+        activeKeys.falcon = { ...activeKeys.falcon, privateKey: privateKeys.falcon };
+
+        updateKeyStatus('<span class="valid">✅ Private keys imported successfully. Active for banknote signing.</span>');
+        updateControlsState(true);
+    } catch (error) {
+        console.error(error);
+        updateKeyStatus(`<span class="invalid">❌ Error decrypting private keys. Check password or file format.</span>`);
+    }
+});
+
+function downloadFile(data, filename, type) {
+    const blob = new Blob([data], { type: type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ===================================================================================
+// LSB Steganography Module (Unchanged)
+// ===================================================================================
+const LSB = (() => {
+    const MESSAGE_TERMINATOR = "00000000";
+    function messageToBinary(message) { return message.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('') + MESSAGE_TERMINATOR; }
+    function encode(ctx, message) {
+        const binaryMessage = messageToBinary(message);
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imageData.data;
+        if (binaryMessage.length > data.length / 4 * 3) { throw new Error("Message too long for image."); }
+        let dataIndex = 0;
+        for (let i = 0; i < binaryMessage.length; i++) {
+            if ((dataIndex + 1) % 4 === 0) dataIndex++;
+            data[dataIndex] = (data[dataIndex] & 0xFE) | parseInt(binaryMessage[i], 10);
+            dataIndex++;
         }
-    };
-    
-    handleDownloadBatch = async () => { /* Logic from original file, unchanged */ };
-    
-    handleFileSelect = async (event) => {
-        const file = event.target.files[0];
-        if (!file || !activeKeys.publicKey) {
-            if(!activeKeys.publicKey) alert("Public key not active for validation.");
+        ctx.putImageData(imageData, 0, 0);
+    }
+    function decode(ctx) {
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const data = imageData.data;
+        let decodedMessage = "";
+        let byte = "";
+        for (let i = 0; i < data.length; i++) {
+            if ((i + 1) % 4 === 0) continue;
+            byte += data[i] & 1;
+            if (byte.length === 8) {
+                if (byte === MESSAGE_TERMINATOR) return decodedMessage;
+                decodedMessage += String.fromCharCode(parseInt(byte, 2));
+                byte = "";
+            }
+        }
+        return null;
+    }
+    return { encode, decode };
+})();
+
+
+// ===================================================================================
+// Validation Logic
+// ===================================================================================
+document.getElementById('validator-input').addEventListener('change', handleFileSelect);
+
+async function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!activeKeys.ed25519?.publicKey || !activeKeys.falcon?.publicKey) {
+        alert("Error: Both public keys (Ed25519 & Falcon) must be active for validation.");
+        return;
+    }
+
+    const resultDiv = document.getElementById('validation-result');
+    resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
+    let isFullyValid = true;
+
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = async () => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 1350;
+        tempCanvas.height = 750;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+
+        // --- VALIDATION PIPELINE ---
+        resultDiv.innerHTML = `<span class="info">1. Reading digital data from QR Code...</span>`;
+        const qrData = await readQRCodeFromCanvas(tempCanvas);
+        if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`; return; }
+        let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
+        
+        resultHTML += `\n\n<span class="info">2. Verifying hybrid signature (Ed25519 + Falcon-512)...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const isSignatureValid = await validateDigitalSignatures(qrData);
+        if (!isSignatureValid) {
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Banknote data is forged.</span>`;
+            resultDiv.innerHTML = resultHTML;
             return;
         }
+        resultHTML += `\n<span class="valid">✅ 2. Hybrid signature confirmed. Authenticity verified.</span>`;
 
-        updateValidationResult(`<span class="info">⏳ Preparing image for validation...</span>`);
-        let isFullyValid = true;
+        resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const decodedSignatures = LSB.decode(tempCtx);
+        const expectedLsbData = qrData.signatures.ed25519 + "," + qrData.signatures.falcon;
+        if (!decodedSignatures || decodedSignatures !== expectedLsbData) {
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic data mismatch. Banknote image has been modified.</span>`;
+            resultDiv.innerHTML = resultHTML;
+            isFullyValid = false;
+            return;
+        }
+        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB data extracted and matched. Image integrity confirmed.</span>`;
 
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = async () => {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 1350; tempCanvas.height = 750;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
+        resultDiv.innerHTML = resultHTML;
+        const concatenatedSigs = qrData.signatures.ed25519 + qrData.signatures.falcon;
+        const expectedVisualHashBytes = await HybridCrypto.hashMessage(concatenatedSigs);
+        const expectedVisualHash = Array.from(expectedVisualHashBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        const referenceCanvas = document.createElement('canvas');
+        referenceCanvas.width = tempCanvas.width;
+        referenceCanvas.height = tempCanvas.height;
+        await drawNoteOnCanvas(referenceCanvas, {...qrData, visualHash: expectedVisualHash}, false);
+        
+        const differencePercentage = compareImages(tempCanvas, referenceCanvas);
+        if (differencePercentage > 0.15) {
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}% (>0.15%).</span>`;
+            isFullyValid = false;
+        } else {
+            resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
+        }
+        
+        if (isFullyValid) {
+            resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
+            resultDiv.innerHTML = resultHTML;
+            const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:' });
+            resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n`;
+            resultHTML += `\n<div class="data-heading">Final Security Cross-Check</div>`;
+            const comparison = compareQRAndOCR(qrData, ocrResult);
+            resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+            if (!comparison.match.amount) isFullyValid = false;
+            resultHTML += `<div class="comparison-item"><strong>Serial & Key:</strong>\n  Serial Match: ${comparison.match.serial ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}, Key Match: ${comparison.match.key ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+            if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
+        }
 
-            let resultHTML = `<span class="info">1. Reading QR Code...</span>`;
-            const qrData = readQRCodeFromCanvas(tempCanvas);
-            if (!qrData) { updateValidationResult(`<span class="invalid">❌ FATAL: QR Code unreadable.</span>`); return; }
-            resultHTML += ` <span class="valid">✅</span>`;
-            
-            resultHTML += `\n<span class="info">2. Verifying hybrid signatures...</span>`;
-            const { isEd25519Valid, isFalconValid } = await validateSignatures(qrData);
-            resultHTML += `\n  <span class="${isEd25519Valid ? 'valid' : 'invalid'}">- Ed25519: ${isEd25519Valid ? '✅' : '❌'}</span>`;
-            resultHTML += `\n  <span class="${isFalconValid ? 'valid' : 'invalid'}">- Falcon-512: ${isFalconValid ? '✅' : '❌'}</span>`;
-            if (!isEd25519Valid || !isFalconValid) {
-                resultHTML += `\n<span class="invalid">❌ FATAL: Signature invalid. Forgery detected.</span>`;
-                updateValidationResult(resultHTML);
-                return;
-            }
+        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery detected.'}</span>`;
+        resultDiv.innerHTML = resultHTML;
+    };
+}
 
-            resultHTML += `\n<span class="info">3. Verifying LSB Steganography...</span>`;
-            // LSB should hide the JSON string of the signatures object
-            const lsbData = LSB.decode(tempCtx);
-            const expectedLsb = JSON.stringify(qrData.signatures);
-            if (!lsbData || lsbData !== expectedLsb) {
-                 resultHTML += ` <span class="invalid">❌ FATAL: Image integrity failed.</span>`;
-                 updateValidationResult(resultHTML);
-                 return;
-            }
-            resultHTML += ` <span class="valid">✅</span>`;
+async function validateDigitalSignatures(qrData) {
+    try {
+        const { signatures } = qrData;
+        if (!signatures || !signatures.ed25519 || !signatures.falcon) return false;
+        
+        const stringToVerify = getStandardizedDataForSigning(qrData);
+        const messageHash = await HybridCrypto.hashMessage(stringToVerify);
 
-            // Graphical & OCR checks from original file can be re-added here for full functionality.
-            // ...
-            
-            resultHTML += `\n\n<span class="valid">✅ FINAL VERDICT: Banknote is authentic.</span>`;
-            updateValidationResult(resultHTML);
+        const publicKeys = {
+            ed25519: activeKeys.ed25519.publicKey,
+            falcon: activeKeys.falcon.publicKey,
         };
-    };
+        return await HybridCrypto.verifySignatures(messageHash, signatures, publicKeys);
+    } catch (e) {
+        console.error("Signature verification error:", e);
+        return false;
+    }
+}
 
-    const readQRCodeFromCanvas = (canvasToCheck) => {
-        const ctx = canvasToCheck.getContext('2d');
-        const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
-        const imageData = ctx.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) try { return JSON.parse(code.data); } catch { return null; }
+function compareImages(canvas1, canvas2, tolerance = 30) {
+    const ctx1 = canvas1.getContext('2d'), ctx2 = canvas2.getContext('2d');
+    const imageData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height);
+    const imageData2 = ctx2.getImageData(0, 0, canvas1.width, canvas2.height);
+    const data1 = imageData1.data, data2 = imageData2.data;
+    let diffPixels = 0;
+    const totalPixels = canvas1.width * canvas1.height;
+    for (let i = 0; i < data1.length; i += 4) {
+        const r1 = data1[i] & 0xFE, g1 = data1[i+1] & 0xFE, b1 = data1[i+2] & 0xFE;
+        const r2 = data2[i] & 0xFE, g2 = data2[i+1] & 0xFE, b2 = data2[i+2] & 0xFE;
+        if (Math.abs(r1 - r2) > tolerance || Math.abs(g1 - g2) > tolerance || Math.abs(b1 - b2) > tolerance) {
+            diffPixels++;
+        }
+    }
+    return (diffPixels / totalPixels) * 100;
+}
+
+function readQRCodeFromCanvas(canvasToCheck) {
+    const context = canvasToCheck.getContext('2d');
+    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
+    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code) { try { return JSON.parse(code.data); } catch { return null; } }
+    return null;
+}
+
+function compareQRAndOCR(qrData, ocrResult) {
+    const text = ocrResult.data.text.replace(/[\s,:.-]/g, '').toUpperCase();
+    const expectedAmount = String(qrData.amount);
+    const expectedSerial = qrData.serial.substring(4); 
+    const expectedKey = qrData.verificationKey.substring(4);
+    const isAmountMatch = text.includes(expectedAmount);
+    const isSerialMatch = text.includes(expectedSerial);
+    const isKeyMatch = text.includes(expectedKey);
+    return {
+        expected: { amount: expectedAmount },
+        found: { amount: text.match(/\d+/g)?.join('') },
+        match: { amount: isAmountMatch, serial: isSerialMatch, key: isKeyMatch }
+    };
+}
+
+// ===================================================================================
+// Banknote Creation Logic
+// ===================================================================================
+const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
+
+async function createNoteData(amount, index = 0) {
+    if (!activeKeys.ed25519?.secretKey || !activeKeys.falcon?.privateKey) {
+        alert("Error: Both private keys must be active for signing.");
         return null;
+    }
+    const now = Date.now();
+    let noteData = {
+        amount: parseInt(amount) || 0,
+        verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
+        serial: "SDT-" + (now + index).toString().slice(-8),
+        timestamp: now
     };
+
+    const stringToSign = getStandardizedDataForSigning(noteData);
+    const messageHash = await HybridCrypto.hashMessage(stringToSign);
     
-    async function validateSignatures(qrData) {
-        try {
-            const stringToVerify = getStandardizedDataForSigning(qrData);
-            const signatures = {
-                ed25519: base64ToBytes(qrData.signatures.ed25519),
-                falcon: base64ToBytes(qrData.signatures.falcon)
-            };
-            return await BankCrypto.verifySignatures(signatures, stringToVerify, activeKeys.publicKey);
-        } catch (e) {
-            console.error("Signature verification error:", e);
-            return { isEd25519Valid: false, isFalconValid: false };
-        }
-    }
+    const privateKeys = {
+        ed25519: activeKeys.ed25519.secretKey,
+        falcon: activeKeys.falcon.privateKey
+    };
+    noteData.signatures = await HybridCrypto.signData(messageHash, privateKeys);
     
-    // ===================================================================================
-    // DRAWING LOGIC (Unchanged from original file)
-    // ===================================================================================
-    const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
-    async function drawNoteOnCanvas(targetCanvas, noteData, applySteganography) {
-        // ... This is the full drawing logic from the original file ...
-        const ctx = targetCanvas.getContext("2d");
-        const { amount, verificationKey, serial, visualHash, signatures } = noteData;
-        const w = targetCanvas.width, h = targetCanvas.height, scale = w / 1350;
-        const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
-        const baseHue = H(visualHash, 0, 0, 360);
-        bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
-        bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
-        ctx.fillStyle = bgGradient;
-        ctx.fillRect(0, 0, w, h);
-        drawWatermark(ctx, visualHash, w, h);
-        drawKochGuilloche(ctx, visualHash, w, h);
-        drawNoisePattern(ctx, visualHash, w, h);
-        ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; ctx.fillStyle="#EAEAEA";
-        ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='left';
-        ctx.fillText(serial.substring(7),150*scale,160*scale); ctx.fillText(verificationKey.substring(4),150*scale,280*scale);
-        ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right";
-        ctx.fillText(amount.toLocaleString(),w-(120*scale),190*scale); ctx.shadowColor="transparent";
-        const qrCanvas=document.createElement("canvas");
-        await QRCode.toCanvas(qrCanvas, JSON.stringify(noteData),{width:380*scale,errorCorrectionLevel:'H'});
-        ctx.drawImage(qrCanvas,w-(150*scale)-380*scale,h-(520*scale),380*scale,380*scale);
-        if(applySteganography && signatures) { LSB.encode(ctx, JSON.stringify(signatures)); }
+    const concatenatedSigs = noteData.signatures.ed25519 + noteData.signatures.falcon;
+    const visualHashBytes = await HybridCrypto.hashMessage(concatenatedSigs);
+    noteData.visualHash = Array.from(visualHashBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    return noteData;
+}
+
+async function handleCreateNewNote() {
+    const amount = document.getElementById("amount-input").value;
+    updateKeyStatus('<span class="info">⏳ Generating new banknote...</span>');
+    const noteData = await createNoteData(amount);
+    if (noteData) {
+        currentNoteData = noteData;
+        await drawNoteOnCanvas(canvas, currentNoteData, true);
+        updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
+    } else {
+        updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>');
     }
-    function drawKochGuilloche(g_ctx, hash, w, h) { /* ... full logic from original ... */ }
-    function drawWatermark(g_ctx, hash, w, h) { /* ... full logic from original ... */ }
-    function drawNoisePattern(g_ctx, hash, w, h) { /* ... full logic from original ... */ }
+}
 
-    // ===================================================================================
-    // INITIALIZATION
-    // ===================================================================================
-    async function init() {
-        updateKeyStatus('⏳ Initializing cryptographic modules...', 'info');
-        dom.generateKeysButton.addEventListener('click', handleGenerateAndExportKeys);
-        dom.createNoteButton.addEventListener('click', handleCreateNewNote);
-        dom.downloadBatchButton.addEventListener('click', () => alert("Batch Download not fully re-implemented in this example."));
-        dom.importPublicKey.addEventListener('change', (e) => handleImportKeys(e.target.files[0], false));
-        dom.importPrivateKey.addEventListener('change', (e) => handleImportKeys(e.target.files[0], true));
-        dom.validatorInput.addEventListener('change', handleFileSelect);
+async function handleDownloadBatch() {
+    if (!activeKeys.ed25519?.secretKey || !activeKeys.falcon?.privateKey) {
+        alert("Error: Private keys are not active."); return;
+    }
+    if (!window.showDirectoryPicker) {
+        alert("Your browser does not support the File System Access API. Downloading one note as a fallback.");
+        await handleCreateNewNote();
+        const link = document.createElement("a");
+        link.download = `SADAT-NOTE-SECURE-${currentNoteData.serial}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        return;
+    }
+    const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
+    const amount = document.getElementById("amount-input").value;
+    const resultDiv = document.getElementById('validation-result');
+    try {
+        const dirHandle = await window.showDirectoryPicker();
+        resultDiv.innerHTML = `<span class="info">Processing ${quantity} banknote(s)...</span>`;
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = canvas.width;
+        offscreenCanvas.height = canvas.height;
 
-        try {
-            falconApi = await pqcSignFalcon512();
-            updateKeyStatus('✅ Modules ready. Please generate or import keys.', 'valid');
-        } catch (e) {
-            console.error("Falcon-512 Loading Error:", e);
-            updateKeyStatus('❌ Error loading modules. Ensure falcon files are local and you are on a web server.', 'invalid');
+        for (let i = 0; i < quantity; i++) {
+            const noteData = await createNoteData(amount, i);
+            await drawNoteOnCanvas(offscreenCanvas, noteData, true);
+            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+await writable.close();
+            resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
         }
+        resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
+        await handleCreateNewNote();
+    } catch (error) {
+        resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
     }
+}
 
-    init();
+async function drawNoteOnCanvas(targetCanvas, noteData, applySteganography = true) {
+    const ctx = targetCanvas.getContext("2d");
+    const { amount, verificationKey, serial, visualHash, signatures } = noteData;
+    const w = targetCanvas.width;
+    const h = targetCanvas.height;
+    const scale = w / 1350; 
+
+    // --- DRAWING ---
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
+    const baseHue = H(visualHash, 0, 0, 360);
+    bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
+    bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, w, h);
+    
+    drawWatermark(ctx, visualHash, w, h);
+    drawKochGuilloche(ctx, visualHash, w, h);
+    drawNoisePattern(ctx, visualHash, w, h);
+
+    ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+    ctx.shadowBlur = 8 * scale;
+    ctx.shadowOffsetX = 2 * scale;
+    ctx.shadowOffsetY = 2 * scale;
+    ctx.fillStyle = "#EAEAEA";
+    ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
+    ctx.textAlign = 'left';
+    ctx.fillText(serial.substring(4), 150 * scale, 160 * scale);
+    ctx.fillText(verificationKey.substring(4), 150 * scale, 280 * scale);
+    ctx.font = `bold ${150 * scale}px 'Roboto Mono'`;
+    ctx.textAlign = "right";
+    ctx.shadowBlur = 12 * scale;
+    ctx.shadowOffsetX = 4 * scale;
+    ctx.shadowOffsetY = 4 * scale;
+    ctx.fillText(amount.toString(), w - (120 * scale), 190 * scale);
+    ctx.shadowColor = "transparent";
+
+    const qrDataString = JSON.stringify(noteData);
+    const qrCanvas = document.createElement("canvas");
+    const qrSize = 380 * scale;
+    await QRCode.toCanvas(qrCanvas, qrDataString, { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } });
+    
+    const qrX = w - (150 * scale) - qrSize;
+    const qrY = h - (520 * scale);
+    ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
+    ctx.font = `${30 * scale}px 'Roboto Mono'`;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.textAlign = "center";
+    ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
+
+    if (applySteganography && signatures) {
+        const lsbData = signatures.ed25519 + "," + signatures.falcon;
+        try { LSB.encode(ctx, lsbData); } catch (e) { console.error("LSB Error:", e); }
+    }
+}
+
+function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save(); g_ctx.translate(w/2,h/2); const scale=w/1350,iteration=H(hash,2,2,4),size=w*(H(hash,4,10,20)/100),angleOffset=(H(hash,6,0,360)/360)*Math.PI*2,numLines=H(hash,8,3,6),hueOffset=H(hash,10,0,360); function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,dist=Math.sqrt(dx*dx+dy*dy),ux=dx/dist,uy=dy/dist,p1x=x1+ux*dist/3,p1y=y1+uy*dist/3,p2x=x1+ux*dist*2/3,p2y=y1+uy*dist*2/3,p3x=p1x+ux*dist/6-uy*dist*Math.sqrt(3)/6,p3y=p1y+uy*dist/6+ux*dist*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*scale;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<numLines;i++){const hue=(hueOffset+i*(360/numLines))%360;g_ctx.strokeStyle=`hsla(${hue},70%,60%,0.15)`;const angle=(i/numLines)*Math.PI*2+angleOffset,x1=Math.cos(angle)*size,y1=Math.sin(angle)*size,x2=Math.cos(angle+Math.PI)*size,y2=Math.sin(angle+Math.PI)*size;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,iteration);g_ctx.stroke()}g_ctx.restore() }
+function drawWatermark(g_ctx, hash, w, h) { g_ctx.save(); g_ctx.translate(w/2,h/2); const scale=w/1350,numSpirals=H(hash,16,3,6),spiralRadius=w*(H(hash,18,10,25)/100)*scale,hue=H(hash,20,0,360); g_ctx.strokeStyle=`hsla(${hue},50%,80%,0.05)`; g_ctx.lineWidth=4*scale; for(let i=0;i<numSpirals;i++){g_ctx.beginPath();const startAngle=(i/numSpirals)*Math.PI*2+H(hash,22,0,100)/100,endAngle=startAngle+H(hash,24,6,12)*Math.PI;for(let t=startAngle;t<endAngle;t+=0.05){const r=spiralRadius*(t-startAngle)/(endAngle-startAngle),x=r*Math.cos(t),y=r*Math.sin(t);if(t===startAngle)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
+function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for(let i=0;i<20000;i++){const x=Math.random()*w,y=Math.random()*h,o=Math.random()*0.15,hue=H(hash,(i%60)+4,0,360);g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`;g_ctx.fillRect(x,y,1,1)}g_ctx.restore() }
+
+window.onload = async () => {
+    updateControlsState(false);
+    updateKeyStatus('<span class="info">⏳ Initializing Post-Quantum Crypto Module (Falcon-512)...</span>');
+    try {
+        // The Falcon library is loaded from bundle.run and exposes a global function
+        falconApi = await pqcSignFalcon512();
+        updateKeyStatus('<span class="info">Ready. Please generate new keys or import existing ones.</span>');
+    } catch (e) {
+        console.error("Falcon-512 initialization failed:", e);
+        updateKeyStatus('<span class="invalid">❌ Failed to load PQC module. The application cannot run.</span>');
+        alert("Fatal Error: Could not initialize the Falcon-512 library. Please check your network connection or browser compatibility.");
+    }
+};
 </script>
 </body>
 </html>
