@@ -207,6 +207,7 @@
             border-radius: 4px;
         }
 
+
         .data-heading {
             color: var(--accent-color-1);
             margin-top: 15px;
@@ -251,7 +252,6 @@
         <h2>Banknote Controls</h2>
         <div class="controls-grid">
             <span class="input-label">Amount:</span>
-        
             <input type="number" id="amount-input" value="50000">
             <span class="input-label">Quantity:</span>
             <input type="number" id="quantity-input" value="1" min="1" max="100">
@@ -262,18 +262,15 @@
 
     <div class="section">
         <h2>Bank Key Management</h2>
-    
         <div class="controls-grid">
             <button id="generate-keys-button">🔑 Generate & Export Keys</button>
             <label for="import-public-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-               
                 Import Public Key
             </label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
             <label for="import-private-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-     
                 Import Private Key
             </label>
             <input type="file" id="import-private-key" accept=".json" style="display: none;">
@@ -284,7 +281,6 @@
     <div class="section" id="validator-section">
         <h2>Validate Banknote</h2>
         <label for="validator-input">
-       
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             Select Image for Validation
         </label>
@@ -332,8 +328,6 @@ const BankCrypto = (() => {
 
     function hashMessage(message) {
         // Use SHAKE256 to produce a 1024-bit (128-byte) hash.
-        // js-sha3's shake256 function takes a string and returns a hex string.
-        
         const hexHash = shake256(message, 1024);
         return hexToUint8Array(hexHash);
     }
@@ -346,7 +340,7 @@ const BankCrypto = (() => {
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
         if (!falconApi) throw new Error("Falcon API not initialized.");
-        const dataHash = hashMessage(data); // Now synchronous
+        const dataHash = hashMessage(data);
         const { signature } = await falconApi.sign(dataHash, privateKey);
         return signature;
     }
@@ -356,7 +350,6 @@ const BankCrypto = (() => {
         if (!falconApi) throw new Error("Falcon API not initialized.");
         
         const dataHash = hashMessage(data);
-        // Now synchronous
         return await falconApi.verify(signature, dataHash, publicKey);
     }
     
@@ -878,35 +871,10 @@ function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save();
 for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`;
 g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
-// ===================================================================================
-// Application Initialization
-// ===================================================================================
-async function main() {
+window.onload = async () => {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading Falcon-512 Crypto Module...</span>');
-    
-    try {
-        falconApi = await pqcSignFalcon512();
-        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
-    } catch (e) {
-        console.error("Failed to load Falcon module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-512 module. Please check the file 'falcon.js' and your browser console. The application cannot continue.</span>`);
-        alert("Error: Failed to load cryptographic module. See the console for details.");
-        return;
-    }
-    
-    // Attach event listeners now that the script is a module
-    document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
-    document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
-    document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
-    document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey);
-    document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey);
-    document.getElementById('validator-input').addEventListener('change', handleFileSelect);
-}
-
-// Start the application
-main();
-
+    updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
+};
 </script>
 </body>
 </html>
