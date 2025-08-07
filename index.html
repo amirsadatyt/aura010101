@@ -593,47 +593,35 @@ async function validateDigitalSignature(qrData, signatureB64) {
     }
 }
 
-// ===================================================================================
-// FIX: Robust QR Code Reader with Pre-processing
-// This function is the solution to the "QR code not found" problem.
-// It attempts to read the code, and if it fails, it applies a high-contrast
-// filter to the image and tries again, making it much more reliable.
-// ===================================================================================
 function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d', { willReadFrequently: true });
     const originalImageData = context.getImageData(0, 0, canvasToCheck.width, canvasToCheck.height);
 
-    // Attempt 1: Read the original, unaltered image data. This works in ideal conditions.
     let code = jsQR(originalImageData.data, originalImageData.width, originalImageData.height);
 
     if (code) {
         console.log("QR Code successfully found on first attempt (original image).");
     } else {
-        // Attempt 2 (Fallback): If the first attempt fails, preprocess the image to be pure black and white.
-        // This removes any interference from background colors, patterns, or noise.
         console.warn("QR Code not found on original image. Applying high-contrast filter and re-scanning...");
         
         const processedImageData = new ImageData(originalImageData.width, originalImageData.height);
-        const threshold = 128; // Brightness threshold for black/white
+        const threshold = 128;
 
         for (let i = 0; i < originalImageData.data.length; i += 4) {
-            // A simple but effective grayscale conversion
             const grayscale = (originalImageData.data[i] * 0.299) + (originalImageData.data[i + 1] * 0.587) + (originalImageData.data[i + 2] * 0.114);
             const value = grayscale < threshold ? 0 : 255;
-            processedImageData.data[i] = value;     // R
-            processedImageData.data[i + 1] = value; // G
-            processedImageData.data[i + 2] = value; // B
-            processedImageData.data[i + 3] = 255;   // Alpha (fully opaque)
+            processedImageData.data[i] = value;
+            processedImageData.data[i + 1] = value;
+            processedImageData.data[i + 2] = value;
+            processedImageData.data[i + 3] = 255;
         }
         
-        // Now, attempt to read the QR code from the simplified, high-contrast image data.
         code = jsQR(processedImageData.data, processedImageData.width, processedImageData.height);
         if (code) {
              console.log("QR Code found on second attempt (pre-processed image).");
         }
     }
     
-    // After all attempts, parse the data if a code was found.
     if (code && code.data) {
         try {
             return JSON.parse(code.data);
@@ -666,17 +654,14 @@ async function createNoteData(amount, index = 0) {
         timestamp: now
     };
 
-    // Create a temporary hash to sign against. The real hash will replace this.
     noteData.signatureHash = "0".repeat(128); 
     let stringToSign = getStandardizedDataForSigning(noteData);
     
     const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
     const signatureB64 = arrayBufferToBase64(signatureBytes);
     
-    // Create the *real* signature hash from the final signature
     const realSignatureHash = uint8ArrayToHex(BankCrypto.hashMessage(signatureB64));
     
-    // Update the note data with the real hash and the full signature for encoding
     noteData.signatureHash = realSignatureHash;
     noteData.signature = signatureB64; 
     
@@ -755,6 +740,9 @@ async function handleDownloadBatch() {
     }
 }
 
+// ===================================================================================
+// FIX: The core problem is solved here by ensuring a perfect, crisp QR code render.
+// ===================================================================================
 async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
     return new Promise(async (resolve, reject) => {
         if (Object.keys(noteData).length === 0) return reject("No note data provided.");
@@ -802,13 +790,36 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         const qrX = w - (150 * scale) - qrSize;
         const qrY = h - (520 * scale);
 
-        QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#050508', light: '#FFFFFE' } }, (err) => {
+        // FIX: Use pure black/white, add a margin, and disable image smoothing for a perfect render.
+        const qrOptions = {
+            width: qrSize,
+            errorCorrectionLevel: 'H',
+            margin: 2, // Ensures a "quiet zone" around the QR code. Critical for scanners.
+            color: {
+                dark: '#000000', // Pure black for maximum contrast.
+                light: '#FFFFFF' // Pure white.
+            }
+        };
+
+        QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), qrOptions, (err) => {
             if (err) { 
                 return reject(err); 
             }
-            // Draw the QR code. It remains clean and readable.
+            
+            // FIX: Disable image smoothing BEFORE drawing the QR code. This is the crucial step.
+            // It prevents the browser from blurring the sharp pixels of the QR code.
+            ctx.imageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false; // for older webkit browsers
+            ctx.mozImageSmoothingEnabled = false;    // for Firefox
+
+            // Draw the QR code. It will now be perfectly crisp.
             ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
             
+            // Re-enable image smoothing for any subsequent drawing (good practice).
+            ctx.imageSmoothingEnabled = true;
+            ctx.webkitImageSmoothingEnabled = true;
+            ctx.mozImageSmoothingEnabled = true;
+
             // Draw final text on top
             ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
             ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)", w/2, h-60*scale);
