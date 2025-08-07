@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>اسکناس دیجیتال سادات (QR Code اصلاح‌شده)</title>
+    <title>اسکناس دیجیتال سادات (QR Code اصلاح نهایی)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -233,15 +233,16 @@ async function drawBanknoteOnCanvas(targetCanvas, noteData) {
         const w = targetCanvas.width, h = targetCanvas.height;
         const scale = w / 1350;
 
+        // --- START CRITICAL BUG FIX: Correct Order of Operations ---
+
+        // STEP 1: Draw the entire background first (gradient, noise, text).
         const baseHue = H(visualHash, 0, 0, 360);
         const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
         bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
         bgGradient.addColorStop(1, `hsl(${baseHue - 40}, 40%, 4%)`);
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, w, h);
-        
         drawNoisePattern(ctx, visualHash, w, h);
-
         ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
         ctx.fillStyle = "#EAEAEA";
         ctx.textAlign = 'left';
@@ -249,40 +250,47 @@ async function drawBanknoteOnCanvas(targetCanvas, noteData) {
         ctx.fillText(serial, 150 * scale, 160 * scale);
         ctx.font = `bold ${50 * scale}px 'Roboto Mono'`;
         ctx.fillText(verificationKey, 150 * scale, 250 * scale);
-        
         ctx.textAlign = "right";
         ctx.font = `bold ${150 * scale}px 'Poppins'`;
         ctx.fillText(amount.toLocaleString(), w - (120 * scale), 190 * scale);
         ctx.shadowColor = "transparent";
 
-        // --- START QR CODE FIX ---
+        // STEP 2: If a signature exists, hide it in the background we just drew.
+        if (signature) {
+            try {
+                LSB.encode(ctx, signature);
+            } catch (lsbError) {
+                reject(lsbError);
+                return;
+            }
+        }
+
+        // STEP 3: Generate the clean QR code and draw it ON TOP of the LSB-encoded background.
         const qrCanvas = document.createElement("canvas");
         const qrSize = 380 * scale;
         const qrDataObject = { ...noteData };
         delete qrDataObject.signature;
         delete qrDataObject.visualHash;
         
-        // FIX 1: Generate a standard black-on-white QR code for maximum contrast.
         QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { 
             width: qrSize, 
             errorCorrectionLevel: 'H', 
             color: { dark: '#000000', light: '#FFFFFF' } 
         }, (err) => {
-            if (err) return reject(err);
-            
-            // Draw the high-contrast QR code directly on the canvas.
+            if (err) {
+                reject(err);
+                return;
+            }
             const qrX = w - (150 * scale) - qrSize;
             const qrY = h - (520 * scale);
             ctx.drawImage(qrCanvas, qrX, qrY);
-            
-            if (signature) {
-                try { LSB.encode(ctx, signature); } catch (lsbError) { reject(lsbError); }
-            }
             resolve();
         });
-        // --- END QR CODE FIX ---
+        
+        // --- END CRITICAL BUG FIX ---
     });
 }
+
 
 // ===================================================================================
 // Validation Logic
@@ -300,7 +308,6 @@ async function handleFileSelect(event) {
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
         
         resultDiv.innerHTML = `<span class="info">۱. در حال خواندن QR Code...</span>`;
-        // FIX 2: Scan the whole canvas, not a fixed region.
         const qrData = readQRCodeFromCanvas(tempCanvas);
         if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ خطا: QR Code یافت نشد یا قابل خواندن نیست.</span>`; return; }
         
@@ -327,7 +334,6 @@ async function handleFileSelect(event) {
 
 function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d');
-    // FIX 2 (Implementation): Scan the entire canvas. This is more robust.
     const imageData = context.getImageData(0, 0, canvasToCheck.width, canvasToCheck.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     if (code) { try { return JSON.parse(code.data); } catch { return null; } }
