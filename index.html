@@ -698,10 +698,15 @@ function compareImages(canvas1, canvas2, tolerance = 30) {
 
 function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d');
-    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
-    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+    const imageData = context.getImageData(0, 0, canvasToCheck.width, canvasToCheck.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code) { try { return JSON.parse(code.data); } catch { return null; } }
+    if (code) {
+        try {
+            return JSON.parse(code.data);
+        } catch {
+            return null;
+        }
+    }
     return null;
 }
 
