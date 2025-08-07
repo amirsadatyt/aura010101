@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256)</title>
+    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256 amir)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -631,6 +631,7 @@ async function validateNoteForCreation(noteData, targetCanvas) {
     // We only need to check the QR data, not the full noteData with the signature
     const qrDataObject = { ...noteData };
     delete qrDataObject.signature;
+    delete qrDataObject.visualHash; // FIX: This property is also removed before QR generation
     
     await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, false); // No LSB needed for this check
     const qrData = await readQRCodeFromCanvas(tempCanvas);
@@ -640,7 +641,6 @@ async function validateNoteForCreation(noteData, targetCanvas) {
     // Ensure the data read from the QR code matches what we intended to write
     return JSON.stringify(qrData) === JSON.stringify(qrDataObject);
 }
-
 
 // ===================================================================================
 // Banknote Creation Logic
