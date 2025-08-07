@@ -600,12 +600,19 @@ async function handleFileSelect(event) {
         tempCanvas.height = 750;
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        
+        const imageData = tempCtx.getImageData(0, 0, 1, 1).data;
+        if (imageData[3] === 0) {
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: The uploaded file could not be loaded as a valid image.</span>`;
+            return;
+        }
+
         // --- VALIDATION PIPELINE ---
         resultDiv.innerHTML = `<span class="info">1.
         Reading digital data from QR Code...</span>`;
         const qrData = await readQRCodeFromCanvas(tempCanvas);
         if (!qrData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code found, but it is unreadable. Please upload a clearer image.</span>`;
             return;
         }
         let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
@@ -700,13 +707,7 @@ function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d');
     const imageData = context.getImageData(0, 0, canvasToCheck.width, canvasToCheck.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code) {
-        try {
-            return JSON.parse(code.data);
-        } catch {
-            return null;
-        }
-    }
+    if (code) { try { return JSON.parse(code.data); } catch { return null; } }
     return null;
 }
 
@@ -795,19 +796,27 @@ async function handleDownloadBatch() {
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
         for (let i = 0; i < quantity; i++) {
-            const noteData = await createNoteData(amount, i);
-            if (!noteData) {
-                resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key.</span>`;
-                return;
+            let noteData = null, isNoteValid = false, attempts = 0;
+            while (!isNoteValid && attempts < 10) {
+                noteData = await createNoteData(amount, i);
+                if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key.</span>`; return;
+                }
+                isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
+                if (!isNoteValid) resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR check on attempt ${attempts + 1}. Regenerating...</span>`;
+                attempts++;
             }
-            
-            await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
-            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
+            if (isNoteValid) {
+                await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
+                const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+                const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
+            } else {
+                 resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts.
+        Batch download stopped.</span>`; return;
+            }
         }
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
         await handleCreateNewNote();
