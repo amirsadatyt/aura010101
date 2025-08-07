@@ -178,17 +178,19 @@ const BankCrypto = (() => {
 // ===================================================================================
 const getStandardizedDataForSigning = (noteData) => JSON.stringify({ amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.verificationKey }, Object.keys(noteData).sort());
 const updateStatus = (elementId, message, type = 'info') => { document.getElementById(elementId).innerHTML = `<span class="${type}">${message}</span>`; };
-const updateControlsState = (isEnabled) => {
-    document.getElementById('create-note-button').disabled = !isEnabled;
-    document.getElementById('batch-download-button').disabled = !isEnabled;
-    document.getElementById('generate-keys-button').disabled = !isEnabled;
-};
 const downloadFile = (data, filename, type) => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([data], { type }));
     a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
 };
+
+// CORRECTED: This function now ONLY controls note creation buttons.
+const updateControlsState = (isEnabled) => {
+    document.getElementById('create-note-button').disabled = !isEnabled;
+    document.getElementById('batch-download-button').disabled = !isEnabled;
+};
+
 
 async function handleGenerateAndExportKeys() {
     const password = prompt("Enter a strong password to encrypt your private key file:");
@@ -235,10 +237,6 @@ async function handleImportKey(event, keyType) {
         updateStatus('key-status', `❌ Error importing ${keyType} key: ${error.message}`, 'invalid');
     }
 }
-
-// ===================================================================================
-// LSB Steganography is no longer used due to Multi-Symbol JAB Code implementation
-// ===================================================================================
 
 // ===================================================================================
 // Multi-Symbol JAB Code Logic
@@ -347,7 +345,7 @@ async function handleFileSelect(event) {
             if (!isSignatureValid) throw new Error("FATAL ERROR: Digital signature is invalid. Forgery detected.");
             resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified.</span>`;
             
-            // 3. Graphical integrity check (LSB layer is removed)
+            // 3. Graphical integrity check
             resultHTML += `\n\n<span class="info">3. Performing graphical integrity check...</span>`;
             const expectedVisualHash = uint8ArrayToHex(BankCrypto.hashMessage(jabData.signature));
             const referenceCanvas = document.createElement('canvas');
@@ -413,6 +411,7 @@ async function handleCreateNewNote() {
     }
 }
 
+// CORRECTED: This function now manually disables all buttons during operation.
 async function handleBatchDownload() {
     if (!window.showDirectoryPicker) {
         alert("Your browser does not support direct folder access. This feature is available in modern browsers like Chrome and Edge.");
@@ -435,7 +434,10 @@ async function handleBatchDownload() {
         return;
     }
 
+    // Manually disable ALL buttons during the operation
     updateControlsState(false);
+    document.getElementById('generate-keys-button').disabled = true;
+
     try {
         const amount = document.getElementById("amount-input").value;
         const tempCanvas = document.createElement('canvas');
@@ -459,7 +461,9 @@ async function handleBatchDownload() {
         console.error(e);
         alert(`An error occurred: ${e.message}. Please check browser permissions.`);
     } finally {
-        updateControlsState(true);
+        // Re-enable buttons based on key availability
+        updateControlsState(!!activeKeys.privateKey); // Re-enable creation buttons if private key exists
+        document.getElementById('generate-keys-button').disabled = false; // Always re-enable this button
     }
 }
 
