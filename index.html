@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256 amir)</title>
+    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -628,17 +628,20 @@ async function validateNoteForCreation(noteData, targetCanvas) {
     tempCanvas.width = targetCanvas.width;
     tempCanvas.height = targetCanvas.height;
     
-    // We only need to check the QR data, not the full noteData with the signature
+    // Create the object that is expected to be in the QR code.
     const qrDataObject = { ...noteData };
     delete qrDataObject.signature;
-    delete qrDataObject.visualHash; // FIX: This property is also removed before QR generation
+    delete qrDataObject.visualHash; // CORRECTED: This property must also be removed for the check.
     
-    await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, false); // No LSB needed for this check
+    // Draw the note to the temporary canvas (which creates the QR code internally)
+    await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, false);
+    
+    // Read the data back from the QR code that was just drawn
     const qrData = await readQRCodeFromCanvas(tempCanvas);
     
     if (!qrData) return false;
     
-    // Ensure the data read from the QR code matches what we intended to write
+    // Compare the data read from the QR code with the object we expected to be there.
     return JSON.stringify(qrData) === JSON.stringify(qrDataObject);
 }
 
@@ -781,10 +784,10 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         const qrCanvas = document.createElement("canvas");
         const qrSize = 380 * scale;
         
-        // **MODIFIED**: Create a separate object for QR code without the full signature
+        // Create a separate object for QR code without the full signature or visual hash
         const qrDataObject = { ...noteData };
         delete qrDataObject.signature;
-        delete qrDataObject.visualHash; // Not needed in QR
+        delete qrDataObject.visualHash;
         
         QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } }, (err) => {
             if (err) { reject(err); return; }
