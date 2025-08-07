@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>اسکناس دیجیتال سادات (Falcon-512 + JAB Code)</title>
+    <title>Sadat Digital Banknote (Falcon-512 + JAB Code)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -180,7 +180,7 @@
             white-space: pre-wrap;
             font-family: var(--mono-font);
             border: 1px solid var(--border-color);
-            direction: ltr; 
+            transition: all 0.3s ease;
         }
 
         .valid { color: var(--success-color); }
@@ -239,50 +239,50 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>اسکناس دیجیتال سادات</h1>
-        <p>یک مفهوم ارز دیجیتال امن و قابل تأیید با استفاده از امضای Falcon-512، هشینگ SHAKE256 و پنهان‌نگاری LSB.</p>
+        <h1>Sadat Digital Banknote</h1>
+        <p>A secure, verifiable digital currency concept using Falcon-512 Signatures, SHAKE256 Hashing, and LSB Steganography.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
 
     <div class="section">
-        <h2>کنترل‌های اسکناس</h2>
+        <h2>Banknote Controls</h2>
         <div class="controls-grid">
-            <span class="input-label">مبلغ:</span>
+            <span class="input-label">Amount:</span>
             <input type="number" id="amount-input" value="50000">
-            <span class="input-label">تعداد:</span>
+            <span class="input-label">Quantity:</span>
             <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" disabled>🎨 طراحی مجدد اسکناس</button>
-            <button id="save-batch-button" disabled>📁 ذخیره گروهی در پوشه</button>
+            <button id="create-note-button" disabled>🎨 Redesign Banknote</button>
+            <button id="batch-download-button" disabled>📁 Save Batch to Folder</button>
         </div>
     </div>
 
     <div class="section">
-        <h2>مدیریت کلید بانک</h2>
+        <h2>Bank Key Management</h2>
         <div class="controls-grid">
-            <button id="generate-keys-button">🔑 تولید و خروجی گرفتن کلیدها</button>
+            <button id="generate-keys-button">🔑 Generate & Export Keys</button>
             <label for="import-public-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                وارد کردن کلید عمومی
+                Import Public Key
             </label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
             <label for="import-private-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                وارد کردن کلید خصوصی
+                Import Private Key
             </label>
             <input type="file" id="import-private-key" accept=".json" style="display: none;">
         </div>
-        <div id="key-status">وضعیت جفت کلید در اینجا نمایش داده می‌شود.</div>
+        <div id="key-status">Key pair status will be displayed here.</div>
     </div>
 
     <div class="section" id="validator-section">
-        <h2>اعتبارسنجی اسکناس</h2>
+        <h2>Validate Banknote</h2>
         <label for="validator-input">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            انتخاب تصویر برای اعتبارسنجی
+            Select Image for Validation
         </label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
-        <div id="validation-result">نتیجه اعتبارسنجی در اینجا نمایش داده می‌شود.</div>
+        <div id="validation-result">Validation result will be displayed here.</div>
     </div>
 </div>
 
@@ -426,20 +426,20 @@ function updateKeyStatus(message) {
 
 function updateControlsState(isEnabled) {
     document.getElementById('create-note-button').disabled = !isEnabled;
-    document.getElementById('save-batch-button').disabled = !isEnabled;
+    document.getElementById('batch-download-button').disabled = !isEnabled;
 }
 
 // ===================================================================================
 // UI Handlers for Key Management
 // ===================================================================================
 async function handleGenerateAndExportKeys() {
-    const password = prompt("برای رمزگذاری فایل کلید خصوصی خود، یک رمز عبور قوی وارد کنید:");
+    const password = prompt("Enter a strong password to encrypt your private key file:");
     if (!password) {
-        updateKeyStatus('<span class="invalid">❌ تولید کلید لغو شد. رمز عبور الزامی است.</span>');
+        updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>');
         return;
     }
 
-    updateKeyStatus('<span class="info">⏳ در حال تولید جفت کلید جدید Falcon-512 و رمزگذاری... لطفاً منتظر بمانید.</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new Falcon-512 key pair and encrypting... Please wait.</span>');
     try {
         const keyPair = await BankCrypto.generateNewKeyPair();
         activeKeys.publicKey = keyPair.publicKey;
@@ -450,12 +450,12 @@ async function handleGenerateAndExportKeys() {
         const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
         downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json');
 
-        updateKeyStatus('<span class="valid">✅ جفت کلید جدید Falcon-512 تولید و صادر شد! کلیدهای جدید اکنون فعال هستند.</span>');
+        updateKeyStatus('<span class="valid">✅ New Falcon-512 key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
     } catch (e) {
         console.error("Key generation failed:", e);
-        updateKeyStatus(`<span class="invalid">❌ عدم موفقیت در تولید کلیدها: ${e.message}</span>`);
+        updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${e.message}</span>`);
     }
 }
 
@@ -466,11 +466,11 @@ async function handleImportPublicKey(event) {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!data.keyData) throw new Error("فرمت فایل کلید عمومی نامعتبر است.");
+            if (!data.keyData) throw new Error("Invalid public key file format.");
             activeKeys.publicKey = base64ToUint8Array(data.keyData);
-            updateKeyStatus('<span class="valid">✅ کلید عمومی با موفقیت وارد شد. اکنون برای اعتبارسنجی اسکناس فعال است.</span>');
+            updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>');
         } catch (error) {
-            updateKeyStatus(`<span class="invalid">❌ خطا در وارد کردن کلید عمومی: ${error.message}</span>`);
+            updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`);
         }
     };
     reader.readAsText(file);
@@ -480,22 +480,22 @@ async function handleImportPublicKey(event) {
 async function handleImportPrivateKey(event) {
     const file = event.target.files[0];
     if (!file) return;
-    const password = prompt("برای رمزگشایی فایل کلید خصوصی، رمز عبور را وارد کنید:");
+    const password = prompt("Enter the password to decrypt the private key file:");
     if (!password) {
-        updateKeyStatus('<span class="invalid">❌ وارد کردن لغو شد. برای رمزگشایی به رمز عبور نیاز است.</span>');
+        updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required to decrypt.</span>');
         return;
     }
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
             const encryptedData = JSON.parse(e.target.result);
-            updateKeyStatus('<span class="info">⏳ در حال رمزگشایی و وارد کردن کلید خصوصی...</span>');
+            updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>');
             const privateKey = await BankCrypto.decryptPrivateKey(encryptedData, password);
             activeKeys.privateKey = privateKey;
-            updateKeyStatus('<span class="valid">✅ کلید خصوصی با موفقیت وارد شد. اکنون برای امضای اسکناس فعال است.</span>');
+            updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>');
             updateControlsState(true);
         } catch (error) {
-            updateKeyStatus(`<span class="invalid">❌ خطا در رمزگشایی یا وارد کردن کلید خصوصی. رمز عبور و فایل خود را بررسی کنید: ${error.message}</span>`);
+            updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key. Check your password and file: ${error.message}</span>`);
         }
     };
     reader.readAsText(file);
@@ -532,7 +532,7 @@ const LSB = (() => {
         const data = imageData.data;
         
         if (binaryMessage.length > data.length / 4 * 3) {
-            throw new Error("پیام برای کدگذاری در تصویر بیش از حد طولانی است.");
+            throw new Error("Message is too long to be encoded in the image.");
         }
 
         let dataIndex = 0;
@@ -567,7 +567,6 @@ const LSB = (() => {
     }
     return { encode, decode };
 })();
-
 // ===================================================================================
 // Validation Logic
 // ===================================================================================
@@ -575,12 +574,12 @@ async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
     if (!activeKeys.publicKey) {
-        alert("خطا: هیچ کلید عمومی برای اعتبارسنجی فعال نیست. لطفاً یکی را تولید یا وارد کنید.");
+        alert("Error: No public key is active for validation. Please generate or import one.");
         return;
     }
 
     const resultDiv = document.getElementById('validation-result');
-    resultDiv.innerHTML = `<span class="info">⏳ در حال آماده‌سازی تصویر برای اعتبارسنجی...</span>`;
+    resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
     let isFullyValid = true;
 
     const fileUrl = URL.createObjectURL(file);
@@ -593,37 +592,37 @@ async function handleFileSelect(event) {
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
         
         // --- VALIDATION PIPELINE ---
-        resultDiv.innerHTML = `<span class="info">1. در حال خواندن داده‌های دیجیتال از JAB Code...</span>`;
+        resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Code...</span>`;
         const jabData = await readJabCodeFromCanvas(tempCanvas);
         if (!jabData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ خطای مهلک: JAB Code یافت نشد یا غیرقابل خواندن است.</span>`;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable.</span>`;
             return;
         }
-        let resultHTML = `<span class="valid">✅ 1. داده‌های JAB Code با موفقیت خوانده شد.</span>`;
+        let resultHTML = `<span class="valid">✅ 1. JAB Code data successfully read.</span>`;
         
-        resultHTML += `\n\n<span class="info">2. در حال تأیید امضای دیجیتال (Falcon-512)...</span>`;
+        resultHTML += `\n\n<span class="info">2. Verifying digital signature (Falcon-512)...</span>`;
         resultDiv.innerHTML = resultHTML;
         const isSignatureValid = await validateDigitalSignature(jabData);
         if (!isSignatureValid) {
-            resultHTML += `\n<span class="invalid">❌ خطای مهلک: امضای دیجیتال نامعتبر است. جعل شناسایی شد.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`;
             isFullyValid = false;
             resultDiv.innerHTML = resultHTML; 
             return;
         }
-        resultHTML += `\n<span class="valid">✅ 2. امضای دیجیتال تأیید شد. اصالت تأیید شد.</span>`;
+        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified.</span>`;
 
-        resultHTML += `\n\n<span class="info">3. در حال استخراج و تأیید داده‌های پنهان LSB...</span>`;
+        resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
         resultDiv.innerHTML = resultHTML;
         const decodedSignature = LSB.decode(tempCtx);
         if (!decodedSignature || decodedSignature !== jabData.signature) {
-            resultHTML += `\n<span class="invalid">❌ خطای مهلک: امضای پنهان‌نگاری شده مطابقت ندارد. یکپارچگی تصویر به خطر افتاده است.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature does not match. Image integrity compromised.</span>`;
             isFullyValid = false;
             resultDiv.innerHTML = resultHTML; 
             return;
         }
-        resultHTML += `\n<span class="valid">✅ 3. امضای پنهان LSB مطابقت داشت. یکپارچگی تصویر تأیید شد.</span>`;
+        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature matched. Image integrity confirmed.</span>`;
         
-        resultHTML += `\n\n<span class="info">4. در حال انجام بررسی یکپارچگی گرافیکی...</span>`;
+        resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
         resultDiv.innerHTML = resultHTML;
         const expectedVisualHash = uint8ArrayToHex(BankCrypto.hashMessage(jabData.signature));
         const referenceCanvas = document.createElement('canvas');
@@ -632,13 +631,13 @@ async function handleFileSelect(event) {
         await drawNoteOnCanvas(referenceCanvas, {...jabData, visualHash: expectedVisualHash}, referenceCanvas.width, referenceCanvas.height, false);
         const differencePercentage = compareImages(tempCanvas, referenceCanvas, 35);
         if (differencePercentage > 0.15) {
-            resultHTML += `\n<span class="invalid">❌ خطای مهلک: دستکاری گرافیکی شناسایی شد. تصویر ${differencePercentage.toFixed(2)}% تفاوت دارد.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}%.</span>`;
             isFullyValid = false;
         } else {
-            resultHTML += `\n<span class="valid">✅ 4. بررسی یکپارچگی گرافیکی با موفقیت انجام شد (${differencePercentage.toFixed(2)}% تفاوت).</span>`;
+            resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
         }
         
-        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">${isFullyValid ? '✅ نتیجه: اسکناس معتبر است.' : '❌ نتیجه: جعل شناسایی شد.'}</span>`;
+        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery detected.'}</span>`;
         resultDiv.innerHTML = resultHTML;
     };
     img.src = fileUrl;
@@ -704,7 +703,7 @@ async function validateNoteForCreation(noteData, targetCanvas) {
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
 async function createNoteData(amount, index = 0) {
     if (!activeKeys.privateKey) {
-        alert("خطا: هیچ کلید خصوصی برای امضای اسکناس فعال نیست. لطفاً یک کلید خصوصی تولید یا وارد کنید.");
+        alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
         return null;
     }
     const now = Date.now();
@@ -725,75 +724,102 @@ async function createNoteData(amount, index = 0) {
 
 async function handleCreateNewNote() {
     const amount = document.getElementById("amount-input").value;
-    updateKeyStatus('<span class="info">⏳ در حال تولید اسکناس جدید...</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new banknote...</span>');
     try {
         const noteData = await createNoteData(amount);
         if (noteData) {
             currentNoteData = noteData;
             await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
-            updateKeyStatus('<span class="valid">✅ طرح اسکناس جدید آماده است.</span>');
+            updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
         } else {
-            updateKeyStatus('<span class="invalid">❌ عدم موفقیت در ایجاد اسکناس جدید.</span>');
+            updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>');
         }
     } catch (e) {
-        updateKeyStatus(`<span class="invalid">❌ خطا در هنگام ایجاد اسکناس: ${e.message}</span>`);
+        updateKeyStatus(`<span class="invalid">❌ Error during banknote creation: ${e.message}</span>`);
         console.error(e);
     }
 }
 
-async function handleSaveBatchToFolder() {
-    if (!activeKeys.privateKey) {
-        alert("خطا: هیچ کلید خصوصی برای امضای اسکناس فعال نیست. لطفاً یک کلید خصوصی تولید یا وارد کنید.");
+// [تغییر اصلی]: این تابع برای ذخیره مستقیم فایل‌ها در پوشه بازنویسی شده است
+async function handleBatchDownload() {
+    // مرحله ۱: بررسی پشتیبانی مرورگر
+    if (!window.showDirectoryPicker) {
+        alert("مرورگر شما از دسترسی مستقیم به پوشه پشتیبانی نمی‌کند. این قابلیت در مرورگرهای مدرن مانند کروم و اج در دسترس است. لطفاً از یک مرورگر دیگر استفاده کنید.");
+        updateKeyStatus(`<span class="invalid">❌ مرورگر برای دانلود دسته‌ای پشتیبانی نمی‌شود.</span>`);
         return;
     }
-    if (!window.showDirectoryPicker) {
-        alert("مرورگر شما از API دسترسی به سیستم فایل پشتیبانی نمی‌کند. به عنوان جایگزین، یک اسکناس دانلود می‌شود.");
-        await handleCreateNewNote();
-        const link = document.createElement("a");
-        link.download = `SADAT-NOTE-SECURE-${currentNoteData.serial}.png`;
-        link.href = canvas.toDataURL("image/png");
-        link.click(); return;
-    }
-    const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
+
     const amount = document.getElementById("amount-input").value;
-    const resultDiv = document.getElementById('validation-result');
+    const quantity = parseInt(document.getElementById("quantity-input").value, 10);
+
+    if (isNaN(quantity) || quantity < 1 || quantity > 100) {
+        alert("لطفاً یک تعداد معتبر بین ۱ تا ۱۰۰ وارد کنید.");
+        return;
+    }
+    if (!activeKeys.privateKey) {
+        alert("خطا: برای ساخت اسکناس به کلید خصوصی نیاز است. لطفاً یک کلید تولید یا وارد کنید.");
+        return;
+    }
+
+    let directoryHandle;
     try {
-        const dirHandle = await window.showDirectoryPicker();
-        resultDiv.innerHTML = `<span class="info">در حال پردازش ${quantity} اسکناس... لطفاً منتظر بمانید.</span>`;
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = canvas.width;
-        offscreenCanvas.height = canvas.height;
-        for (let i = 0; i < quantity; i++) {
-            let noteData = null, isNoteValid = false, attempts = 0;
-            while (!isNoteValid && attempts < 10) {
-                noteData = await createNoteData(amount, i);
-                if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ ذخیره گروهی متوقف شد. کلید خصوصی وجود ندارد.</span>`; return; }
-                isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
-                if (!isNoteValid) resultDiv.innerHTML = `<span class="invalid">❌ اسکناس ${i + 1} در تلاش ${attempts + 1} در بررسی اعتبارسنجی شکست خورد. در حال تولید مجدد...</span>`;
-                attempts++;
+        // مرحله ۲: درخواست از کاربر برای انتخاب پوشه
+        updateKeyStatus('<span class="info">📂 لطفاً پوشه‌ای را برای ذخیره تصاویر اسکناس انتخاب کنید.</span>');
+        directoryHandle = await window.showDirectoryPicker();
+    } catch (err) {
+        // اگر کاربر پنجره انتخاب پوشه را ببندد
+        console.log("انتخاب پوشه لغو شد.", err);
+        updateKeyStatus('<span class="info">دانلود دسته‌ای لغو شد.</span>');
+        return;
+    }
+
+    updateControlsState(false); // غیرفعال کردن دکمه‌ها در حین پردازش
+
+    try {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 1350;
+        tempCanvas.height = 750;
+
+        // مرحله ۳: حلقه برای تولید و ذخیره هر فایل
+        for (let i = 1; i <= quantity; i++) {
+            updateKeyStatus(`<span class="info">⚙️ در حال تولید و ذخیره اسکناس ${i} از ${quantity}...</span>`);
+            const noteData = await createNoteData(amount, i);
+            if (!noteData) {
+                throw new Error(`ایجاد داده برای اسکناس #${i} با شکست مواجه شد.`);
             }
-            if (isNoteValid) {
-                await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
-                const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-                const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                resultDiv.innerHTML = `<span class="info">اسکناس ${i + 1} از ${quantity} با موفقیت ذخیره شد.</span>`;
-            } else {
-                 resultDiv.innerHTML = `<span class="invalid">❌ پس از چندین تلاش، ایجاد اسکناس معتبر ناموفق بود. ذخیره گروهی متوقف شد.</span>`; return;
-            }
+
+            await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, true);
+
+            const imageBlob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+            
+            // دریافت دسترسی به فایل در پوشه انتخاب شده
+            const fileHandle = await directoryHandle.getFileHandle(`banknote_${noteData.serial}.png`, { create: true });
+            
+            // ایجاد یک جریان قابل نوشتن برای فایل
+            const writable = await fileHandle.createWritable();
+            
+            // نوشتن داده تصویر در فایل
+            await writable.write(imageBlob);
+            
+            // بستن فایل
+            await writable.close();
         }
-        resultDiv.innerHTML = `<span class="valid">✅ ${quantity} اسکناس با موفقیت ذخیره شد.</span>`;
-        await handleCreateNewNote();
-    } catch (error) {
-        resultDiv.innerHTML = `<span class="invalid">❌ خطا: ${error.message}</span>`;
+
+        updateKeyStatus(`<span class="valid">✅ ${quantity} اسکناس با موفقیت در پوشه انتخابی ذخیره شد.</span>`);
+
+    } catch (e) {
+        updateKeyStatus(`<span class="invalid">❌ خطایی در حین ذخیره دسته‌ای رخ داد: ${e.message}</span>`);
+        console.error(e);
+        alert(`یک خطا رخ داد: ${e.message}. لطفاً دسترسی‌های مرورگر را بررسی کنید.`);
+    } finally {
+        updateControlsState(true); // فعال کردن مجدد دکمه‌ها
     }
 }
 
+
 async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
     if (Object.keys(noteData).length === 0) {
-        throw new Error("هیچ داده‌ای برای اسکناس ارائه نشده است.");
+        throw new Error("No note data provided.");
     }
 
     const ctx = targetCanvas.getContext("2d");
@@ -829,7 +855,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
                 ctx.drawImage(jabImg, JAB_CODE_REGION.x * scale, JAB_CODE_REGION.y * scale, jabSize, jabSize);
                 
                 ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
-                ctx.fillText("امضای دیجیتال توسط مرجع بانک سادات (Falcon-512)", w/2, h-60*scale);
+                ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)", w/2, h-60*scale);
 
                 if (applySteganography && signature) {
                     try { LSB.encode(ctx, signature); } catch (lsbError) { reject(lsbError); }
@@ -838,7 +864,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
             };
             jabImg.onerror = (err) => {
                 console.error("Failed to load JAB Code image.", err);
-                reject(new Error("داده‌های تصویر JAB Code بارگیری نشد."));
+                reject(new Error("JAB Code image data could not be loaded."));
             };
             jabImg.src = jabcodeApi.encode_message(JSON.stringify(noteData));
         } catch (jabError) {
@@ -847,6 +873,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         }
     });
 }
+
 
 function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
 function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
@@ -857,22 +884,22 @@ function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<200
 // ===================================================================================
 async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ در حال بارگیری ماژول رمزنگاری Falcon-512...</span>');
+    updateKeyStatus('<span class="info">⏳ Loading Falcon-512 Crypto Module...</span>');
     
     try {
         falconApi = await pqcSignFalcon512();
         jabcodeApi = new JabcodeJSInterface();
-        updateKeyStatus('<span class="info">آماده. لطفاً برای شروع یک جفت کلید جدید تولید کنید یا کلیدهای موجود را وارد کنید.</span>');
+        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
         console.error("Failed to load a module:", e);
-        updateKeyStatus(`<span class="invalid">❌ خطای بحرانی: ماژول مورد نیاز بارگیری نشد. لطفاً مسیرهای فایل و کنسول مرورگر خود را بررسی کنید. برنامه نمی‌تواند ادامه دهد.</span>`);
-        alert("خطا: بارگیری ماژول مورد نیاز ناموفق بود. برای جزئیات به کنسول مراجعه کنید.");
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load a required module. Please check file paths and your browser console. The application cannot continue.</span>`);
+        alert("Error: Failed to load a required module. See the console for details.");
         return;
     }
     
     document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
     document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
-    document.getElementById('save-batch-button').addEventListener('click', handleSaveBatchToFolder);
+    document.getElementById('batch-download-button').addEventListener('click', handleBatchDownload);
     document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey);
     document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey);
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
