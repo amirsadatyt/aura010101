@@ -2,11 +2,11 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Advanced Security with JAB Code)</title>
+    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script type="module" src="./jabcodeJSLib.min.js"></script>
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -205,7 +205,6 @@
             border-radius: 4px;
         }
 
-
         .data-heading {
             color: var(--accent-color-1);
             margin-top: 15px;
@@ -241,7 +240,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using RSA-PSS Digital Signatures, JAB Code, and LSB Steganography.</p>
+        <p>A secure, verifiable digital currency concept using Falcon-512 Signatures, SHAKE256 Hashing, and LSB Steganography.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
@@ -253,15 +252,15 @@
             <input type="number" id="amount-input" value="50000">
             <span class="input-label">Quantity:</span>
             <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" onclick="handleCreateNewNote()" disabled>🎨 Redesign Banknote</button>
-            <button id="download-batch-button" onclick="handleDownloadBatch()" disabled>📥 Download Batch</button>
+            <button id="create-note-button" disabled>🎨 Redesign Banknote</button>
+            <button id="download-batch-button" disabled>📥 Download Batch</button>
         </div>
     </div>
 
     <div class="section">
         <h2>Bank Key Management</h2>
         <div class="controls-grid">
-            <button onclick="handleGenerateAndExportKeys()">🔑 Generate & Export Keys</button>
+            <button id="generate-keys-button">🔑 Generate & Export Keys</button>
             <label for="import-public-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 Import Public Key
@@ -287,90 +286,76 @@
     </div>
 </div>
 
-<script>
-    // The entire minified jabcodeJSLib.min.js content is embedded here.
-    // The final "export default JabcodeJSInterface;" has been removed to prevent syntax errors.
-    (()=>{var A={470:A=>{"use strict";function e(A){if("string"!=typeof A)throw new TypeError("Path must be a string. Received "+JSON.stringify(A))}function r(A,e){for(var r,f="",i=0,a=-1,b=0,k=0;k<=A.length;++k){if(k<A.length)r=A.charCodeAt(k);else{if(47===r)break;r=47}if(47===r){if(a===k-1||1===b);else if(a!==k-1&&2===b){if(f.length<2||2!==i||46!==f.charCodeAt(f.length-1)||46!==f.charCodeAt(f.length-2))if(f.length>2){var t=f.lastIndexOf("/");if(t!==f.length-1){-1===t?(f="",i=0):i=(f=f.slice(0,t)).length-1-f.lastIndexOf("/"),a=k,b=0;continue}}else if(2===f.length||1===f.length){f="",i=0,a=k,b=0;continue}e&&(f.length>0?f+="/..":f="..",i=2)}else f.length>0?f+="/"+A.slice(a+1,k):f=A.slice(a+1,k),i=k-a-1;a=k,b=0}else 46===r&&-1!==b?++b:b=-1}return f}var f={resolve:function(){for(var A,f="",i=!1,a=arguments.length-1;a>=-1&&!i;a--){var b;a>=0?b=arguments[a]:(void 0===A&&(A=process.cwd()),b=A),e(b),0!==b.length&&(f=b+"/"+f,i=47===b.charCodeAt(0))}return f=r(f,!i),i?f.length>0?"/"+f:"/":f.length>0?f:"."},normalize:function(A){if(e(A),0===A.length)return".";var f=47===A.charCodeAt(0),i=47===A.charCodeAt(A.length-1);return 0!==(A=r(A,!f)).length||f||(A="."),A.length>0&&i&&(A+="/"),f?"/"+A:A},isAbsolute:function(A){return e(A),A.length>0&&47===A.charCodeAt(0)},join:function(){if(0===arguments.length)return".";for(var A,r=0;r<arguments.length;++r){var i=arguments[r];e(i),i.length>0&&(void 0===A?A=i:A+="/"+i)}return void 0===A?".":f.normalize(A)},relative:function(A,r){if(e(A),e(r),A===r)return"";if((A=f.resolve(A))===(r=f.resolve(r)))return"";for(var i=1;i<A.length&&47===A.charCodeAt(i);++i);for(var a=A.length,b=a-i,k=1;k<r.length&&47===r.charCodeAt(k);++k);for(var t=r.length-k,n=b<t?b:t,o=-1,s=0;s<=n;++s){if(s===n){if(t>n){if(47===r.charCodeAt(k+s))return r.slice(k+s+1);if(0===s)return r.slice(k+s)}else b>n&&(47===A.charCodeAt(i+s)?o=s:0===s&&(o=0));break}var c=A.charCodeAt(i+s);if(c!==r.charCodeAt(k+s))break;47===c&&(o=s)}var u="";for(s=i+o+1;s<=a;++s)s!==a&&47!==A.charCodeAt(s)||(0===u.length?u+="..":u+="/..");return u.length>0?u+r.slice(k+o):(k+=o,47===r.charCodeAt(k)&&++k,r.slice(k))},_makeLong:function(A){return A},dirname:function(A){if(e(A),0===A.length)return".";for(var r=A.charCodeAt(0),f=47===r,i=-1,a=!0,b=A.length-1;b>=1;--b)if(47===(r=A.charCodeAt(b))){if(!a){i=b;break}}else a=!1;return-1===i?f?"/":".":f&&1===i?"//":A.slice(0,i)},basename:function(A,r){if(void 0!==r&&"string"!=typeof r)throw new TypeError('"ext" argument must be a string');e(A);var f,i=0,a=-1,b=!0;if(void 0!==r&&r.length>0&&r.length<=A.length){if(r.length===A.length&&r===A)return"";var k=r.length-1,t=-1;for(f=A.length-1;f>=0;--f){var n=A.charCodeAt(f);if(47===n){if(!b){i=f+1;break}}else-1===t&&(b=!1,t=f+1),k>=0&&(n===r.charCodeAt(k)?-1==--k&&(a=f):(k=-1,a=t))}return i===a?a=t:-1===a&&(a=A.length),A.slice(i,a)}for(f=A.length-1;f>=0;--f)if(47===A.charCodeAt(f)){if(!b){i=f+1;break}}else-1===a&&(b=!1,a=f+1);return-1===a?"":A.slice(i,a)},extname:function(A){e(A);for(var r=-1,f=0,i=-1,a=!0,b=0,k=A.length-1;k>=0;--k){var t=A.charCodeAt(k);if(47!==t)-1===i&&(a=!1,i=k+1),46===t?-1===r?r=k:1!==b&&(b=1):-1!==r&&(b=-1);else if(!a){f=k+1;break}}return-1===r||-1===i||0===b||1===b&&r===i-1&&r===f+1?"":A.slice(r,i)},format:function(A){if(null===A||"object"!=typeof A)throw new TypeError('The "pathObject" argument must be of type Object. Received type '+typeof A);return function(A,e){var r=e.dir||e.root,f=e.base||(e.name||"")+(e.ext||"");return r?r===e.root?r+f:r+A+f:f}("/",A)},parse:function(A){e(A);var r={root:"",dir:"",base:"",ext:"",name:""};if(0===A.length)return r;var f,i=A.charCodeAt(0),a=47===i;a?(r.root="/",f=1):f=0;for(var b=-1,k=0,t=-1,n=!0,o=A.length-1,s=0;o>=f;--o)if(47!==(i=A.charCodeAt(o)))-1===t&&(n=!1,t=o+1),46===i?-1===b?b=o:1!==s&&(s=1):-1!==b&&(s=-1);else if(!n){k=o+1;break}return-1===b||-1===t||0===s||1===s&&b===t-1&&b===k+1?-1!==t&&(r.base=r.name=0===k&&a?A.slice(1,t):A.slice(k,t)):(0===k&&a?(r.name=A.slice(1,b),r.base=A.slice(1,t)):(r.name=A.slice(k,b),r.base=A.slice(k,t)),r.ext=A.slice(b,t)),k>0?r.dir=A.slice(0,k-1):a&&(r.dir="/"),r},sep:"/",delimiter:":",win32:null,posix:null};f.posix=f,A.exports=f},710:(A,e,r)=>{"use strict";r.d(e,{Z:()=>bA}),A=r.hmd(A);var f,i=void 0!==i?i:{},a={};for(f in i)i.hasOwnProperty(f)&&(a[f]=i[f]);var b,k,t,n,o,s=[],c="object"==typeof window,u="function"==typeof importScripts,l="object"==typeof process&&"object"==typeof process.versions&&"string"==typeof process.versions.node,B="";l?(B=u?r(470).dirname(B)+"/":"//",b=function(A,e){var f=q(A);return f?e?f:f.toString():(n||(n=r(576)),o||(o=r(470)),A=o.normalize(A),n.readFileSync(A,e?null:"utf8"))},t=function(A){var e=b(A,!0);return e.buffer||(e=new Uint8Array(e)),C(e.buffer),e},k=function(A,e,f){var i=q(A);i&&e(i),n||(n=r(576)),o||(o=r(470)),A=o.normalize(A),n.readFile(A,(function(A,r){A?f(A):e(r.buffer)}))},process.argv.length>1&&process.argv[1].replace(/\\/g,"/"),s=process.argv.slice(2),A.exports=i,process.on("uncaughtException",(function(A){if(!(A instanceof iA))throw A})),process.on("unhandledRejection",U),function(A,e){if(w)throw process.exitCode=A,e;process.exit(A)},i.inspect=function(){return"[Emscripten Module object]"}):(c||u)&&(u?B=self.location.href:"undefined"!=typeof document&&document.currentScript&&(B=document.currentScript.src),B=0!==B.indexOf("blob:")?B.substr(0,B.lastIndexOf("/")+1):"",b=function(A){try{var e=new XMLHttpRequest;return e.open("GET",A,!1),e.send(null),e.responseText}catch(e){var r=q(A);if(r)return function(A){for(var e=[],r=0;r<A.length;r++){var f=A[r];f>255&&(f&=255),e.push(String.fromCharCode(f))}return e.join("")}(r);throw e}},u&&(t=function(A){try{var e=new XMLHttpRequest;return e.open("GET",A,!1),e.responseType="arraybuffer",e.send(null),new Uint8Array(e.response)}catch(e){var r=q(A);if(r)return r;throw e}}),k=function(A,e,r){var f=new XMLHttpRequest;f.open("GET",A,!0),f.responseType="arraybuffer",f.onload=function(){if(200==f.status||0==f.status&&f.response)e(f.response);else{var i=q(A);i?e(i.buffer):r()}},f.onerror=r,f.send(null)});var g,h=i.print||console.log.bind(console),d=i.printErr||console.warn.bind(console);for(f in a)a.hasOwnProperty(f)&&(i[f]=a[f]);a=null,i.arguments&&(s=i.arguments),i.thisProgram&&i.thisProgram,i.quit&&i.quit,i.wasmBinary&&(g=i.wasmBinary);var I,w=i.noExitRuntime||!0,Q={Memory:function(A){this.buffer=new ArrayBuffer(65536*A.initial)},Module:function(A){},Instance:function(A,e){this.exports=function(A){for(var e,r=new Uint8Array(123),f=25;f>=0;--f)r[48+f]=52+f,r[65+f]=f,r[97+f]=26+f;function i(A,e,f){for(var i,a,b=0,k=e,t=f.length,n=e+(3*t>>2)-("="==f[t-2])-("="==f[t-1]);b<t;b+=4)i=r[f.charCodeAt(b+1)],a=r[f.charCodeAt(b+2)],A[k++]=r[f.charCodeAt(b)]<<2|i>>4,k<n&&(A[k++]=i<<4|a>>2),k<n&&(A[k++]=a<<6|r[f.charCodeAt(b+3)])}r[43]=62,r[47]=63;var a=new ArrayBuffer(16),b=new Int32Array(a),k=new Float32Array(a),t=new Float64Array(a);function n(A){return b[A]}function o(A,e){b[A]=e}function s(){return t[0]}function c(A){t[0]=A}function u(){return k[2]}return function(A){var r=A.a.buffer,f=new Int8Array(r),a=new Int16Array(r),b=new Int32Array(r),k=new Uint8Array(r),t=new Uint16Array(r),l=new Uint32Array(r),B=new Float32Array(r),g=new Float64Array(r),h=Math.imul,d=Math.fround,I=Math.abs,w=Math.clz32,Q=Math.min,G=Math.max,C=Math.floor,v=Math.ceil,Z=(Math.trunc,Math.sqrt),m=A.abort,W=1/0,E=A.b,Y=A.c,p=A.d,D=5271024,y=0;function F(A,e,r){var i,a=0,t=0,n=0,o=0,s=0,c=0,u=d(0),l=0,g=0,w=d(0),Q=0,G=d(0),C=0,v=0,Z=d(0),m=0,W=0,E=0,Y=0,p=0,y=0,F=0,N=0,R=d(0),P=0,x=d(0),H=0,J=0,V=0,X=0,U=0,M=0,S=d(0),z=0,j=0;if(D=i=D-112|0,C=b[e>>2],t=Ze(500,24)){b[i+108>>2]=0,b[i+88>>2]=0,b[i+92>>2]=0,b[i+80>>2]=0,b[i+84>>2]=0;A:{e:{if(!(b[C+4>>2]<=0)){for(;;){for(a=b[e+4>>2],s=b[a>>2],l=b[e+8>>2],c=b[l>>2],g=b[C>>2],b[i+72>>2]=g,b[i+68>>2]=0,E=20+(h(Q,g)+C|0)|0,Y=20+(l+h(c,Q)|0)|0,c=20+(a+h(s,Q)|0)|0,G=d(0|Q),s=0,g=0,W=0;;){b[i+76>>2]=s+g,b[i+72>>2]=b[C>>2],a=0;r:if(cA(c,i+76|0,i+72|0,i+60|0,i+48|0,i+68|0)){w=B[i+60>>2],g=d(I(w))<d(2147483648)?~~w:-2147483648,v=k[g+c|0],B[i+64>>2]=w,B[i+56>>2]=w;f:{i:{if(u=B[i+48>>2],Z=d(u+u),tA(b[e+8>>2],Z,i+56|0,G,i+44|0)){if(Z=B[i+56>>2],s=d(I(Z))<d(2147483648)?~~Z:-2147483648,s=k[s+Y|0],B[i+52>>2]=u,m=1,l=0,y=s?255:0,(0|(s=d(I(u))<d(2147483648)?~~u:-2147483648))<1)break i;F=(C=(0|(g=g-(s<<1)|0))>0?g:0)+(s<<2)|0,N=b[e>>2],p=b[N>>2],J=h(p,Q),s=0;a:{for(;;){if((0|C)>=(0|p))break i;if(g=0,(0|(s=k[20+(N+(C+J|0)|0)|0]?s+1|0:0))>3)break a;if(!((0|F)>(0|(C=C+1|0))))break}break i}N=1;break f}a:{if(tA(b[e>>2],Z,i- -64|0,G,i+52|0)){if(Z=B[i+64>>2],s=d(I(Z))<d(2147483648)?~~Z:-2147483648,n=k[s+E|0],B[i+44>>2]=u,s=d(I(u))<d(2147483648)?~~u:-2147483648,l=1,Z=B[i+56>>2],g=d(I(Z))<d(2147483648)?~~Z:-2147483648,m=0,n=n?255:0,(0|s)<1)break a;g=(C=(0|(l=g-(s<<1)|0))>0?l:0)+(s<<2)|0,F=b[e+8>>2],p=b[F>>2],J=h(p,Q),s=0;b:{for(;;){if((0|C)>=(0|p)){l=1;break a}if(N=1,l=0,(0|(s=k[20+(F+(C+J|0)|0)|0]?s+1|0:0))>=4)break b;if(!((0|g)>(0|(C=C+1|0))))break}l=1;break a}}else l=0,N=1;m=1,g=0;break f}N=1,g=0,y=0;break f}N=0,g=1,n=0}if(l|g){b[i+32>>2]=1,B[i+28>>2]=G;f:if(N){if(!m){if(R=B[i+52>>2],Z=d(d(u+R)*d(.5)),!((x=d(Z/d(2.5)))>d(I(d(Z-R))))){a=6;break r}if(!(x>d(I(d(Z-u))))){a=6;break r}if(B[i+20>>2]=Z,B[i+24>>2]=d(w+B[i+64>>2])*d(.5),n|v|y){if(255!=(0|n)){a=6;break r}if(!v){a=6;break r}if(y){a=6;break r}b[i+16>>2]=2}else b[i+16>>2]=1}}else{if(R=B[i+44>>2],Z=d(d(u+R)*d(.5)),!((x=d(Z/d(2.5)))>d(I(d(Z-u))))){a=6;break r}if(!(x>d(I(d(Z-R))))){a=6;break r}if(B[i+20>>2]=Z,B[i+24>>2]=d(w+B[i+56>>2])*d(.5),!(n|v|y)){b[i+16>>2]=0;break f}if(n){a=6;break r}if(!v){a=6;break r}if(255!=(0|y)){a=6;break r}b[i+16>>2]=3}O(e,i+16|0,0)&&(EA(i+16|0,t,i+108|0,i+80|0),(0|(o=b[i+108>>2]))<499||(a=5,W=1))}}if(5!=(0|a)){if(s=b[i+76>>2],C=b[e>>2],!((0|s)>=(0|(a=b[C>>2]))|(0|a)<=b[i+72>>2])){g=b[i+68>>2];continue}}else C=b[e>>2];break}if(Q=Q+1|0,W||!((0|Q)<b[C+4>>2]))break}if(b[i+80>>2]){if(b[i+88>>2]|!b[i+84>>2])break A;if(!b[i+92>>2])break e;break A}}if(!b[i+92>>2]|b[i+84>>2]|!b[i+88>>2])break A}U=i+80|0,Y=i+108|0,C=0,g=0,W=0,D=n=D+-64|0,a=b[e>>2];e:if(!(b[a>>2]<=0))for(;;){for(o=b[a+4>>2],b[n+52>>2]=0,G=d(0|g),l=0,a=0,y=0;;){b[n+56>>2]=o,b[n+60>>2]=a+l,l=0,F=b[e+4>>2],N=n+52|0,c=0,b[(Q=D-32|0)+16>>2]=0,b[Q+8>>2]=0,b[Q+12>>2]=0,b[Q>>2]=0,b[Q+4>>2]=0;r:{f:{if((0|(o=b[n+60>>2]))<(0|(m=b[n+56>>2])))for(p=m-1|0,J=F+20|0,s=a=o;;){i:if((0|o)!=(0|s)){if((0|g)<0)break f;if(v=b[F>>2],(v=(0|(V=k[J+(h(v,s)+g|0)|0]))!=(0|(H=k[J+(h(v,s-1|0)+g|0)|0])))||(b[(E=Q+(c<<2)|0)>>2]=b[E>>2]+1),(0|s)==(0|p)||v)if(v=b[(E=Q+(c<<2)|0)>>2],(0|c)<=3){if((0|v)<=2){if(!c){b[E>>2]=1,b[n+60>>2]=s,c=0,a=s;break i}H=b[(V=Q+((c=c-1|0)<<2)|0)>>2],b[E>>2]=0,b[V>>2]=1+(v+H|0);break i}b[(v=Q+((c=c+1|0)<<2)|0)>>2]=b[v>>2]+1}else if((0|v)<=2)H=b[(V=Q+((c=c-1|0)<<2)|0)>>2],b[E>>2]=0,b[V>>2]=1+(v+H|0);else{if(!(!(c=b[Q+12>>2])|!(v=b[Q+4>>2])|!(E=b[Q+8>>2]))&&(u=d(d(c+(v+E|0)|0)/d(3)),B[n+32>>2]=u,(w=d(u*d(.5)))>d(I(d(u-d(0|v))))&&(Z=d(0|E),!(!(w>d(I(d(u-Z))))|!(w>d(I(d(u-d(0|c))))))&&(z=.5*(X=+w),M=b[Q>>2],z<+d(0|M)&&(j=b[Q+16>>2],!(!(+d(0|j)>z)|!(X>I(+(v-c|0))))))))){a=s+1|0,b[n+56>>2]=a,N&&(b[N>>2]=M),B[n+44>>2]=d(((0|s)==(0|p)&&(0|V)==(0|H)?a:s)-(c+j|0)|0)+d(Z*d(-.5)),a=1;break r}a=b[Q>>2]+a|0,b[n+60>>2]=a,b[Q+8>>2]=c,b[Q+4>>2]=E,b[Q>>2]=v,c=b[Q+16>>2],b[Q+16>>2]=1,b[Q+12>>2]=c,c=4}}else b[(a=Q+(c<<2)|0)>>2]=b[a>>2]+1,b[n+60>>2]=o,a=o;if((0|m)==(0|(s=s+1|0)))break}b[n+56>>2]=m}a=0}r:if(a){a=b[e+4>>2],w=B[n+44>>2],o=d(I(w))<d(2147483648)?~~w:-2147483648,c=k[20+(a+(h(o,b[b[e>>2]>>2])+g|0)|0)|0],B[n+48>>2]=w,B[n+40>>2]=w,s=b[e+8>>2],u=B[n+32>>2],Z=d(u+u);f:if(nA(s,a=d(I(Z))<d(2147483648)?~~Z:-2147483648,G,n+40|0,n+28|0)){if(a=s=b[e+8>>2],Z=B[n+40>>2],Q=d(I(Z))<d(2147483648)?~~Z:-2147483648,v=k[20+(a+(h(Q,b[s>>2])+g|0)|0)|0],B[n+36>>2]=u,s=1,Q=0,(0|(a=d(I(u))<d(2147483648)?~~u:-2147483648))<1){W=0,C=v?255:0;break f}m=(o=(0|(o=o-(a<<1)|0))>0?o:0)+(a<<2)|0,C=b[e>>2],E=b[C+4>>2],a=0;i:{for(;;){if((0|o)>=(0|E)){W=0,C=v?255:0;break f}if((0|(a=k[20+(C+(h(b[C>>2],o)+g|0)|0)|0]?a+1|0:0))>=4)break i;if(!((0|m)>(0|(o=o+1|0))))break}W=0,C=v?255:0;break f}s=0,C=v?255:0}else if(nA(b[e>>2],a,G,n+48|0,n+36|0)){a=o=b[e>>2],Z=B[n+48>>2],s=d(I(Z))<d(2147483648)?~~Z:-2147483648,v=k[20+(a+(h(s,b[o>>2])+g|0)|0)|0],B[n+28>>2]=u,a=d(I(u))<d(2147483648)?~~u:-2147483648,Q=1,Z=B[n+40>>2],o=d(I(Z))<d(2147483648)?~~Z:-2147483648,s=0;i:if((0|a)<1)C=0;else{m=(o=(0|(o=o-(a<<1)|0))>0?o:0)+(a<<2)|0,W=b[e+8>>2],E=b[W+4>>2],a=0;a:{for(;;){if((0|o)>=(0|E)){C=0;break i}if((0|(a=k[20+(W+(h(b[W>>2],o)+g|0)|0)|0]?a+1|0:0))>=4)break a;if(!((0|m)>(0|(o=o+1|0))))break}C=0;break i}Q=0}W=v?255:0}else s=0,Q=0;if(s|Q){b[n+16>>2]=1,B[n+8>>2]=G;f:if(s){if(R=B[n+28>>2],Z=d(d(u+R)*d(.5)),!((x=d(Z/d(2.5)))>d(I(d(Z-u))))){l=6;break r}if(!(x>d(I(d(Z-R))))){l=6;break r}if(B[n+4>>2]=Z,B[n+12>>2]=d(w+B[n+40>>2])*d(.5),!(c|W|C)){b[n>>2]=0;break f}if(W){l=6;break r}if(!c){l=6;break r}if(255!=(0|C)){l=6;break r}b[n>>2]=3}else if(Q){if(R=B[n+36>>2],Z=d(d(u+R)*d(.5)),!((x=d(Z/d(2.5)))>d(I(d(Z-R))))){l=6;break r}if(!(x>d(I(d(Z-u))))){l=6;break r}if(B[n+4>>2]=Z,B[n+12>>2]=d(w+B[n+48>>2])*d(.5),c|W|C){if(255!=(0|W)){l=6;break r}if(!c){l=6;break r}if(C){l=6;break r}b[n>>2]=2}else b[n>>2]=1}O(e,n,1)&&(EA(n,t,Y,U),b[Y>>2]<499||(y=1,l=5))}}if(5!=(0|l)){if(a=b[e>>2],!((0|(o=b[a+4>>2]))<=(0|(l=b[n+60>>2]))|b[n+56>>2]>=(0|o))){a=b[n+52>>2];continue}}else a=b[e>>2];break}if((0|(g=g+1|0))>=b[a>>2])break e;if(y)break}D=n- -64|0,o=b[i+108>>2]}if(!((0|o)<1)){if(s=3&o,C=0,o-1>>>0>=3)for(g=-4&o;a=h(C,24)+t|0,b[a+20>>2]=b[a+20>>2]>-1?1:-1,a=h(1|C,24)+t|0,b[a+20>>2]=b[a+20>>2]>-1?1:-1,a=h(2|C,24)+t|0,b[a+20>>2]=b[a+20>>2]>-1?1:-1,a=h(3|C,24)+t|0,b[a+20>>2]=b[a+20>>2]>-1?1:-1,C=C+4|0,g=g-4|0;);if(s)for(;a=h(C,24)+t|0,b[a+20>>2]=b[a+20>>2]>-1?1:-1,C=C+1|0,s=s-1|0;);}a=0,u=d(0),E=0,W=0,Q=0,l=0,m=(C=(v=(g=(c=D-32|0)-(h(b[i+80>>2],24)+15&-16)|0)-(h(b[i+84>>2],24)+15&-16)|0)-(h(b[i+88>>2],24)+15&-16)|0)-(h(b[i+92>>2],24)+15&-16)|0;A:{if(!((0|o)<=0)){for(;;){n=h(a,24)+t|0;e:if(!(b[n+16>>2]<3)){r:{f:switch(b[n>>2]){case 0:s=g+h(l,24)|0,l=l+1|0;break r;case 1:s=v+h(E,24)|0,E=E+1|0;break r;case 2:s=C+h(W,24)|0,W=W+1|0;break r;case 3:break f;default:break e}s=m+h(Q,24)|0,Q=Q+1|0}Y=b[n+4>>2],b[s>>2]=b[n>>2],b[s+4>>2]=Y,Y=b[n+20>>2],b[s+16>>2]=b[n+16>>2],b[s+20>>2]=Y,Y=b[n+12>>2],b[s+8>>2]=b[n+8>>2],b[s+12>>2]=Y}if((0|o)==(0|(a=a+1|0)))break}if((0|l)>1){for(s=-2&l,o=1&l,n=0,a=0;Y=g+h(a,24)|0,b[Y+16>>2]>=1&&(n=n+1|0,u=d(u+B[Y+4>>2])),Y=g+h(1|a,24)|0,b[Y+16>>2]>0&&(n=n+1|0,u=d(u+B[Y+4>>2])),a=a+2|0,s=s-2|0;);for(o&&(a=g+h(a,24)|0,b[a+16>>2]<1||(n=n+1|0,u=d(u+B[a+4>>2]))),G=d(u/d(0|n)),u=d(100),a=0,s=0,o=0;;){Y=g+h(a,24)|0;e:if(!((0|(n=b[Y+16>>2]))<1)){if((0|n)>(0|o))o=n,u=d(I(d(B[Y+4>>2]-G)));else{if((0|n)!=(0|o))break e;if(!((w=d(I(d(B[Y+4>>2]-G))))<u))break e;u=w}s=a}if((0|l)==(0|(a=a+1|0)))break}a=g+h(s,24)|0,o=b[a+20>>2],b[c+24>>2]=b[a+16>>2],b[c+28>>2]=o,o=b[a+12>>2],b[c+16>>2]=b[a+8>>2],b[c+20>>2]=o,o=b[a+4>>2],b[c+8>>2]=b[a>>2],b[c+12>>2]=o,b[a+16>>2]=0,a=b[c+28>>2],b[t+16>>2]=b[c+24>>2],b[t+20>>2]=a,a=b[c+20>>2],b[t+8>>2]=b[c+16>>2],b[t+12>>2]=a,a=b[c+12>>2],b[t>>2]=b[c+8>>2],b[t+4>>2]=a;break A}if(1==(0|l)){a=b[g+4>>2],b[t>>2]=b[g>>2],b[t+4>>2]=a,a=b[g+20>>2],b[t+16>>2]=b[g+16>>2],b[t+20>>2]=a,a=b[g+12>>2],b[t+8>>2]=b[g+8>>2],b[t+12>>2]=a;break A}}b[t>>2]=0,b[t+4>>2]=0,b[t+16>>2]=0,b[t+20>>2]=0,b[t+8>>2]=0,b[t+12>>2]=0}if((0|E)>=2){for(o=-2&E,s=1&E,u=d(0),n=0,a=0;l=v+h(a,24)|0,b[l+16>>2]>=1&&(n=n+1|0,u=d(u+B[l+4>>2])),l=v+h(1|a,24)|0,b[l+16>>2]>0&&(n=n+1|0,u=d(u+B[l+4>>2])),a=a+2|0,o=o-2|0;);for(s&&(a=v+h(a,24)|0,b[a+16>>2]<1||(n=n+1|0,u=d(u+B[a+4>>2]))),G=d(u/d(0|n)),u=d(100),a=0,o=0,s=0;;){l=v+h(a,24)|0;A:if(!((0|(n=b[l+16>>2]))<1)){if((0|n)>(0|s))s=n,u=d(I(d(B[l+4>>2]-G)));else{if((0|n)!=(0|s))break A;if(!((w=d(I(d(B[l+4>>2]-G))))<u))break A;u=w}o=a}if((0|E)==(0|(a=a+1|0)))break}a=v+h(o,24)|0,o=b[a+20>>2],b[c+24>>2]=b[a+16>>2],b[c+28>>2]=o,o=b[a+12>>2],b[c+16>>2]=b[a+8>>2],b[c+20>>2]=o,o=b[a+4>>2],b[c+8>>2]=b[a>>2],b[c+12>>2]=o,b[a+16>>2]=0,a=b[c+28>>2],b[t+40>>2]=b[c+24>>2],b[t+44>>2]=a,a=b[c+20>>2],b[t+32>>2]=b[c+16>>2],b[t+36>>2]=a,a=b[c+12>>2],b[t+24>>2]=b[c+8>>2],b[t+28>>2]=a}else 1!=(0|E)?(b[t+24>>2]=0,b[t+28>>2]=0,b[t+40>>2]=0,b[t+44>>2]=0,b[t+32>>2]=0,b[t+36>>2]=0):(a=b[v+4>>2],b[t+24>>2]=b[v>>2],b[t+28>>2]=a,a=b[v+20>>2],b[t+40>>2]=b[v+16>>2],b[t+44>>2]=a,a=b[v+12>>2],b[t+32>>2]=b[v+8>>2],b[t+36>>2]=a);if((0|W)>=2){for(o=-2&W,s=1&W,u=d(0),n=0,a=0;l=C+h(a,24)|0,b[l+16>>2]>=1&&(n=n+1|0,u=d(u+B[l+4>>2])),l=C+h(1|a,24)|0,b[l+16>>2]>0&&(n=n+1|0,u=d(u+B[l+4>>2])),a=a+2|0,o=o-2|0;);for(s&&(a=C+h(a,24)|0,b[a+16>>2]<1||(n=n+1|0,u=d(u+B[a+4>>2]))),G=d(u/d(0|n)),u=d(100),a=0,s=0,o=0;;){l=C+h(a,24)|0;A:if(!((0|(n=b[l+16>>2]))<1)){if((0|n)>(0|o))o=n,u=d(I(d(B[l+4>>2]-G)));else{if((0|n)!=(0|o))break A;if(!((w=d(I(d(B[l+4>>2]-G))))<u))break A;u=w}s=a}if((0|W)==(0|(a=a+1|0)))break}a=C+h(s,24)|0,o=b[a+20>>2],b[c+24>>2]=b[a+16>>2],b[c+28>>2]=o,o=b[a+12>>2],b[c+16>>2]=b[a+8>>2],b[c+20>>2]=o,o=b[a+4>>2],b[c+8>>2]=b[a>>2],b[c+12>>2]=o,b[a+16>>2]=0,o=b[c+28>>2],b[(a=t- -64|0)>>2]=b[c+24>>2],b[a+4>>2]=o,a=b[c+20>>2],b[t+56>>2]=b[c+16>>2],b[t+60>>2]=a,a=b[c+12>>2],b[t+48>>2]=b[c+8>>2],b[t+52>>2]=a}else 1!=(0|W)?(b[t+48>>2]=0,b[t+52>>2]=0,b[t+64>>2]=0,b[t+68>>2]=0,b[t+56>>2]=0,b[t+60>>2]=0):(a=b[C+4>>2],b[t+48>>2]=b[C>>2],b[t+52>>2]=a,a=b[C+20>>2],b[t+64>>2]=b[C+16>>2],b[t+68>>2]=a,a=b[C+12>>2],b[t+56>>2]=b[C+8>>2],b[t+60>>2]=a);if((0|Q)>=2){for(o=-2&Q,s=1&Q,u=d(0),n=0,a=0;l=m+h(a,24)|0,b[l+16>>2]>=1&&(n=n+1|0,u=d(u+B[l+4>>2])),l=m+h(1|a,24)|0,b[l+16>>2]>0&&(n=n+1|0,u=d(u+B[l+4>>2])),a=a+2|0,o=o-2|0;);for(s&&(a=m+h(a,24)|0,b[a+16>>2]<1||(n=n+1|0,u=d(u+B[a+4>>2]))),G=d(u/d(0|n)),u=d(100),a=0,o=0,s=0;;){l=m+h(a,24)|0;A:if(!((0|(n=b[l+16>>2]))<1)){if((0|n)>(0|s))s=n,u=d(I(d(B[l+4>>2]-G)));else{if((0|n)!=(0|s))break A;if(!((w=d(I(d(B[l+4>>2]-G))))<u))break A;u=w}o=a}if((0|Q)==(0|(a=a+1|0)))break}a=m+h(o,24)|0,o=b[a+20>>2],b[c+24>>2]=b[a+16>>2],b[c+28>>2]=o,o=b[a+12>>2],b[c+16>>2]=b[a+8>>2],b[c+20>>2]=o,o=b[a+4>>2],b[c+8>>2]=b[a>>2],b[c+12>>2]=o,b[a+16>>2]=0,a=b[c+28>>2],b[t+88>>2]=b[c+24>>2],b[t+92>>2]=a,a=b[c+20>>2],b[t+80>>2]=b[c+16>>2],b[t+84>>2]=a,a=b[c+12>>2],b[t+72>>2]=b[c+8>>2],b[t+76>>2]=a}else 1!=(0|Q)?(b[t+72>>2]=0,b[t+76>>2]=0,b[t+88>>2]=0,b[t+92>>2]=0,b[t+80>>2]=0,b[t+84>>2]=0):(a=b[m+4>>2],b[t+72>>2]=b[m>>2],b[t+76>>2]=a,a=b[m+20>>2],b[t+88>>2]=b[m+16>>2],b[t+92>>2]=a,a=b[m+12>>2],b[t+80>>2]=b[m+8>>2],b[t+84>>2]=a);if(!((X=.5*+(0|((0|(a=b[t+88>>2]))>(0|(l=(0|(n=b[t- -64>>2]))>(0|(l=(0|(o=b[t+40>>2]))>(0|(l=(0|(s=b[t+16>>2]))>0?s:0))?o:l))?n:l))?a:l)))>+(0|s))|(0|s)<1||(b[t>>2]=0,b[t+4>>2]=0,b[t+16>>2]=0,b[t+20>>2]=0,b[t+8>>2]=0,b[t+12>>2]=0,s=0),!(X>+(0|o))|(0|o)<1||(b[t+24>>2]=0,b[t+28>>2]=0,b[t+40>>2]=0,b[t+44>>2]=0,b[t+32>>2]=0,b[t+36>>2]=0,o=0),!(X>+(0|n))|(0|n)<1||(b[t+48>>2]=0,b[t+52>>2]=0,b[(n=t- -64|0)>>2]=0,b[n+4>>2]=0,b[t+56>>2]=0,b[t+60>>2]=0,n=0),!(X>+(0|a))|(0|a)<1||(b[t+72>>2]=0,b[t+76>>2]=0,b[t+88>>2]=0,b[t+92>>2]=0,b[t+80>>2]=0,b[t+84>>2]=0,a=0),(a=!a+(!n+(!s+!o|0)|0)|0)>>>0>1)_e(2755),C=0;else if(C=1,1==(0|a))if(b[t+16>>2]?b[t+40>>2]?b[t- -64>>2]?b[t+88>>2]?(u=B[t+8>>2],W=0):(b[t+88>>2]=1,b[t+72>>2]=3,b[t+92>>2]=b[t+68>>2],u=B[t+4>>2],w=d(u+B[t+28>>2]),G=B[t+52>>2],B[t+76>>2]=d(w+G)/d(3),G=d(d(u+G)*d(.5)),w=d(w*d(.5)),u=d(B[t+56>>2]+d(G*d(d(B[t+8>>2]-B[t+32>>2])/w))),B[t+80>>2]=u,B[t+84>>2]=B[t+60>>2]+d(G*d(d(B[t+12>>2]-B[t+36>>2])/w)),W=3):(b[t+64>>2]=1,b[t+48>>2]=2,b[t+68>>2]=b[t+92>>2],u=B[t+28>>2],w=d(B[t+4>>2]+u),G=B[t+76>>2],B[t+52>>2]=d(w+G)/d(3),G=d(d(u+G)*d(.5)),w=d(w*d(.5)),u=d(B[t+80>>2]+d(G*d(d(B[t+32>>2]-B[t+8>>2])/w))),B[t+56>>2]=u,B[t+60>>2]=B[t+84>>2]+d(G*d(d(B[t+36>>2]-B[t+12>>2])/w)),W=2):(b[t+40>>2]=1,b[t+24>>2]=1,b[t+44>>2]=0-b[t+20>>2],u=B[t+76>>2],w=B[t+52>>2],G=d(w+B[t+4>>2]),B[t+28>>2]=d(u+G)/d(3),G=d(G*d(.5)),w=d(d(w+u)*d(.5)),u=d(B[t+8>>2]+d(G*d(d(B[t+56>>2]-B[t+80>>2])/w))),B[t+32>>2]=u,B[t+36>>2]=B[t+12>>2]+d(G*d(d(B[t+60>>2]-B[t+84>>2])/w)),W=1):(b[t+16>>2]=1,b[t>>2]=0,b[t+20>>2]=0-b[t+44>>2],u=B[t+76>>2],w=B[t+52>>2],G=B[t+28>>2],B[t+4>>2]=d(u+d(w+G))/d(3),G=d(d(u+G)*d(.5)),w=d(d(w+u)*d(.5)),u=d(B[t+32>>2]+d(G*d(d(B[t+80>>2]-B[t+56>>2])/w))),B[t+8>>2]=u,B[t+12>>2]=B[t+36>>2]+d(G*d(d(B[t+84>>2]-B[t+60>>2])/w)),W=0),u<d(0)||(e=b[e>>2],d(b[e>>2]-1|0)<u||(u=B[12+(h(W,24)+t|0)>>2])<d(0)||u>d(b[e+4>>2]-1|0)))C=0,RA(7535,0),b[i>>2]=W,RA(2406,i),Ae(),b[16+(h(W,24)+t|0)>>2]=0;else{s=A,D=c=D-96|0,E=h(W,24)+t|0,w=B[E+8>>2],u=d(B[E+4>>2]*d(5)),G=(G=d(w-u))>=d(0)?G:d(0),A=d(I(G))<d(2147483648)?~~G:-2147483648,w=d(w+u),l=b[s>>2],G=d(l-1|0),a=d(I(w=w<=G?w:G))<d(2147483648)?~~w:-2147483648,w=B[E+12>>2],G=(G=d(w-u))>=d(0)?G:d(0),e=d(I(G))<d(2147483648)?~~G:-2147483648,Q=c,n=v=a-A|0,u=d(u+w),w=d(b[s+4>>2]-1|0),o=d(I(u=u<=w?u:w))<d(2147483648)?~~u:-2147483648,m=Ze(1,n=(g=h(n,J=o-e|0))+20|0),b[Q+84>>2]=m;A:if(m&&(b[m+4>>2]=J,b[m>>2]=v,b[m+16>>2]=1,b[m+8>>2]=8,b[m+12>>2]=8,F=Ze(1,n),b[c+88>>2]=F,F&&(b[F+4>>2]=J,b[F>>2]=v,b[F+16>>2]=1,b[F+8>>2]=8,b[F+12>>2]=8,Y=Ze(1,n),b[c+92>>2]=Y,Y))){if(b[Y+4>>2]=J,b[Y>>2]=v,b[Y+16>>2]=1,b[Y+8>>2]=8,b[Y+12>>2]=8,y=b[s+8>>2]/8|0,p=(0|e)<(0|o)){for(N=h(l,y),u=d(0),w=d(0),G=d(0),n=e;;){if(U=(0|A)<(0|a))for(V=h(n,N),Q=A;l=s+(V+h(Q,y)|0)|0,G=d(G+d(k[l+22|0])),w=d(w+d(k[l+21|0])),u=d(u+d(k[l+20|0])),(0|a)!=(0|(Q=Q+1|0)););if((0|o)==(0|(n=n+1|0)))break}if(p)for(Z=G,G=d(0|g),Z=d(Z/G),w=d(w/G),u=d(u/G),a=e;;){if(U)for(p=h(v,P),V=h(a,N),Q=0,l=A;;){n=s+(V+h(l,y)|0)|0,H=k[n+20|0];e:{if(!(u>d(H>>>0))|!(w>d(k[n+21|0]))|!(Z>d(k[n+22|0]))){if(g=m+(o=Q+p|0)|0,H>>>0<k[n+22|0]){f[g+20|0]=0,g=255,n=255;break e}f[g+20|0]=255,g=255}else f[20+(m+(o=Q+p|0)|0)|0]=0,g=0;n=0}if(f[20+(o+F|0)|0]=g,f[20+(o+Y|0)|0]=n,l=l+1|0,(0|v)==(0|(Q=Q+1|0)))break}if(a=a+1|0,(0|J)==(0|(P=P+1|0)))break}}N=0,a=0,n=0;e:{r:switch(W-2|0){case 0:a=255,n=255;break e;case 1:break r;default:break e}n=255,N=255}if(!(p=Ze(500,24))){_e(7054);break A}if(b[c+80>>2]=0,b[c+72>>2]=0,b[c+76>>2]=0,b[c+64>>2]=0,b[c+68>>2]=0,(0|J)<1)break A;for(y=0,P=0;;){for(Q=b[m>>2],o=b[F>>2],s=b[Y>>2],l=0,b[c+52>>2]=0,U=20+(Y+h(s,P)|0)|0,v=20+(F+h(o,P)|0)|0,V=20+(m+h(Q,P)|0)|0,x=d(0|P),g=0,o=0;;){b[c+56>>2]=Q,b[c+60>>2]=l+g;e:{r:{f:if(cA(v,c+60|0,c+56|0,c+16|0,c+4|0,c+52|0)){if(Q=0,G=B[c+16>>2],s=d(I(G))<d(2147483648)?~~G:-2147483648,(0|(k[s+v|0]?255:0))!=(0|n))break r;B[c+12>>2]=G,B[c+20>>2]=G;i:{a:switch(0|W){case 0:case 3:if(w=B[c+4>>2],!tA(Y,d(w+w),c+12|0,x,c))break f;if(Z=B[c+12>>2],g=d(I(Z))<d(2147483648)?~~Z:-2147483648,(0|(k[g+U|0]?255:0))!=(0|N))break r;b:if(!((0|(g=d(I(w))<d(2147483648)?~~w:-2147483648))<1))for(g=(l=(0|(s=s-(g<<1)|0))>0?s:0)+(g<<2)|0,H=b[m>>2],M=h(H,P),s=0;;){if((0|l)>=(0|H))break b;if((0|(s=k[20+(m+(l+M|0)|0)|0]?s+1|0:0))>3)break f;if(!((0|g)>(0|(l=l+1|0))))break}if(S=B[c>>2],u=d(d(w+S)*d(.5)),!((R=d(u/d(2.5)))>d(I(d(u-w)))))break r;if(R>d(I(d(u-S))))break i;break r;case 1:case 2:break a;default:break f}if(w=B[c+4>>2],!tA(m,d(w+w),c+20|0,x,c+8|0))break f;if(Z=B[c+20>>2],g=d(I(Z))<d(2147483648)?~~Z:-2147483648,(0|(k[g+V|0]?255:0))!=(0|a))break r;B[c>>2]=w;a:if(!((0|(g=d(I(w))<d(2147483648)?~~w:-2147483648))<1))for(g=(l=(0|(s=s-(g<<1)|0))>0?s:0)+(g<<2)|0,H=b[Y>>2],M=h(H,P),s=0;;){if((0|l)>=(0|H))break a;if((0|(s=k[20+(Y+(l+M|0)|0)|0]?s+1|0:0))>3)break f;if(!((0|g)>(0|(l=l+1|0))))break}if(S=B[c+8>>2],u=d(d(w+S)*d(.5)),!((R=d(u/d(2.5)))>d(I(d(u-S))))|!(R>d(I(d(u-w)))))break r}if(b[c+40>>2]=1,B[c+36>>2]=x,B[c+28>>2]=u,b[c+24>>2]=W,B[c+32>>2]=d(G+Z)*d(.5),O(c+84|0,c+24|0,0)&&(EA(c+24|0,p,c+80|0,c- -64|0),Q=1,s=1,(0|(y=b[c+80>>2]))>498))break e}Q=0}s=o}if(o=s,Q||(0|(l=b[c+60>>2]))>=(0|(Q=b[m>>2]))|b[c+56>>2]>=(0|Q))break;g=b[c+52>>2]}if(P=P+1|0,255&o||!((0|J)>(0|P)))break}if((0|y)<1)break A;if(s=3&y,y-1>>>0<3)Q=0,n=0,l=0;else for(g=-4&y,Q=0,n=0,l=0;a=(0|(o=b[16+(p+h(Q,24)|0)>>2]))>(0|l),o=(0|(W=b[16+(p+h(m=1|Q,24)|0)>>2]))>(0|(l=a?o:l)),W=(0|(v=b[16+(p+h(Y=2|Q,24)|0)>>2]))>(0|(l=o?W:l)),l=(v=(0|(P=b[16+(p+h(y=3|Q,24)|0)>>2]))>(0|(l=W?v:l)))?P:l,n=v?y:W?Y:o?m:a?Q:n,Q=Q+4|0,g=g-4|0;);if(s)for(;l=(a=(0|(o=b[16+(p+h(Q,24)|0)>>2]))>(0|l))?o:l,n=a?Q:n,Q=Q+1|0,s=s-1|0;);a=p+h(n,24)|0,o=b[a+4>>2],b[E>>2]=b[a>>2],b[E+4>>2]=o,o=b[a+20>>2],b[E+16>>2]=b[a+16>>2],b[E+20>>2]=o,o=b[a+12>>2],b[E+8>>2]=b[a+8>>2],b[E+12>>2]=o,B[E+8>>2]=B[E+8>>2]+d(0|A),B[E+12>>2]=B[E+12>>2]+d(0|e)}else RA(7551,0),RA(7145,0),Ae();D=c+96|0}b[r>>2]=C}else _e(2993),b[r>>2]=-2,t=0;return D=i+112|0,t}},e:{}}};window.JabcodeJSInterface=class{getProcessor=()=>(this.processor||(this.processor=new e),this.processor);encode_message=(e,r=null,i=null)=>{null===r&&(r=A.Z._getDefaultSymbolNumber()),null===i&&(i=A.Z._getDefaultColorNumber());let a=A.Z.ccall("encode_image","array",["string","int","int"],[e,r,i]),b=(A.Z.HEAP32[a/4],A.Z.HEAP32[a/4+1],A.Z.HEAP32[a/4+2]),k=A.Z.HEAP32[a/4+3],t=A.Z.HEAP32[a/4+4],n=new f(b,k,t);for(let e=0;e<b;e++)for(let r=0;r<k;r++){let f=4*(r*b+e)+20+a;n.buffer[n.index(e,r)]=n.color(A.Z.HEAPU8[f],A.Z.HEAPU8[f+1],A.Z.HEAPU8[f+2],A.Z.HEAPU8[f+3])}return A.Z._free(a),"data:image/png;base64,"+n.getBase64()};decode_message=e=>this.getProcessor().getByteBufferFromImage(e).then((e=>{this.module=A.Z;let r=e.byteLength,f=A.Z._malloc(r);for(let i=0;i<r;i++)A.Z.HEAPU8[f+i]=e[i];let i=A.Z.ccall("decode_image","int",["int","int"],[f,r]);r=A.Z.HEAP32[i/4];let a=[];for(let e=0;e<r;e++)a.push(A.Z.HEAPU8[i+8+e]);return A.Z._free(f),A.Z._free(i),String.fromCharCode(...a)}))}})()
-</script>
+<script type="module">
+// Import cryptographic libraries as modules
+import pqcSignFalcon512 from './falcon.js';
+import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import JabcodeJSInterface from './jabcodeJSLib.min.js';
 
-<script>
+// --- Global State ---
 const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
 let activeKeys = { publicKey: null, privateKey: null };
-let jabcode;
+let falconApi = null;
+let jabcodeApi = null;
+
+// --- Utility Functions ---
+const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+const base64ToUint8Array = (base64) => {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes;
+};
+const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
 // ===================================================================================
-// Bank Key Management and Crypto Logic
+// Bank Key Management and Falcon-512 Crypto Logic
 // ===================================================================================
 
 const BankCrypto = (() => {
-    const HASH_ALGO = "SHA-256";
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
 
+    function hashMessage(message) {
+        const hexHash = shake256(message, 1024);
+        return hexToUint8Array(hexHash);
+    }
+    
     async function generateNewKeyPair() {
-        try {
-            const keyPair = await window.crypto.subtle.generateKey(
-                { name: "RSA-PSS", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: HASH_ALGO },
-                true, // is extractable
-                ["sign", "verify"]
-            );
-            return keyPair;
-        } catch (e) {
-            console.error("Crypto key generation failed:", e);
-            alert("Error: Could not generate cryptographic keys. Please use a modern browser with Web Crypto API support.");
-            return null;
-        }
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        return await falconApi.keypair();
     }
 
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
-        const encodedData = new TextEncoder().encode(data);
-        const signature = await window.crypto.subtle.sign(
-            { name: "RSA-PSS", saltLength: 32 },
-            privateKey,
-            encodedData
-        );
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        const dataHash = hashMessage(data);
+        const { signature } = await falconApi.sign(dataHash, privateKey);
         return signature;
     }
 
     async function verifySignature(signature, data, publicKey) {
         if (!publicKey) throw new Error("Public key is not available for verification.");
-        const encodedData = new TextEncoder().encode(data);
-        return await window.crypto.subtle.verify(
-            { name: "RSA-PSS", saltLength: 32 },
-            publicKey,
-            signature,
-            encodedData
-        );
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        const dataHash = hashMessage(data);
+        return await falconApi.verify(signature, dataHash, publicKey);
     }
     
-    async function exportKey(key) {
-        return await window.crypto.subtle.exportKey('jwk', key);
-    }
-    
-    async function importKey(jwk, usage) {
-        return await window.crypto.subtle.importKey(
-            'jwk',
-            jwk,
-            { name: 'RSA-PSS', hash: HASH_ALGO },
-            true,
-            [usage]
-        );
-    }
-    
-    async function encryptPrivateKey(privateKey, password) {
+    async function encryptPrivateKey(privateKeyBytes, password) {
         const passwordBuffer = new TextEncoder().encode(password);
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        
         const keyMaterial = await window.crypto.subtle.importKey(
             "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
         );
-        
         const derivedKey = await window.crypto.subtle.deriveKey(
             { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
             keyMaterial,
@@ -378,16 +363,13 @@ const BankCrypto = (() => {
             true,
             ["encrypt", "decrypt"]
         );
-        
-        const exportedJwk = await exportKey(privateKey);
-        const encodedKey = new TextEncoder().encode(JSON.stringify(exportedJwk));
-        
+        const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
+        const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
         const encryptedKey = await window.crypto.subtle.encrypt(
             { name: AES_ALGO, iv: iv },
             derivedKey,
             encodedKey
         );
-        
         return {
             cipherText: arrayBufferToBase64(encryptedKey),
             salt: arrayBufferToBase64(salt),
@@ -400,14 +382,12 @@ const BankCrypto = (() => {
     
     async function decryptPrivateKey(encryptedData, password) {
         const passwordBuffer = new TextEncoder().encode(password);
-        const salt = base64ToArrayBuffer(encryptedData.salt);
-        const iv = base64ToArrayBuffer(encryptedData.iv);
-        const cipherText = base64ToArrayBuffer(encryptedData.cipherText);
-        
+        const salt = base64ToUint8Array(encryptedData.salt);
+        const iv = base64ToUint8Array(encryptedData.iv);
+        const cipherText = base64ToUint8Array(encryptedData.cipherText);
         const keyMaterial = await window.crypto.subtle.importKey(
             "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
         );
-        
         const derivedKey = await window.crypto.subtle.deriveKey(
             { name: "PBKDF2", salt: salt, iterations: encryptedData.iterations, hash: encryptedData.hash },
             keyMaterial,
@@ -415,26 +395,16 @@ const BankCrypto = (() => {
             true,
             ["encrypt", "decrypt"]
         );
-        
-        const decryptedKey = await window.crypto.subtle.decrypt(
+        const decryptedKeyBuffer = await window.crypto.subtle.decrypt(
             { name: AES_ALGO, iv: iv },
             derivedKey,
             cipherText
         );
-        
-        const jwk = JSON.parse(new TextDecoder().decode(decryptedKey));
-        return await importKey(jwk, 'sign');
-    }
-    
-    async function hashMessage(message) {
-        const encodedData = new TextEncoder().encode(message);
-        const hashBuffer = await window.crypto.subtle.digest(HASH_ALGO, encodedData);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
+        return base64ToUint8Array(keyObject.keyData);
     }
 
-
-    return { generateNewKeyPair, signData, verifySignature, exportKey, importKey, encryptPrivateKey, decryptPrivateKey, hashMessage };
+    return { generateNewKeyPair, signData, verifySignature, encryptPrivateKey, decryptPrivateKey, hashMessage };
 })();
 
 function getStandardizedDataForSigning(noteData) {
@@ -466,44 +436,45 @@ async function handleGenerateAndExportKeys() {
         return;
     }
 
-    updateKeyStatus('<span class="info">⏳ Generating new key pair and encrypting... Please wait.</span>');
-    const keyPair = await BankCrypto.generateNewKeyPair();
-    if (keyPair) {
+    updateKeyStatus('<span class="info">⏳ Generating new Falcon-512 key pair and encrypting... Please wait.</span>');
+    try {
+        const keyPair = await BankCrypto.generateNewKeyPair();
         activeKeys.publicKey = keyPair.publicKey;
         activeKeys.privateKey = keyPair.privateKey;
-
-        const exportedPublic = await BankCrypto.exportKey(keyPair.publicKey);
-        downloadFile(JSON.stringify(exportedPublic, null, 2), 'Sadat-public-key.json', 'application/json');
+        const publicKeyB64 = arrayBufferToBase64(keyPair.publicKey);
+        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-public-key.json', 'application/json');
 
         const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
-        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-key.json', 'application/json');
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json');
 
-        updateKeyStatus('<span class="valid">✅ New key pair generated and exported! The new public key is now active for validation, and the encrypted private key is active for signing.</span>');
+        updateKeyStatus('<span class="valid">✅ New Falcon-512 key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
-    } else {
-        updateKeyStatus('<span class="invalid">❌ Failed to generate keys.</span>');
+    } catch (e) {
+        console.error("Key generation failed:", e);
+        updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${e.message}</span>`);
     }
 }
 
-document.getElementById('import-public-key').addEventListener('change', async (event) => {
+async function handleImportPublicKey(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const jwk = JSON.parse(e.target.result);
-            const publicKey = await BankCrypto.importKey(jwk, 'verify');
-            activeKeys.publicKey = publicKey;
+            const data = JSON.parse(e.target.result);
+            if (!data.keyData) throw new Error("Invalid public key file format.");
+            activeKeys.publicKey = base64ToUint8Array(data.keyData);
             updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>');
         } catch (error) {
             updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`);
         }
     };
     reader.readAsText(file);
-});
+    event.target.value = '';
+}
 
-document.getElementById('import-private-key').addEventListener('change', async (event) => {
+async function handleImportPrivateKey(event) {
     const file = event.target.files[0];
     if (!file) return;
     const password = prompt("Enter the password to decrypt the private key file:");
@@ -525,7 +496,8 @@ document.getElementById('import-private-key').addEventListener('change', async (
         }
     };
     reader.readAsText(file);
-});
+    event.target.value = '';
+}
 
 function downloadFile(data, filename, type) {
     const blob = new Blob([data], { type: type });
@@ -538,7 +510,6 @@ function downloadFile(data, filename, type) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
-
 
 // ===================================================================================
 // LSB Steganography Module
@@ -563,9 +534,7 @@ const LSB = (() => {
 
         let dataIndex = 0;
         for (let i = 0; i < binaryMessage.length; i++) {
-            if ((dataIndex + 1) % 4 === 0) {
-                dataIndex++;
-            }
+            if ((dataIndex + 1) % 4 === 0) dataIndex++;
             const bit = parseInt(binaryMessage[i], 10);
             data[dataIndex] = (data[dataIndex] & 0xFE) | bit;
             dataIndex++;
@@ -577,49 +546,27 @@ const LSB = (() => {
     function decode(ctx) {
         const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
         const data = imageData.data;
-        let binaryMessage = "";
-        let byte = "";
         let decodedMessage = "";
-
         for (let i = 0; i < data.length; i++) {
             if ((i + 1) % 4 === 0) continue;
             const lsb = data[i] & 1;
-            byte += lsb;
             
             if (byte.length === 8) {
-                if (byte === MESSAGE_TERMINATOR) {
-                    return decodedMessage;
-                }
+                if (byte === MESSAGE_TERMINATOR) return decodedMessage;
                 decodedMessage += String.fromCharCode(parseInt(byte, 2));
                 byte = "";
             }
         }
         return null;
     }
-
     return { encode, decode };
 })();
-
-
 // ===================================================================================
 // Validation Logic
 // ===================================================================================
-document.getElementById('validator-input').addEventListener('change', handleFileSelect);
-
-function base64ToArrayBuffer(base64) {
-    const binary_string = window.atob(base64);
-    const len = binary_string.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binary_string.charCodeAt(i);
-    }
-    return bytes.buffer;
-}
-
 async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     if (!activeKeys.publicKey) {
         alert("Error: No public key is active for validation. Please generate or import one.");
         return;
@@ -631,102 +578,75 @@ async function handleFileSelect(event) {
 
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
-
     img.onload = async () => {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = 1350;
         tempCanvas.height = 750;
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-
         // --- VALIDATION PIPELINE ---
-        
-        // Step 1: Read JAB Code
         resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Code...</span>`;
         const jabData = await readJabCodeFromCanvas(tempCanvas);
-
         if (!jabData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable. Validation stopped.</span>`;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable.</span>`;
             return;
         }
-        let resultHTML = `<span class="valid">✅ 1. JAB Code data successfully read.</span>`;
-        
-        // Step 2: Verify Digital Signature
-        resultHTML += `\n\n<span class="info">2. Verifying digital signature (RSA-PSS)...</span>`;
+        let resultHTML = `<span class="valid">✅ 1. JAB data successfully read.</span>`;
+        resultHTML += `\n\n<span class="info">2. Verifying digital signature (Falcon-512)...</span>`;
         resultDiv.innerHTML = resultHTML;
         const isSignatureValid = await validateDigitalSignature(jabData);
-
         if (!isSignatureValid) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. The banknote data is forged or has been tampered with.</span>`;
-            resultDiv.innerHTML = resultHTML;
-            return;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`;
+            resultDiv.innerHTML = resultHTML; return;
         }
-        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified by the issuing bank's public key.</span>`;
+        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified.</span>`;
 
-        // Step 3: Verify LSB Steganography
         resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
         resultDiv.innerHTML = resultHTML;
         const decodedSignature = LSB.decode(tempCtx);
-
         if (!decodedSignature || decodedSignature !== jabData.signature) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature is missing or does not match the JAB Code data. The banknote's image has been modified or replaced.</span>`;
-            resultDiv.innerHTML = resultHTML;
-            isFullyValid = false;
-            return;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature does not match. Image integrity compromised.</span>`;
+            resultDiv.innerHTML = resultHTML; isFullyValid = false; return;
         }
-        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature extracted and successfully matched. Integrity of the image is confirmed.</span>`;
-
-
-        // Step 4: Perform Graphical Integrity Check
+        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature matched. Image integrity confirmed.</span>`;
         resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
         resultDiv.innerHTML = resultHTML;
-        
-        const expectedVisualHash = await BankCrypto.hashMessage(jabData.signature);
+        const expectedVisualHash = uint8ArrayToHex(BankCrypto.hashMessage(jabData.signature));
         const referenceCanvas = document.createElement('canvas');
         referenceCanvas.width = tempCanvas.width;
         referenceCanvas.height = tempCanvas.height;
         await drawNoteOnCanvas(referenceCanvas, {...jabData, visualHash: expectedVisualHash}, referenceCanvas.width, referenceCanvas.height, false);
-        
         const differencePercentage = compareImages(tempCanvas, referenceCanvas, 35);
-        
         if (differencePercentage > 0.15) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}% from original (Threshold: >0.15%).</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}%.</span>`;
             isFullyValid = false;
         } else {
             resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
         }
         
-        // Step 5: Perform OCR Cross-Check
         if (isFullyValid) {
-            resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
-            resultDiv.innerHTML = resultHTML;
-            const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-            const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
-            resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n`;
-            resultHTML += `\n<div class="data-heading">Final Security Cross-Check</div>`;
-            const comparison = compareJabAndOCR(jabData, ocrResult);
-            resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
+             resultHTML += `\n\n<div class="data-heading">Final Security Cross-Check</div>`;
+            const comparison = compareQRAndOCR(jabData, ocrResult);
+             resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
             if (!comparison.match.amount) isFullyValid = false;
             resultHTML += `<div class="comparison-item"><strong>Serial & Key:</strong>\n  Serial Match: ${comparison.match.serial ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}, Key Match: ${comparison.match.key ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
             if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
         }
 
-        // --- FINAL VERDICT ---
         resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery detected.'}</span>`;
         resultDiv.innerHTML = resultHTML;
     };
     img.src = fileUrl;
+    event.target.value = '';
 }
 
 async function validateDigitalSignature(jabData) {
     try {
         const { signature } = jabData;
         if (!signature || !activeKeys.publicKey) return false;
-        
         const stringToVerify = getStandardizedDataForSigning(jabData);
-        const signatureBuffer = base64ToArrayBuffer(signature);
-
-        return await BankCrypto.verifySignature(signatureBuffer, stringToVerify, activeKeys.publicKey);
+        const signatureBytes = base64ToUint8Array(signature);
+        return await BankCrypto.verifySignature(signatureBytes, stringToVerify, activeKeys.publicKey);
     } catch (e) {
         console.error("Signature verification error:", e);
         return false;
@@ -734,98 +654,51 @@ async function validateDigitalSignature(jabData) {
 }
 
 function compareImages(canvas1, canvas2, tolerance = 30) {
-    const ctx1 = canvas1.getContext('2d');
-    const ctx2 = canvas2.getContext('2d');
-    const imageData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height);
-    const imageData2 = ctx2.getImageData(0, 0, canvas1.width, canvas2.height);
-    const data1 = imageData1.data;
-    const data2 = imageData2.data;
+    const ctx1 = canvas1.getContext('2d'), ctx2 = canvas2.getContext('2d');
+    const imgData1 = ctx1.getImageData(0,0,canvas1.width,canvas1.height), imgData2 = ctx2.getImageData(0,0,canvas1.width,canvas2.height);
+    const data1 = imgData1.data, data2 = imgData2.data;
     let diffPixels = 0;
     const totalPixels = canvas1.width * canvas1.height;
-    for (let i = 0; i < data1.length; i += 4) {
-        const r1 = data1[i] & 0xFE;
-        const g1 = data1[i+1] & 0xFE;
-        const b1 = data1[i+2] & 0xFE;
-        const r2 = data2[i] & 0xFE;
-        const g2 = data2[i+1] & 0xFE;
-        const b2 = data2[i+2] & 0xFE;
-
-        const rDiff = Math.abs(r1 - r2);
-        const gDiff = Math.abs(g1 - g2);
-        const bDiff = Math.abs(b1 - b2);
-        
-        if (rDiff > tolerance || gDiff > tolerance || bDiff > tolerance) {
-            diffPixels++;
-        }
+    for (let i=0; i<data1.length; i+=4) {
+        const r1=data1[i]&0xFE, g1=data1[i+1]&0xFE, b1=data1[i+2]&0xFE;
+        const r2=data2[i]&0xFE, g2=data2[i+1]&0xFE, b2=data2[i+2]&0xFE;
+        if (Math.abs(r1-r2)>tolerance || Math.abs(g1-g2)>tolerance || Math.abs(b1-b2)>tolerance) diffPixels++;
     }
     return (diffPixels / totalPixels) * 100;
 }
 
-
 async function readJabCodeFromCanvas(canvasToCheck) {
-    const region = { x: 800, y: 210, width: 420, height: 420 };
+    if (!jabcodeApi) return null;
+    const jabRegion = { x: 800, y: 210, width: 420, height: 420 };
     const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = region.width;
-    tempCanvas.height = region.height;
+    tempCanvas.width = jabRegion.width;
+    tempCanvas.height = jabRegion.height;
     const tempCtx = tempCanvas.getContext('2d');
-    
-    // Extract the JAB code region from the main canvas
-    tempCtx.drawImage(canvasToCheck, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height);
-    
-    const base64Image = tempCanvas.toDataURL();
+    tempCtx.drawImage(canvasToCheck, jabRegion.x, jabRegion.y, jabRegion.width, jabRegion.height, 0, 0, jabRegion.width, jabRegion.height);
     
     try {
-        const decodedString = await jabcode.decode_message(base64Image);
-        if (decodedString) {
-            return JSON.parse(decodedString);
-        }
+        const decodedMessage = await jabcodeApi.decode_message(tempCanvas.toDataURL());
+        return JSON.parse(decodedMessage);
     } catch (e) {
-        console.error("JAB Code decoding or parsing failed:", e);
+        console.error("JAB Code decoding failed:", e);
         return null;
     }
-    return null;
 }
-
 
 async function validateNoteForCreation(noteData, targetCanvas) {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = targetCanvas.width;
     tempCanvas.height = targetCanvas.height;
-    
     await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, true);
-
     const jabData = await readJabCodeFromCanvas(tempCanvas);
-    if (!jabData) return false;
-
-    if (JSON.stringify(jabData) !== JSON.stringify(noteData)) return false;
-
-    const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-    const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
-    const comparison = compareJabAndOCR(jabData, ocrResult);
-
-    return comparison.match.amount && comparison.match.serial && comparison.match.key;
+    return jabData && JSON.stringify(jabData) === JSON.stringify(noteData);
 }
 
-function compareJabAndOCR(jabData, ocrResult) {
-    const text = ocrResult.data.text.replace(/[\s,:.-]/g, '').toUpperCase();
-    const expectedAmount = String(jabData.amount);
-    const expectedSerial = jabData.serial.substring(4); 
-    const expectedKey = jabData.verificationKey.substring(4);
-    const isAmountMatch = text.includes(expectedAmount);
-    const isSerialMatch = text.includes(expectedSerial);
-    const isKeyMatch = text.includes(expectedKey);
-    return {
-        expected: { amount: expectedAmount },
-        found: { amount: text.match(/\d+/g)?.join('') },
-        match: { amount: isAmountMatch, serial: isSerialMatch, key: isKeyMatch }
-    };
-}
 
 // ===================================================================================
 // Banknote Creation Logic
 // ===================================================================================
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
-
 async function createNoteData(amount, index = 0) {
     if (!activeKeys.privateKey) {
         alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
@@ -838,22 +711,13 @@ async function createNoteData(amount, index = 0) {
         serial: "SDT-" + (now + index).toString().slice(-8),
         timestamp: now
     };
-
     const stringToSign = getStandardizedDataForSigning(noteData);
-    const signatureBuffer = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
-    noteData.signature = arrayBufferToBase64(signatureBuffer);
+    const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
+    noteData.signature = arrayBufferToBase64(signatureBytes);
     
-    noteData.visualHash = await BankCrypto.hashMessage(noteData.signature);
-
+    const hashBytes = BankCrypto.hashMessage(noteData.signature);
+    noteData.visualHash = uint8ArrayToHex(hashBytes);
     return noteData;
-}
-function arrayBufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
 }
 
 async function handleCreateNewNote() {
@@ -880,8 +744,7 @@ async function handleDownloadBatch() {
         const link = document.createElement("a");
         link.download = `SADAT-NOTE-SECURE-${currentNoteData.serial}.png`;
         link.href = canvas.toDataURL("image/png");
-        link.click();
-        return;
+        link.click(); return;
     }
     const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
     const amount = document.getElementById("amount-input").value;
@@ -892,24 +755,15 @@ async function handleDownloadBatch() {
         const offscreenCanvas = document.createElement('canvas');
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
-
         for (let i = 0; i < quantity; i++) {
-            let noteData = null;
-            let isNoteValid = false;
-            let attempts = 0;
+            let noteData = null, isNoteValid = false, attempts = 0;
             while (!isNoteValid && attempts < 10) {
                 noteData = await createNoteData(amount, i);
-                if (!noteData) {
-                    resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key available.</span>`;
-                    return;
-                }
+                if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key.</span>`; return; }
                 isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
-                if (!isNoteValid) {
-                    resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR check on attempt ${attempts + 1}. Regenerating...</span>`;
-                }
+                if (!isNoteValid) resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed validation check on attempt ${attempts + 1}. Regenerating...</span>`;
                 attempts++;
             }
-            
             if (isNoteValid) {
                 await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
@@ -919,8 +773,7 @@ async function handleDownloadBatch() {
                 await writable.close();
                 resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
             } else {
-                 resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts. Batch download stopped.</span>`;
-                 return;
+                 resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts. Batch download stopped.</span>`; return;
             }
         }
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
@@ -937,11 +790,8 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         const ctx = targetCanvas.getContext("2d");
         const { amount, verificationKey, serial, visualHash, signature } = noteData;
 
-        const w = width;
-        const h = height;
-        const scale = w / 1350; 
+        const w = width, h = height, scale = w / 1350; 
 
-        // --- DRAWING STARTS ---
         const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
         const baseHue = H(visualHash, 0, 0, 360);
         bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -953,161 +803,64 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         drawKochGuilloche(ctx, visualHash, w, h);
         drawNoisePattern(ctx, visualHash, w, h);
 
-        ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
-        ctx.shadowBlur = 8 * scale;
-        ctx.shadowOffsetX = 2 * scale;
-        ctx.shadowOffsetY = 2 * scale;
-        ctx.fillStyle = "#EAEAEA";
-        ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
-        ctx.textAlign = 'left';
-        ctx.fillText(serial.substring(4), 150 * scale, 160 * scale);
-        ctx.fillText(verificationKey.substring(4), 150 * scale, 280 * scale);
-        ctx.font = `bold ${150 * scale}px 'Roboto Mono'`;
-        ctx.textAlign = "right";
-        ctx.shadowBlur = 12 * scale;
-        ctx.shadowOffsetX = 4 * scale;
-        ctx.shadowOffsetY = 4 * scale;
-        ctx.fillText(amount.toString(), w - (120 * scale), 190 * scale);
-        ctx.shadowColor = "transparent";
+        ctx.shadowColor="rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; ctx.shadowOffsetX=2*scale; ctx.shadowOffsetY=2*scale;
+        ctx.fillStyle="#EAEAEA"; ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='left';
+        ctx.fillText(serial.substring(4),150*scale,160*scale); ctx.fillText(verificationKey.substring(4),150*scale,280*scale);
+        ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right";
+        ctx.shadowBlur=12*scale; ctx.shadowOffsetX=4*scale; ctx.shadowOffsetY=4*scale;
+        ctx.fillText(amount.toString(),w-(120*scale),190*scale); ctx.shadowColor="transparent";
 
-        const dataString = JSON.stringify(noteData);
-        const jabCodeImageBase64 = jabcode.encode_message(dataString);
-        
         const jabImg = new Image();
         jabImg.onload = () => {
-            const codeSize = 420 * scale;
-            const codeX = w - (120 * scale) - codeSize;
-            const codeY = h - (550 * scale);
-
-            ctx.fillStyle = 'white';
-            ctx.fillRect(codeX - (10 * scale), codeY - (10 * scale), codeSize + (20 * scale), codeSize + (20 * scale));
-            
-            ctx.drawImage(jabImg, codeX, codeY, codeSize, codeSize);
-
-            ctx.font = `${30 * scale}px 'Roboto Mono'`;
-            ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.textAlign = "center";
-            ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
+            const jabSize = 380 * scale;
+            ctx.drawImage(jabImg, w - (150 * scale) - jabSize, h - (520 * scale), jabSize, jabSize);
+            ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
+            ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)", w/2, h-60*scale);
 
             if (applySteganography && signature) {
-                try {
-                    LSB.encode(ctx, signature);
-                } catch (lsbError) {
-                    console.error("LSB Encoding Error:", lsbError);
-                    reject(lsbError);
-                    return;
-                }
+                try { LSB.encode(ctx, signature); } catch (lsbError) { reject(lsbError); }
             }
             resolve();
         };
-        jabImg.onerror = (err) => { 
-            console.error("Failed to load JAB Code image from base64 string.", err);
-            reject("Failed to generate JAB Code image.");
-        };
-        jabImg.src = jabCodeImageBase64;
+        jabImg.onerror = reject;
+        jabImg.src = jabcodeApi.encode_message(JSON.stringify(noteData));
     });
 }
 
-function drawKochGuilloche(g_ctx, hash, w, h) {
-    g_ctx.save();
-    g_ctx.translate(w / 2, h / 2);
-
-    const scale = w / 1350;
-    const iteration = H(hash, 2, 2, 4);
-    const size = w * (H(hash, 4, 10, 20) / 100);
-    const angleOffset = (H(hash, 6, 0, 360) / 360) * Math.PI * 2;
-    const numLines = H(hash, 8, 3, 6);
-    const hueOffset = H(hash, 10, 0, 360);
-
-    function drawKochSegment(x1, y1, x2, y2, level) {
-        if (level === 0) {
-            g_ctx.lineTo(x2, y2);
-            return;
-        }
-
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const unitVecX = dx / dist;
-        const unitVecY = dy / dist;
-
-        const p1x = x1 + unitVecX * dist / 3;
-        const p1y = y1 + unitVecY * dist / 3;
-
-        const p2x = x1 + unitVecX * dist * 2 / 3;
-        const p2y = y1 + unitVecY * dist * 2 / 3;
-
-        const p3x = p1x + unitVecX * dist / 6 - unitVecY * dist * Math.sqrt(3) / 6;
-        const p3y = p1y + unitVecY * dist / 6 + unitVecX * dist * Math.sqrt(3) / 6;
-
-        drawKochSegment(x1, y1, p1x, p1y, level - 1);
-        drawKochSegment(p1x, p1y, p3x, p3y, level - 1);
-        drawKochSegment(p3x, p3y, p2x, p2y, level - 1);
-        drawKochSegment(p2x, p2y, x2, y2, level - 1);
-    }
-
-    g_ctx.lineWidth = 1 * scale;
-    g_ctx.lineJoin = 'bevel';
-    g_ctx.lineCap = 'round';
-    
-    for (let i = 0; i < numLines; i++) {
-        const hue = (hueOffset + i * (360 / numLines)) % 360;
-        g_ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.15)`;
-        
-        const lineAngle = (i / numLines) * Math.PI * 2 + angleOffset;
-        const x1 = Math.cos(lineAngle) * size;
-        const y1 = Math.sin(lineAngle) * size;
-        const x2 = Math.cos(lineAngle + Math.PI) * size;
-        const y2 = Math.sin(lineAngle + Math.PI) * size;
-
-        g_ctx.beginPath();
-        g_ctx.moveTo(x1, y1);
-        drawKochSegment(x1, y1, x2, y2, iteration);
-        g_ctx.stroke();
-    }
-
-    g_ctx.restore();
-}
-
-function drawWatermark(g_ctx, hash, w, h) {
-    g_ctx.save();
-    g_ctx.translate(w / 2, h / 2);
-    const scale = w / 1350;
-    const numSpirals = H(hash, 16, 3, 6);
-    const spiralRadius = w * (H(hash, 18, 10, 25) / 100) * scale;
-    const hue = H(hash, 20, 0, 360);
-    g_ctx.strokeStyle = `hsla(${hue}, 50%, 80%, 0.05)`;
-    g_ctx.lineWidth = 4 * scale;
-    
-    for (let i = 0; i < numSpirals; i++) {
-        g_ctx.beginPath();
-        const startAngle = (i / numSpirals) * Math.PI * 2 + H(hash, 22, 0, 100) / 100;
-        const endAngle = startAngle + H(hash, 24, 6, 12) * Math.PI;
-
-        for (let t = startAngle; t < endAngle; t += 0.05) {
-            const r = spiralRadius * (t - startAngle) / (endAngle - startAngle);
-            const x = r * Math.cos(t);
-            const y = r * Math.sin(t);
-            if (t === startAngle) g_ctx.moveTo(x, y);
-            else g_ctx.lineTo(x, y);
-        }
-        g_ctx.stroke();
-    }
-    g_ctx.restore();
-}
-
+function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
+function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
 function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
-window.onload = async () => {
-    jabcode = new window.JabcodeJSInterface();
+// ===================================================================================
+// Application Initialization
+// ===================================================================================
+async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
-};
+    updateKeyStatus('<span class="info">⏳ Loading Falcon-512 Crypto Module...</span>');
+    
+    try {
+        falconApi = await pqcSignFalcon512();
+        jabcodeApi = new JabcodeJSInterface();
+        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
+    } catch (e) {
+        console.error("Failed to load a module:", e);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load a required module. Please check the file paths and your browser console. The application cannot continue.</span>`);
+        alert("Error: Failed to load a required module. See the console for details.");
+        return;
+    }
+    
+    // Attach event listeners now that the script is a module
+    document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
+    document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
+    document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
+    document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey);
+    document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey);
+    document.getElementById('validator-input').addEventListener('change', handleFileSelect);
+}
 
-// Make functions globally accessible from HTML onclick attributes
-window.handleCreateNewNote = handleCreateNewNote;
-window.handleDownloadBatch = handleDownloadBatch;
-window.handleGenerateAndExportKeys = handleGenerateAndExportKeys;
+// Start the application
+main();
+
 </script>
 </body>
 </html>
