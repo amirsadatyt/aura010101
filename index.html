@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Shdhdadat Digital Banknote (Falcon-512 + SHAKE256)</title>
+    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -529,6 +529,7 @@ const LSB = (() => {
     }
     return { encode, decode };
 })();
+
 // ===================================================================================
 // Validation Logic
 // ===================================================================================
@@ -546,30 +547,37 @@ async function handleFileSelect(event) {
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = async () => {
+        // --- START OF FIX ---
+        // Create a temporary canvas with the EXACT dimensions of the uploaded image
+        // This prevents any scaling or blurring that would corrupt the QR code.
         const tempCanvas = document.createElement('canvas');
-        // Set canvas to the expected banknote dimensions to handle scaled uploads
-        tempCanvas.width = 1350;
-        tempCanvas.height = 750;
+        tempCanvas.width = img.naturalWidth;
+        tempCanvas.height = img.naturalHeight;
         const tempCtx = tempCanvas.getContext('2d');
-        // Draw the uploaded image onto the canvas, scaling it if necessary
-        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Draw the image 1:1 (pixel for pixel) without any resizing.
+        tempCtx.drawImage(img, 0, 0);
+        // --- END OF FIX ---
 
-        // --- VALIDATION PIPELINE ---
+        // --- VALIDATION PIPELINE (Now uses the perfect, unscaled canvas) ---
         resultDiv.innerHTML = `<span class="info">1. Reading public data from QR Code...</span>`;
-        // Pass the entire canvas for a robust scan
         const qrData = await readQRCodeFromCanvas(tempCanvas);
         if (!qrData || !qrData.signatureHash) {
             resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or is invalid. Make sure the uploaded image is clear.</span>`;
+            URL.revokeObjectURL(fileUrl); // Clean up the object URL
             return;
         }
         let resultHTML = `<span class="valid">✅ 1. QR Code data successfully read.</span>`;
 
         resultHTML += `\n\n<span class="info">2. Extracting hidden signature from image...</span>`;
         resultDiv.innerHTML = resultHTML;
+        // The LSB decode will also benefit from the unscaled, clear image data.
         const lsbSignatureB64 = LSB.decode(tempCtx);
         if (!lsbSignatureB64) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: No hidden signature found in the image.</span>`;
-            resultDiv.innerHTML = resultHTML; return;
+            resultDiv.innerHTML = resultHTML; 
+            URL.revokeObjectURL(fileUrl);
+            return;
         }
         resultHTML += `\n<span class="valid">✅ 2. Hidden signature extracted.</span>`;
 
@@ -578,7 +586,9 @@ async function handleFileSelect(event) {
         const lsbSignatureHash = uint8ArrayToHex(BankCrypto.hashMessage(lsbSignatureB64));
         if (lsbSignatureHash !== qrData.signatureHash) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Image integrity check failed. Hashes do not match. Forgery detected.</span>`;
-            resultDiv.innerHTML = resultHTML; return;
+            resultDiv.innerHTML = resultHTML; 
+            URL.revokeObjectURL(fileUrl);
+            return;
         }
         resultHTML += `\n<span class="valid">✅ 3. Image integrity confirmed. The hidden signature matches the QR code's manifest.</span>`;
 
@@ -587,16 +597,27 @@ async function handleFileSelect(event) {
         const isSignatureValid = await validateDigitalSignature(qrData, lsbSignatureB64);
         if (!isSignatureValid) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`;
-            resultDiv.innerHTML = resultHTML; return;
+            resultDiv.innerHTML = resultHTML; 
+            URL.revokeObjectURL(fileUrl);
+            return;
         }
         resultHTML += `\n<span class="valid">✅ 4. Digital signature confirmed. Authenticity verified.</span>`;
 
         resultHTML += `\n\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
         resultDiv.innerHTML = resultHTML;
+        
+        URL.revokeObjectURL(fileUrl); // Clean up the object URL at the end
     };
+    
+    img.onerror = () => {
+        resultDiv.innerHTML = `<span class="invalid">❌ Error: Could not load the selected image file.</span>`;
+        URL.revokeObjectURL(fileUrl);
+    };
+
     img.src = fileUrl;
-    event.target.value = '';
+    event.target.value = ''; // Reset the input to allow re-uploading the same file
 }
+
 
 async function validateDigitalSignature(qrData, signatureB64) {
     try {
@@ -670,7 +691,7 @@ async function createNoteData(amount, index = 0) {
     const signatureB64 = arrayBufferToBase64(signatureBytes);
     
     // Now, create the REAL signature hash from the REAL signature
-    const realSignatureHash = uint8ArrayToHex(BankCrypto.hashMessage(signatureB64));
+    const realSignatureHash = uint8ArayToHex(BankCrypto.hashMessage(signatureB64));
     
     // Replace placeholder with the real hash
     noteData.signatureHash = realSignatureHash;
