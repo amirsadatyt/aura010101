@@ -547,15 +547,23 @@ async function handleFileSelect(event) {
     const img = new Image();
     img.onload = async () => {
         // Draw the uploaded image onto the main canvas to show the user what's being validated.
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
+        // We use a temporary canvas for processing to not alter the main view until the end.
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.imageSmoothingEnabled = false;
+        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        
         // --- VALIDATION PIPELINE ---
         resultDiv.innerHTML = `<span class="info">1. Searching for QR Code...</span>`;
-        const qrResult = readQRCodeFromCanvas(ctx); // Use the main canvas context
+        const qrResult = readQRCodeFromCanvas(tempCtx); // Scan from the temporary canvas
 
         // Diagnostic Check 1: QR Code found and parsed
         if (qrResult.error) {
+            // Show the user the problematic image and where we looked
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const region = getQRScanRegion();
             ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
             ctx.lineWidth = 5;
@@ -587,7 +595,7 @@ async function handleFileSelect(event) {
         // Continue with the rest of the validation...
         resultHTML += `\n\n<span class="info">2. Extracting hidden signature from image...</span>`;
         resultDiv.innerHTML = resultHTML;
-        const lsbSignatureB64 = LSB.decode(ctx);
+        const lsbSignatureB64 = LSB.decode(tempCtx);
         if (!lsbSignatureB64) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: No hidden signature found in the image.</span>`;
             resultDiv.innerHTML = resultHTML; return;
@@ -614,6 +622,10 @@ async function handleFileSelect(event) {
 
         resultHTML += `\n\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
         resultDiv.innerHTML = resultHTML;
+        
+        // On success, also show the validated image
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
     };
     img.src = fileUrl;
     event.target.value = '';
@@ -641,9 +653,23 @@ function getQRScanRegion() {
     return { x, y, width: rectSize, height: rectSize };
 }
 
-function readQRCodeFromCanvas(context) {
+function readQRCodeFromCanvas(sourceContext) {
     const region = getQRScanRegion();
-    const imageData = context.getImageData(region.x, region.y, region.width, region.height);
+    
+    // Create a new, small canvas to isolate the QR code region.
+    // This is more robust than scanning a small part of a large image.
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = region.width;
+    cropCanvas.height = region.height;
+    const cropCtx = cropCanvas.getContext('2d');
+
+    // Copy the QR code region from the source canvas to the small crop canvas.
+    cropCtx.drawImage(sourceContext.canvas, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height);
+
+    // Get the image data from the small, isolated canvas.
+    const imageData = cropCtx.getImageData(0, 0, region.width, region.height);
+    
+    // Scan the isolated image data.
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     
     if (code) { 
@@ -668,7 +694,6 @@ async function createNoteData(amount, index = 0) {
     }
     const now = Date.now();
     
-    // Initial data object without hashes or signatures
     const noteData = {
         amount: parseInt(amount) || 0,
         verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
@@ -676,22 +701,17 @@ async function createNoteData(amount, index = 0) {
         timestamp: now
     };
 
-    // Placeholder for the hash, to be included in the signed data
-    noteData.signatureHash = "0".repeat(128); // Placeholder of correct length (512 bits / 4 = 128 hex chars)
+    noteData.signatureHash = "0".repeat(128);
     let stringToSign = getStandardizedDataForSigning(noteData);
     
-    // Generate signature based on data with placeholder hash
     const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
     const signatureB64 = arrayBufferToBase64(signatureBytes);
     
-    // Now, create the REAL signature hash from the REAL signature
     const realSignatureHash = uint8ArrayToHex(BankCrypto.hashMessage(signatureB64));
     
-    // Replace placeholder with the real hash
     noteData.signatureHash = realSignatureHash;
-    noteData.signature = signatureB64; // This is for LSB, not signing
+    noteData.signature = signatureB64;
     
-    // Create final visual hash from the final, real signature hash
     noteData.visualHash = uint8ArrayToHex(BankCrypto.hashMessage(noteData.signatureHash));
     
     return noteData;
