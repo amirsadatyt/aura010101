@@ -751,44 +751,81 @@ async function handleDownloadBatch() {
         const link = document.createElement("a");
         link.download = `SADAT-NOTE-SECURE-${currentNoteData.serial}.png`;
         link.href = canvas.toDataURL("image/png");
-        link.click(); return;
+        link.click();
+        return;
     }
+
     const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
     const amount = document.getElementById("amount-input").value;
     const resultDiv = document.getElementById('validation-result');
+    const downloadButton = document.getElementById('download-batch-button');
+    
+    downloadButton.disabled = true;
+    resultDiv.innerHTML = `<span class="info">⏳ Generating ${quantity} banknote(s) in memory... Please wait.</span>`;
+
+    const notesToSave = [];
+    const offscreenCanvas = document.createElement('canvas');
+    offscreenCanvas.width = canvas.width;
+    offscreenCanvas.height = canvas.height;
+
     try {
-        const dirHandle = await window.showDirectoryPicker();
-        resultDiv.innerHTML = `<span class="info">Processing ${quantity} banknote(s)... Please wait.</span>`;
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = canvas.width;
-        offscreenCanvas.height = canvas.height;
+        // STAGE 1: Generate all banknote data and blobs in memory first.
         for (let i = 0; i < quantity; i++) {
+            resultDiv.innerHTML = `<span class="info">⏳ Generating banknote ${i + 1} of ${quantity}...</span>`;
             let noteData = null, isNoteValid = false, attempts = 0;
+            
             while (!isNoteValid && attempts < 10) {
                 noteData = await createNoteData(amount, i);
-                if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key.</span>`; return; }
+                if (!noteData) {
+                    throw new Error("Batch download stopped. No private key available.");
+                }
                 isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
-                if (!isNoteValid) resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed validation check on attempt ${attempts + 1}. Regenerating...</span>`;
+                if (!isNoteValid) {
+                     resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed validation check on attempt ${attempts + 1}. Regenerating...</span>`;
+                }
                 attempts++;
             }
+
             if (isNoteValid) {
                 await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-                const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
+                notesToSave.push({ blob, noteData });
             } else {
-                 resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts. Batch download stopped.</span>`; return;
+                throw new Error(`Failed to create a valid banknote after multiple attempts. Batch download stopped.`);
             }
         }
+
+        // STAGE 2: After generation, ask for directory and save all files.
+        resultDiv.innerHTML = `<span class="info">✅ Generation complete. Please select a directory to save the ${notesToSave.length} banknotes.</span>`;
+        const dirHandle = await window.showDirectoryPicker();
+
+        for (let i = 0; i < notesToSave.length; i++) {
+            const { blob, noteData } = notesToSave[i];
+            resultDiv.innerHTML = `<span class="info">📥 Saving banknote ${i + 1} of ${notesToSave.length}...</span>`;
+            
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+        }
+
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
         await handleCreateNewNote();
+
     } catch (error) {
-        resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
+        // Catch errors from both generation and saving stages.
+        // The error includes user canceling the directory picker.
+        if (error.name === 'AbortError') {
+             resultDiv.innerHTML = `<span class="info">ℹ️ Batch download cancelled.</span>`;
+        } else {
+             resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
+        }
+    } finally {
+        // Re-enable the button after the process is finished or cancelled.
+        downloadButton.disabled = false;
     }
 }
+
 
 async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
     if (Object.keys(noteData).length === 0) {
