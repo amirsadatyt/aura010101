@@ -545,18 +545,36 @@ async function handleFileSelect(event) {
 
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
+    
     img.onload = async () => {
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 1350;
-        tempCanvas.height = 750;
         const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        
+        const canvasWidth = 1350;
+        const canvasHeight = 750;
+        tempCanvas.width = canvasWidth;
+        tempCanvas.height = canvasHeight;
+
+        // Calculate scale factor to fit image inside canvas without stretching
+        const scale = Math.min(canvasWidth / img.naturalWidth, canvasHeight / img.naturalHeight);
+        const newWidth = img.naturalWidth * scale;
+        const newHeight = img.naturalHeight * scale;
+
+        // Calculate offsets to center the scaled image
+        const x = (canvasWidth - newWidth) / 2;
+        const y = (canvasHeight - newHeight) / 2;
+        
+        // Fill background and draw the correctly scaled, centered image
+        tempCtx.fillStyle = 'black';
+        tempCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+        tempCtx.drawImage(img, x, y, newWidth, newHeight);
 
         // --- VALIDATION PIPELINE ---
         resultDiv.innerHTML = `<span class="info">1. Reading public data from QR Code...</span>`;
         const qrData = await readQRCodeFromCanvas(tempCanvas);
         if (!qrData || !qrData.signatureHash) {
             resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or is invalid.</span>`;
+            URL.revokeObjectURL(fileUrl);
             return;
         }
         let resultHTML = `<span class="valid">✅ 1. QR Code data successfully read.</span>`;
@@ -566,7 +584,9 @@ async function handleFileSelect(event) {
         const lsbSignatureB64 = LSB.decode(tempCtx);
         if (!lsbSignatureB64) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: No hidden signature found in the image.</span>`;
-            resultDiv.innerHTML = resultHTML; return;
+            resultDiv.innerHTML = resultHTML; 
+            URL.revokeObjectURL(fileUrl);
+            return;
         }
         resultHTML += `\n<span class="valid">✅ 2. Hidden signature extracted.</span>`;
 
@@ -575,7 +595,9 @@ async function handleFileSelect(event) {
         const lsbSignatureHash = uint8ArrayToHex(BankCrypto.hashMessage(lsbSignatureB64));
         if (lsbSignatureHash !== qrData.signatureHash) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Image integrity check failed. Hashes do not match. Forgery detected.</span>`;
-            resultDiv.innerHTML = resultHTML; return;
+            resultDiv.innerHTML = resultHTML; 
+            URL.revokeObjectURL(fileUrl);
+            return;
         }
         resultHTML += `\n<span class="valid">✅ 3. Image integrity confirmed. The hidden signature matches the QR code's manifest.</span>`;
 
@@ -584,13 +606,22 @@ async function handleFileSelect(event) {
         const isSignatureValid = await validateDigitalSignature(qrData, lsbSignatureB64);
         if (!isSignatureValid) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`;
-            resultDiv.innerHTML = resultHTML; return;
+            resultDiv.innerHTML = resultHTML; 
+            URL.revokeObjectURL(fileUrl);
+            return;
         }
         resultHTML += `\n<span class="valid">✅ 4. Digital signature confirmed. Authenticity verified.</span>`;
 
         resultHTML += `\n\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
         resultDiv.innerHTML = resultHTML;
+        URL.revokeObjectURL(fileUrl);
     };
+    
+    img.onerror = () => {
+        resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: Could not load the selected file as an image.</span>`;
+        URL.revokeObjectURL(fileUrl);
+    };
+
     img.src = fileUrl;
     event.target.value = '';
 }
@@ -609,23 +640,22 @@ async function validateDigitalSignature(qrData, signatureB64) {
 
 function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d');
-    const w = canvasToCheck.width;
-    const h = canvasToCheck.height;
+    // The canvas passed here is now a normalized 1350x750 image with letterboxing.
+    // The original QR code drawing logic was relative to a 1350x750 canvas,
+    // so we can now use that same logic to find it again.
+    const w = canvasToCheck.width; // Should be 1350
+    const h = canvasToCheck.height; // Should be 750
     
-    // Dynamically calculate the QR code's position and size using the exact
-    // same logic as the drawing function to eliminate any mismatch.
     const scale = w / 1350;
     const qrSize = 380 * scale; 
     const qrX = w - (150 * scale) - qrSize;
     const qrY = h - (520 * scale);
 
-    // Ensure the calculated region is valid before attempting to read.
     if (qrX < 0 || qrY < 0 || (qrX + qrSize > w) || (qrY + qrSize > h)) {
         console.error("FATAL: QR Code reading region is out of canvas bounds.");
         return null;
     }
     
-    // Read the image data from the PRECISE location of the QR code.
     const imageData = context.getImageData(qrX, qrY, qrSize, qrSize);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     
@@ -799,40 +829,4 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
 }
 
 function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
-function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
-function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save();
-for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`;
-g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
-
-// ===================================================================================
-// Application Initialization
-// ===================================================================================
-async function main() {
-    updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading Falcon-512 Crypto Module...</span>');
-    
-    try {
-        falconApi = await pqcSignFalcon512();
-        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
-    } catch (e) {
-        console.error("Failed to load Falcon module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-512 module. Please check the file 'falcon.js' and your browser console. The application cannot continue.</span>`);
-        alert("Error: Failed to load cryptographic module. See the console for details.");
-        return;
-    }
-    
-    // Attach event listeners now that the script is a module
-    document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
-    document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
-    document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
-    document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey);
-    document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey);
-    document.getElementById('validator-input').addEventListener('change', handleFileSelect);
-}
-
-// Start the application
-main();
-
-</script>
-</body>
-</html>
+function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},
