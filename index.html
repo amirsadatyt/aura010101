@@ -420,10 +420,10 @@
             return new Uint8Array(decryptedBuffer);
         }
 
-        return { 
-            generateNewKeyPair, 
-            signData, 
-            verifySignature, 
+        return {
+            generateNewKeyPair,
+            signData,
+            verifySignature,
             hashMessage,
             encryptPrivateKey,
             decryptPrivateKey
@@ -465,7 +465,12 @@
             activeKeys.publicKey = keyPair.publicKey;
             activeKeys.privateKey = keyPair.privateKey;
 
-            downloadFile(bytesToBase64(keyPair.publicKey), 'Sadat-public-key.b64', 'text/plain');
+            // Save public key as Base64 in a JSON object
+            const exportedPublic = {
+                publicKey: bytesToBase64(keyPair.publicKey),
+                algo: "Falcon-512"
+            };
+            downloadFile(JSON.stringify(exportedPublic, null, 2), 'Sadat-public-key.json', 'application/json');
 
             const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
             downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-key.json', 'application/json');
@@ -484,8 +489,11 @@
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const base64Key = e.target.result;
-                const publicKey = base64ToBytes(base64Key);
+                const jwk = JSON.parse(e.target.result);
+                if (jwk.algo !== "Falcon-512" || !jwk.publicKey) {
+                    throw new Error("Invalid key file format.");
+                }
+                const publicKey = base64ToBytes(jwk.publicKey);
                 // Simple check for key length
                 if (publicKey.byteLength !== falconPkBytes) {
                     throw new Error("Invalid public key format or length for Falcon-512.");
@@ -780,7 +788,7 @@
     function compareQRAndOCR(qrData, ocrResult) {
         const text = ocrResult.data.text.replace(/[\s,:.-]/g, '').toUpperCase();
         const expectedAmount = String(qrData.amount);
-        const expectedSerial = qrData.serial.substring(4); 
+        const expectedSerial = qrData.serial.substring(4);
         const expectedKey = qrData.verificationKey.substring(4);
         const isAmountMatch = text.includes(expectedAmount);
         const isSerialMatch = text.includes(expectedSerial);
@@ -907,7 +915,7 @@
 
             const w = width;
             const h = height;
-            const scale = w / 1350; 
+            const scale = w / 1350;
 
             // --- DRAWING STARTS ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
