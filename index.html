@@ -622,8 +622,6 @@ function readQRCodeFromCanvas(canvasToCheck) {
     return null;
 }
 
-// DELETED: The validateNoteForCreation function is no longer needed.
-
 // ===================================================================================
 // Banknote Creation Logic
 // ===================================================================================
@@ -703,7 +701,6 @@ async function handleDownloadBatch() {
         offscreenCanvas.height = canvas.height;
         
         for (let i = 0; i < quantity; i++) {
-            // REMOVED the validation loop. We now generate and save directly.
             const noteData = await createNoteData(amount, i);
             if (!noteData) { 
                 resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. Could not create note data (check for private key).</span>`; 
@@ -720,9 +717,8 @@ async function handleDownloadBatch() {
         }
         
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
-        await handleCreateNewNote(); // Show a new note on screen after batch is done
+        await handleCreateNewNote();
     } catch (error) {
-        // This will catch user cancellation of the directory picker or file system errors.
         if (error.name !== 'AbortError') {
            console.error("Batch download error:", error);
            resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
@@ -762,14 +758,25 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         const qrCanvas = document.createElement("canvas");
         const qrSize = 380 * scale;
         
-        // Create a separate object for QR code without the full signature or visual hash
         const qrDataObject = { ...noteData };
         delete qrDataObject.signature;
         delete qrDataObject.visualHash;
         
         QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } }, (err) => {
             if (err) { reject(err); return; }
-            ctx.drawImage(qrCanvas, w - (150 * scale) - qrSize, h - (520 * scale), qrSize, qrSize);
+            
+            const qrX = w - (150 * scale) - qrSize;
+            const qrY = h - (520 * scale);
+            const padding = 20 * scale;
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 15 * scale;
+            ctx.fillRect(qrX - padding, qrY - padding, qrSize + (padding * 2), qrSize + (padding * 2));
+            ctx.shadowColor = 'transparent';
+
+            ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+            
             ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
             ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)", w/2, h-60*scale);
 
