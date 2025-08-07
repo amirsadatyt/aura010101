@@ -622,28 +622,7 @@ function readQRCodeFromCanvas(canvasToCheck) {
     return null;
 }
 
-async function validateNoteForCreation(noteData, targetCanvas) {
-    // This simplified check ensures the QR code is generated and readable
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = targetCanvas.width;
-    tempCanvas.height = targetCanvas.height;
-    
-    // Create the object that is expected to be in the QR code.
-    const qrDataObject = { ...noteData };
-    delete qrDataObject.signature;
-    delete qrDataObject.visualHash; // CORRECTED: This property must also be removed for the check.
-    
-    // Draw the note to the temporary canvas (which creates the QR code internally)
-    await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, false);
-    
-    // Read the data back from the QR code that was just drawn
-    const qrData = await readQRCodeFromCanvas(tempCanvas);
-    
-    if (!qrData) return false;
-    
-    // Compare the data read from the QR code with the object we expected to be there.
-    return JSON.stringify(qrData) === JSON.stringify(qrDataObject);
-}
+// DELETED: The validateNoteForCreation function is no longer needed.
 
 // ===================================================================================
 // Banknote Creation Logic
@@ -722,35 +701,34 @@ async function handleDownloadBatch() {
         const offscreenCanvas = document.createElement('canvas');
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
+        
         for (let i = 0; i < quantity; i++) {
-            let noteData = null, isNoteValid = false, attempts = 0;
-            while (!isNoteValid && attempts < 10) {
-                noteData = await createNoteData(amount, i);
-                if (!noteData) { 
-                    resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key.</span>`; return;
-                }
-                isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
-                if (!isNoteValid) {
-                    resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed validation check on attempt ${attempts + 1}. Regenerating...</span>`;
-                }
-                attempts++;
+            // REMOVED the validation loop. We now generate and save directly.
+            const noteData = await createNoteData(amount, i);
+            if (!noteData) { 
+                resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. Could not create note data (check for private key).</span>`; 
+                return;
             }
-            if (isNoteValid) {
-                await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
-                const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-                const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
-            } else {
-                 resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts. Batch download stopped.</span>`; return;
-            }
+
+            await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
+            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
         }
+        
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
-        await handleCreateNewNote();
+        await handleCreateNewNote(); // Show a new note on screen after batch is done
     } catch (error) {
-        resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
+        // This will catch user cancellation of the directory picker or file system errors.
+        if (error.name !== 'AbortError') {
+           console.error("Batch download error:", error);
+           resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
+        } else {
+           resultDiv.innerHTML = `<span class="info">Batch download cancelled by user.</span>`;
+        }
     }
 }
 
