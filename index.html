@@ -546,29 +546,48 @@ async function handleFileSelect(event) {
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = async () => {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 1350;
-        tempCanvas.height = 750;
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        // ** THE FIX **
-        // Disable image smoothing to ensure the QR code pixels are drawn sharply.
-        tempCtx.imageSmoothingEnabled = false;
-        
-        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        // Draw the uploaded image onto the main canvas to show the user what's being validated.
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         // --- VALIDATION PIPELINE ---
-        resultDiv.innerHTML = `<span class="info">1. Reading public data from QR Code...</span>`;
-        const qrData = await readQRCodeFromCanvas(tempCanvas);
-        if (!qrData || !qrData.signatureHash) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or is invalid.</span>`;
+        resultDiv.innerHTML = `<span class="info">1. Searching for QR Code...</span>`;
+        const qrResult = readQRCodeFromCanvas(ctx); // Use the main canvas context
+
+        // Diagnostic Check 1: QR Code found and parsed
+        if (qrResult.error) {
+            const region = getQRScanRegion();
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(region.x, region.y, region.width, region.height);
+            
+            let errorMessage = '';
+            switch (qrResult.error) {
+                case 'NOT_FOUND':
+                    errorMessage = 'هیچ QR Code در ناحیه مورد انتظار یافت نشد (کادر قرمز).';
+                    break;
+                case 'INVALID_JSON':
+                    errorMessage = 'QR Code شناسایی شد، اما حاوی داده‌های معتبر اسکناس نیست.';
+                    break;
+            }
+            resultDiv.innerHTML = `<span class="invalid">❌ خطای مرگبار: ${errorMessage}</span>`;
             return;
         }
+        
+        const qrData = qrResult; // It's valid data now
+        
+        // Diagnostic Check 2: QR data structure is correct
+        if (!qrData.signatureHash) {
+             resultDiv.innerHTML = `<span class="invalid">❌ خطای مرگبار: داده‌های QR Code ناقص است و فاقد «هش امضا» می‌باشد.</span>\n<span class="info">ممکن است اسکناس با نسخه قدیمی نرم‌افزار ساخته شده باشد.</span>`;
+             return;
+        }
+        
         let resultHTML = `<span class="valid">✅ 1. QR Code data successfully read.</span>`;
 
+        // Continue with the rest of the validation...
         resultHTML += `\n\n<span class="info">2. Extracting hidden signature from image...</span>`;
         resultDiv.innerHTML = resultHTML;
-        const lsbSignatureB64 = LSB.decode(tempCtx);
+        const lsbSignatureB64 = LSB.decode(ctx);
         if (!lsbSignatureB64) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: No hidden signature found in the image.</span>`;
             resultDiv.innerHTML = resultHTML; return;
@@ -612,19 +631,29 @@ async function validateDigitalSignature(qrData, signatureB64) {
     }
 }
 
-function readQRCodeFromCanvas(canvasToCheck) {
-    const context = canvasToCheck.getContext('2d');
-    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
-    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+function getQRScanRegion() {
+    const scale = canvas.width / 1350;
+    const qrSize = 380 * scale;
+    const padding = 20 * scale;
+    const rectSize = qrSize + (padding * 2);
+    const x = canvas.width - (150 * scale) - qrSize - padding;
+    const y = canvas.height - (520 * scale) - padding;
+    return { x, y, width: rectSize, height: rectSize };
+}
+
+function readQRCodeFromCanvas(context) {
+    const region = getQRScanRegion();
+    const imageData = context.getImageData(region.x, region.y, region.width, region.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
+    
     if (code) { 
         try { 
             return JSON.parse(code.data); 
         } catch { 
-            return null; 
+            return { error: 'INVALID_JSON' }; 
         } 
     }
-    return null;
+    return { error: 'NOT_FOUND' };
 }
 
 // ===================================================================================
@@ -770,9 +799,9 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } }, (err) => {
             if (err) { reject(err); return; }
             
+            const padding = 20 * scale;
             const qrX = w - (150 * scale) - qrSize;
             const qrY = h - (520 * scale);
-            const padding = 20 * scale;
 
             ctx.fillStyle = '#FFFFFF';
             ctx.shadowColor = 'rgba(0,0,0,0.3)';
