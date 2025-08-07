@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>اسکناس دیجیتال سادات (نسخه نهایی)</title>
+    <title>اسکناس دیجیتال سادات (QR Code اصلاح‌شده)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -103,7 +103,7 @@ const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).pad
 // ===================================================================================
 const BankCrypto = (() => {
     function hashMessage(message) {
-        const hexHash = shake256(message, 512); // Using 512-bit output for SHAKE256
+        const hexHash = shake256(message, 512);
         return hexToUint8Array(hexHash);
     }
     async function generateNewKeyPair() {
@@ -191,7 +191,6 @@ const LSB = (() => {
 // ===================================================================================
 // Banknote Creation and Drawing
 // ===================================================================================
-// Helper to derive values from hash
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
 
 async function createNoteData(amount) {
@@ -206,26 +205,20 @@ async function createNoteData(amount) {
         serial: "SDT-" + now.toString().slice(-8),
         timestamp: now
     };
-    noteData.signatureHash = "0".repeat(128); // Placeholder
+    noteData.signatureHash = "0".repeat(128);
     let stringToSign = getStandardizedDataForSigning(noteData);
     const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
     const signatureB64 = arrayBufferToBase64(signatureBytes);
-    
-    // The final, real hash of the signature
     noteData.signatureHash = uint8ArrayToHex(BankCrypto.hashMessage(signatureB64));
-    noteData.signature = signatureB64; // For LSB
-    noteData.visualHash = uint8ArrayToHex(BankCrypto.hashMessage(noteData.signatureHash)); // For visuals
-    
+    noteData.signature = signatureB64;
+    noteData.visualHash = uint8ArrayToHex(BankCrypto.hashMessage(noteData.signatureHash));
     return noteData;
 }
 
 function drawNoisePattern(g_ctx, hash, w, h) {
     g_ctx.save();
     for (let i = 0; i < 20000; i++) {
-        const x = Math.random() * w;
-        const y = Math.random() * h;
-        const o = Math.random() * 0.15;
-        // The hue of each noise pixel is derived from the hash
+        const x = Math.random() * w, y = Math.random() * h, o = Math.random() * 0.15;
         const hue = H(hash, (i % 30) * 2, 0, 360);
         g_ctx.fillStyle = `hsla(${hue}, 50%, 80%, ${o})`;
         g_ctx.fillRect(x, y, 1, 1);
@@ -240,7 +233,6 @@ async function drawBanknoteOnCanvas(targetCanvas, noteData) {
         const w = targetCanvas.width, h = targetCanvas.height;
         const scale = w / 1350;
 
-        // 1. Draw hash-dependent background
         const baseHue = H(visualHash, 0, 0, 360);
         const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
         bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -248,10 +240,8 @@ async function drawBanknoteOnCanvas(targetCanvas, noteData) {
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, w, h);
         
-        // 2. Draw hash-dependent noise pattern
         drawNoisePattern(ctx, visualHash, w, h);
 
-        // 3. Draw text information
         ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
         ctx.fillStyle = "#EAEAEA";
         ctx.textAlign = 'left';
@@ -265,25 +255,32 @@ async function drawBanknoteOnCanvas(targetCanvas, noteData) {
         ctx.fillText(amount.toLocaleString(), w - (120 * scale), 190 * scale);
         ctx.shadowColor = "transparent";
 
-        // 4. Draw QR Code
+        // --- START QR CODE FIX ---
         const qrCanvas = document.createElement("canvas");
         const qrSize = 380 * scale;
         const qrDataObject = { ...noteData };
         delete qrDataObject.signature;
         delete qrDataObject.visualHash;
         
-        QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#FFFFFF', light: '#00000000' } }, (err) => {
+        // FIX 1: Generate a standard black-on-white QR code for maximum contrast.
+        QRCode.toCanvas(qrCanvas, JSON.stringify(qrDataObject), { 
+            width: qrSize, 
+            errorCorrectionLevel: 'H', 
+            color: { dark: '#000000', light: '#FFFFFF' } 
+        }, (err) => {
             if (err) return reject(err);
-            ctx.fillStyle = `hsla(${baseHue}, 50%, 6%, 0.8)`;
-            ctx.fillRect(w - (150 * scale) - qrSize - 20 * scale, h - (520 * scale) - 20 * scale, qrSize + 40 * scale, qrSize + 40 * scale);
-            ctx.drawImage(qrCanvas, w - (150 * scale) - qrSize, h - (520 * scale));
             
-            // 5. Hide signature in image (LSB)
+            // Draw the high-contrast QR code directly on the canvas.
+            const qrX = w - (150 * scale) - qrSize;
+            const qrY = h - (520 * scale);
+            ctx.drawImage(qrCanvas, qrX, qrY);
+            
             if (signature) {
                 try { LSB.encode(ctx, signature); } catch (lsbError) { reject(lsbError); }
             }
             resolve();
         });
+        // --- END QR CODE FIX ---
     });
 }
 
@@ -303,8 +300,9 @@ async function handleFileSelect(event) {
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
         
         resultDiv.innerHTML = `<span class="info">۱. در حال خواندن QR Code...</span>`;
+        // FIX 2: Scan the whole canvas, not a fixed region.
         const qrData = readQRCodeFromCanvas(tempCanvas);
-        if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ خطا: QR Code یافت نشد.</span>`; return; }
+        if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ خطا: QR Code یافت نشد یا قابل خواندن نیست.</span>`; return; }
         
         resultDiv.innerHTML += `\n<span class="info">۲. در حال استخراج امضای پنهان...</span>`;
         const lsbSignatureB64 = LSB.decode(tempCtx);
@@ -326,10 +324,11 @@ async function handleFileSelect(event) {
     img.src = URL.createObjectURL(file);
     event.target.value = '';
 }
+
 function readQRCodeFromCanvas(canvasToCheck) {
     const context = canvasToCheck.getContext('2d');
-    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
-    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+    // FIX 2 (Implementation): Scan the entire canvas. This is more robust.
+    const imageData = context.getImageData(0, 0, canvasToCheck.width, canvasToCheck.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height);
     if (code) { try { return JSON.parse(code.data); } catch { return null; } }
     return null;
