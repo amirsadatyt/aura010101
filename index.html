@@ -706,6 +706,9 @@ class SadatBanknoteApp {
                 tempCanvas.height = image.height;
                 tempCtx.drawImage(image, 0, 0, image.width, image.height);
 
+                // --- NEW Pre-processing Step for better QR code detection ---
+                this.preprocessImage(tempCtx, tempCanvas.width, tempCanvas.height);
+                
                 const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
                 const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
 
@@ -720,7 +723,7 @@ class SadatBanknoteApp {
                     this.updateValidationResult('<span class="info">✅ Data extracted from image. Verifying...</span>');
                     await this._processVerification(noteData, noteData.signature);
                 } else {
-                    this.updateValidationResult('<span class="invalid">❌ No QR code found in the image.</span>');
+                    this.updateValidationResult('<span class="invalid">❌ No QR code found in the image. Please ensure the QR code is clear and not obscured.</span>');
                 }
                 URL.revokeObjectURL(image.src);
             };
@@ -751,6 +754,21 @@ class SadatBanknoteApp {
         } catch (e) {
             this.updateValidationResult(`<span class="invalid">❌ Verification error: ${e.message}</span>`);
         }
+    }
+
+    // --- NEW: Image preprocessing function ---
+    preprocessImage(ctx, width, height) {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        const factor = 1.2; // Increase this value for more contrast
+        const intercept = 128 * (1 - factor);
+
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = factor * data[i] + intercept;     // Red
+            data[i + 1] = factor * data[i + 1] + intercept; // Green
+            data[i + 2] = factor * data[i + 2] + intercept; // Blue
+        }
+        ctx.putImageData(imageData, 0, 0);
     }
     
     // =================================================================
