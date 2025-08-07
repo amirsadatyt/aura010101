@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [Commitment Scheme]</title>
+    <title>Sadat Digital Banknote [Commitment Scheme - Fixed]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -187,6 +187,24 @@
             color: var(--text-muted);
             margin-right: -10px;
         }
+
+        /* --- LOADER CSS FOR VISUAL FEEDBACK --- */
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top: 4px solid var(--accent-color-1);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 12px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -248,11 +266,17 @@ const ctx = canvas.getContext("2d");
 let activeKeys = { privateKey: null, publicKey: null };
 let jabcodeApi = null;
 let noteWorker = null; 
+let keyGenTimeout = null; // <-- VARIABLE FOR TIMEOUT
 
 const JAB_CODE_REGION = { x: 800, y: 210, width: 420, height: 420 };
 
 // --- UI Update Functions ---
-const updateKeyStatus = (message) => document.getElementById('key-status').innerHTML = message;
+const updateKeyStatus = (message, isLoading = false) => {
+    const statusDiv = document.getElementById('key-status');
+    let content = isLoading ? '<div class="loader"></div>' : '';
+    content += `<span>${message}</span>`;
+    statusDiv.innerHTML = content;
+};
 const updateValidationResult = (message) => document.getElementById('validation-result').innerHTML = message;
 const updateControlsState = (isEnabled) => {
     document.getElementById('create-note-button').disabled = !isEnabled;
@@ -424,10 +448,23 @@ async function renderFullNote(targetCanvas, jabData, visualData, integrityHash) 
 async function handleGenerateNewKeys() {
     const password = prompt("Enter a strong password to encrypt your new private key file:");
     if (!password) {
-        updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password required.</span>');
+        updateKeyStatus('<span class="invalid">❌ Key generation cancelled.</span>', false);
         return;
     }
-    updateKeyStatus('<span class="info">⏳ Generating new Falcon-512 key pair...</span>');
+
+    // 1. Set the loading state with the spinner
+    updateKeyStatus('Generating new Falcon-512 key pair... This may take a moment.', true);
+
+    // 2. Set a 30-second timeout
+    keyGenTimeout = setTimeout(() => {
+        updateKeyStatus('<span class="invalid">❌ Error: Key generation timed out. The process likely crashed due to high memory usage. Please refresh the page and try again.</span>', false);
+        // Terminate and restart the worker to clear the stuck process
+        if (noteWorker) noteWorker.terminate();
+        noteWorker = setupWorker();
+        noteWorker.onmessage = handleWorkerMessage;
+    }, 30000); // 30,000 milliseconds = 30 seconds
+
+    // 3. Send the job to the worker
     noteWorker.postMessage({ action: 'generateKey', payload: { password } });
 }
 
@@ -461,7 +498,7 @@ async function handleImportPrivateKey(event) {
     reader.onload = (e) => {
         try {
             const encryptedData = JSON.parse(e.target.result);
-            updateKeyStatus('<span class="info">⏳ Decrypting private key...</span>');
+            updateKeyStatus('Decrypting private key...', true);
             noteWorker.postMessage({ action: 'importKey', payload: { encryptedData, password } });
         } catch (error) {
             updateKeyStatus(`<span class="invalid">❌ Error importing private key: ${error.message}</span>`);
@@ -477,7 +514,7 @@ async function handleCreateNewNote() {
         return;
     }
     const amount = document.getElementById("amount-input").value;
-    updateKeyStatus('<span class="info">⏳ Generating new banknote...</span>');
+    updateKeyStatus('Generating new banknote...', true);
     noteWorker.postMessage({ action: 'createNote', payload: { amount, privateKey: activeKeys.privateKey } });
 }
 
@@ -495,7 +532,7 @@ async function handleDownloadBatch() {
 
     try {
         const dirHandle = await window.showDirectoryPicker();
-        updateValidationResult(`<span class="info">🚀 Starting batch creation for ${quantity} notes...</span>`);
+        updateValidationResult(`<span class="info">🚀 Starting batch creation for ${quantity} notes...</span>`, true);
         
         noteWorker.postMessage({
             action: 'createBatch',
@@ -530,7 +567,7 @@ async function handleFileSelectForValidation(event) {
         alert("Error: No public key is active for validation. Please import one.");
         return;
     }
-    updateValidationResult(`<span class="info">⏳ Preparing image for validation...</span>`);
+    updateValidationResult(`Preparing image for validation...`, true);
 
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
@@ -540,7 +577,7 @@ async function handleFileSelectForValidation(event) {
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
         
-        updateValidationResult(`<span class="info">1. Reading JAB Code...</span>`);
+        updateValidationResult(`1. Reading JAB Code...`, true);
         let jabData;
         try {
             jabData = JSON.parse(await jabcodeApi.decode_message(tempCanvas.toDataURL()));
@@ -551,7 +588,7 @@ async function handleFileSelectForValidation(event) {
         let resultHTML = `<span class="valid">✅ 1. JAB Code data read successfully.</span>\n`;
 
         resultHTML += `<span class="info">2. Verifying image integrity via DCT hash...</span>`;
-        updateValidationResult(resultHTML);
+        updateValidationResult(resultHTML, true);
         const expectedHash = shake256(JSON.stringify(jabData), 256);
         const decodedHash = DCTStego.decode(tempCtx);
         if (decodedHash !== expectedHash) {
@@ -561,7 +598,7 @@ async function handleFileSelectForValidation(event) {
         resultHTML += `<span class="valid">✅ 2. DCT integrity hash matches.</span>\n`;
 
         resultHTML += `<span class="info">3. Verifying Falcon-512 signature...</span>`;
-        updateValidationResult(resultHTML);
+        updateValidationResult(resultHTML, true);
         
         noteWorker.postMessage({
             action: 'verifySignature',
@@ -659,25 +696,26 @@ function handleWorkerMessage(e) {
 
     switch (status) {
         case 'keyGenerated':
+            clearTimeout(keyGenTimeout); // IMPORTANT: Cancel the timeout on success
             activeKeys = { privateKey: payload.privateKey, publicKey: payload.publicKey };
             utils.downloadFile(JSON.stringify({publicKey: utils.arrayBufferToBase64(payload.publicKey)}, null, 2), 'Sadat-public-key.json', 'application/json');
             utils.downloadFile(JSON.stringify(payload.encryptedData, null, 2), 'Sadat-private-key.json', 'application/json');
-            updateKeyStatus('<span class="valid">✅ Keys generated and saved. Ready to create banknotes.</span>');
+            updateKeyStatus('<span class="valid">✅ Keys generated and saved. Ready to create banknotes.</span>', false);
             updateControlsState(true);
             handleCreateNewNote();
             break;
         case 'keyImported':
             activeKeys = { privateKey: payload.privateKey, publicKey: payload.publicKey };
-            updateKeyStatus('<span class="valid">✅ Private key imported successfully. Ready.</span>');
+            updateKeyStatus('<span class="valid">✅ Private key imported successfully. Ready.</span>', false);
             updateControlsState(true);
             break;
         case 'noteCreated':
             renderFullNote(canvas, payload.jabData, payload.visualData, payload.integrityHash)
-                .then(() => updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>'))
-                .catch(err => updateKeyStatus(`<span class="invalid">❌ Failed to render note: ${err.message}</span>`));
+                .then(() => updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>', false))
+                .catch(err => updateKeyStatus(`<span class="invalid">❌ Failed to render note: ${err.message}</span>`, false));
             break;
         case 'verificationComplete':
-            let resultHTML = document.getElementById('validation-result').innerHTML;
+            let resultHTML = document.getElementById('validation-result').innerHTML.split('\n').slice(0, 3).join('\n') + '\n';
             if(payload.isValid) {
                 resultHTML += `<span class="valid">✅ 3. Falcon-512 Signature is valid.</span>\n\n<hr style="border-color: var(--border-color); margin-top: 15px;">`;
                 resultHTML += `<span style="font-size:14px;font-weight:600;" class="valid">✅ VERDICT: Banknote is authentic.</span>\n`;
@@ -688,7 +726,8 @@ function handleWorkerMessage(e) {
             updateValidationResult(resultHTML);
             break;
         case 'error':
-            updateKeyStatus(`<span class="invalid">❌ Worker Error: ${payload.message}</span>`);
+            clearTimeout(keyGenTimeout); // IMPORTANT: Cancel the timeout on error
+            updateKeyStatus(`<span class="invalid">❌ Worker Error: ${payload.message}</span>`, false);
             break;
     }
 }
@@ -698,14 +737,14 @@ function handleWorkerMessage(e) {
 // ===================================================================================
 async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Initializing systems...</span>');
+    updateKeyStatus('Initializing systems...', true);
     try {
         jabcodeApi = new JabcodeJSInterface();
         noteWorker = setupWorker();
         noteWorker.onmessage = handleWorkerMessage;
-        updateKeyStatus('<span class="info">✅ Systems ready. Please generate or import keys to begin.</span>');
+        updateKeyStatus('✅ Systems ready. Please generate or import keys to begin.', false);
     } catch (e) {
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: ${e.message}.</span>`);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: ${e.message}.</span>`, false);
         return;
     }
     document.getElementById('generate-keys-button').addEventListener('click', handleGenerateNewKeys);
