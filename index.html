@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>اسکناس دیجیتال سادات (Falcon-512 + SHAKE256)</title>
+    <title>Sadat Digital Banknote (Falcon-512 + SHAKE256)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
     <style>
         :root {
-            --primary-font: 'Vazirmatn', 'Segoe UI', sans-serif;
+            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
             --mono-font: 'Roboto Mono', monospace;
             --dark-bg: #10101a;
             --medium-bg: #1a1a2e;
@@ -111,8 +111,7 @@
         textarea {
             min-height: 100px;
             width: calc(100% - 20px);
-            text-align: right;
-            direction: rtl;
+            text-align: left;
             resize: vertical;
             font-size: 0.8rem;
         }
@@ -183,8 +182,7 @@
             font-weight: normal;
             min-height: 50px;
             line-height: 1.6;
-            text-align: right;
-            direction: rtl;
+            text-align: left;
             background: var(--dark-bg);
             padding: 15px 20px;
             border-radius: 12px;
@@ -199,8 +197,7 @@
         .info { color: var(--info-color); }
         
         .key-info {
-            text-align: right;
-            direction: rtl;
+            text-align: left;
             padding: 10px;
         }
         .key-info p {
@@ -244,7 +241,7 @@
         .input-label {
             font-size: 0.9rem;
             color: var(--text-muted);
-            margin-left: 5px;
+            margin-right: -10px;
         }
 
         .upload-container {
@@ -259,84 +256,83 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>اسکناس دیجیتال سادات</h1>
-        <p>یک مفهوم اولیه برای اسکناس دیجیتال امن با استفاده از امضای Falcon-512 و هش SHAKE256.</p>
+        <h1>Sadat Digital Banknote</h1>
+        <p>A proof-of-concept for a secure digital banknote using Falcon-512 and SHAKE256.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
 
     <div class="section">
-        <h2>کنترل‌های اسکناس</h2>
+        <h2>Banknote Controls</h2>
         <div class="controls-grid">
-            <span class="input-label">مقدار:</span>
+            <span class="input-label">Amount:</span>
             <input type="number" id="amount-input" value="50000">
-            <span class="input-label">تعداد:</span>
+            <span class="input-label">Quantity:</span>
             <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" disabled>🎨 طراحی مجدد اسکناس</button>
-            <button id="download-batch-button" disabled>📥 دانلود دسته‌ای</button>
+            <button id="create-note-button" disabled>🎨 Redesign Note</button>
+            <button id="download-batch-button" disabled>📥 Download Batch</button>
         </div>
     </div>
 
     <div class="section">
-        <h2>مدیریت کلید بانکی</h2>
+        <h2>Bank Key Management</h2>
         <div class="controls-grid">
-            <button id="generate-keys-button">🔑 تولید و خروجی گرفتن از کلیدها</button>
+            <button id="generate-keys-button">🔑 Generate & Export Keys</button>
             <label for="import-public-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                وارد کردن کلید عمومی
+                Import Public Key
             </label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
             <label for="import-private-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                وارد کردن کلید خصوصی
+                Import Private Key
             </label>
             <input type="file" id="import-private-key" accept=".json" style="display: none;">
         </div>
-        <div id="key-status">وضعیت کلید در اینجا نمایش داده می‌شود.</div>
+        <div id="key-status">Key status will be shown here.</div>
     </div>
     
     <div class="section">
-        <h2>اعتبارسنجی اسکناس</h2>
+        <h2>Banknote Validation</h2>
         <div class="controls-grid">
             <label for="verify-from-image" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                آپلود تصویر برای تأیید
+                Upload Image to Verify
             </label>
             <input type="file" id="verify-from-image" accept="image/*" style="display: none;">
         </div>
         <hr style="border-color: rgba(124, 77, 255, 0.1); margin: 20px 0;">
-        <p style="color: var(--text-muted); margin-bottom: 10px;">یا اطلاعات اسکناس را به صورت دستی وارد کنید:</p>
+        <p style="color: var(--text-muted); margin-bottom: 10px;">Or enter banknote details manually:</p>
         <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
             <div class="controls-grid" style="width: 100%;">
-                <span class="input-label">مقدار:</span>
+                <span class="input-label">Amount:</span>
                 <input type="number" id="verify-amount">
-                <span class="input-label">سریال:</span>
+                <span class="input-label">Serial:</span>
                 <input type="text" id="verify-serial">
-                <span class="input-label">کلید تأیید:</span>
+                <span class="input-label">Verification Key:</span>
                 <input type="text" id="verify-verification-key">
             </div>
-            <textarea id="verify-signature" placeholder="امضای دیجیتال Base64..." style="min-height: 120px;"></textarea>
-            <button id="verify-note-button" disabled>✅ تأیید اصالت</button>
+            <textarea id="verify-signature" placeholder="Base64 Digital Signature..." style="min-height: 120px;"></textarea>
+            <button id="verify-note-button" disabled>✅ Verify Authenticity</button>
         </div>
-        <div id="validation-result" style="text-align: center;">نتیجه تأیید در اینجا نمایش داده می‌شود.</div>
+        <div id="validation-result" style="text-align: center;">Validation result will be shown here.</div>
     </div>
 </div>
 
 <script type="module">
-// --- یادداشت مهم امنیتی ---
-// این کد یک مفهوم اولیه برای اسکناس دیجیتال است.
-// تمام عملیات رمزنگاری در مرورگر (سمت کاربر) انجام می‌شود.
-// برای یک سیستم واقعی بانکی، کلید خصوصی باید در یک محیط امن و ایزوله (مانند HSM)
-// در سمت سرور مدیریت شود تا از حملات احتمالی در امان بماند و از مشکلاتی مانند
-// خرج کردن مضاعف (Double-Spending) جلوگیری شود.
+// --- IMPORTANT SECURITY NOTE ---
+// This code is a proof-of-concept for a digital banknote.
+// All cryptographic operations are performed in the browser (client-side).
+// For a real-world banking system, the private key MUST be managed in a secure, isolated environment (like an HSM)
+// on the server side to protect against attacks and prevent double-spending.
 
 // Import cryptographic libraries as modules
 import pqcSignFalcon512 from './falcon.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 /**
- * کلاس SadatBanknoteApp تمام منطق و UI برنامه را مدیریت می‌کند.
- * این کلاس برای سازماندهی بهتر و حرفه‌ای‌تر کردن کد ایجاد شده است.
+ * The SadatBanknoteApp class manages all application logic and UI.
+ * It's structured this way for better organization and maintainability.
  */
 class SadatBanknoteApp {
     constructor() {
@@ -350,7 +346,7 @@ class SadatBanknoteApp {
     }
 
     /**
-     * متدهای کمکی برای تبدیل داده‌ها
+     * Helper methods for data conversion
      */
     arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
     base64ToUint8Array = (base64) => {
@@ -366,7 +362,7 @@ class SadatBanknoteApp {
     hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 
     /**
-     * مدیریت وضعیت UI
+     * UI state management
      */
     updateKeyStatus(message) {
         document.getElementById('key-status').innerHTML = message;
@@ -384,7 +380,7 @@ class SadatBanknoteApp {
     }
 
     /**
-     * مدیریت رویدادهای UI
+     * UI event handlers
      */
     initEventListeners() {
         document.getElementById('generate-keys-button').addEventListener('click', () => this.handleGenerateAndExportKeys());
@@ -397,29 +393,28 @@ class SadatBanknoteApp {
     }
 
     /**
-     * شروع برنامه و بارگذاری ماژول رمزنگاری
+     * App initialization and cryptographic module loading
      */
     async init() {
         this.updateControlsState(false, false);
-        this.updateKeyStatus('<span class="info">⏳ در حال بارگذاری ماژول رمزنگاری Falcon-512...</span>');
+        this.updateKeyStatus('<span class="info">⏳ Loading Falcon-512 cryptographic module...</span>');
         
         try {
             this.falconApi = await pqcSignFalcon512();
-            this.updateKeyStatus('<span class="info">✅ آماده. لطفاً یک جفت کلید جدید تولید یا کلیدهای موجود را وارد کنید.</span>');
+            this.updateKeyStatus('<span class="info">✅ Ready. Please generate a new key pair or import existing keys.</span>');
         } catch (e) {
             console.error("Failed to load Falcon module:", e);
-            this.updateKeyStatus(`<span class="invalid">❌ خطای بحرانی: ماژول Falcon-512 بارگذاری نشد. ${e.message}</span>`);
-            alert("خطا: ماژول رمزنگاری بارگذاری نشد.");
+            this.updateKeyStatus(`<span class="invalid">❌ CRITICAL ERROR: Failed to load Falcon-512 module. ${e.message}</span>`);
+            alert("Error: Cryptographic module failed to load.");
         }
     }
 
     // =================================================================
-    // رمزنگاری و کلیدها
+    // Cryptography and Key Management
     // =================================================================
     
     /**
-     * از SHAKE256 برای تولید یک هش 1024 بیتی از پیام استفاده می‌کند.
-     * این یک انتخاب استاندارد و امن برای هش کردن داده‌ها است.
+     * Uses SHAKE256 to create a 1024-bit hash of the message.
      */
     hashMessage(message) {
         const hexHash = shake256(message, 1024);
@@ -427,7 +422,7 @@ class SadatBanknoteApp {
     }
 
     /**
-     * داده‌ها را با استفاده از کلید خصوصی Falcon-512 امضا می‌کند.
+     * Signs data using the Falcon-512 private key.
      */
     async signData(data, privateKey) {
         if (!this.falconApi) throw new Error("Falcon API is not initialized.");
@@ -437,7 +432,7 @@ class SadatBanknoteApp {
     }
 
     /**
-     * امضا را با استفاده از کلید عمومی Falcon-512 تأیید می‌کند.
+     * Verifies a signature using the Falcon-512 public key.
      */
     async verifySignature(data, signature, publicKey) {
         if (!this.falconApi) throw new Error("Falcon API is not initialized.");
@@ -446,7 +441,7 @@ class SadatBanknoteApp {
     }
 
     /**
-     * تابع استانداردسازی داده‌ها برای امضا.
+     * Standardizes banknote data for signing.
      */
     getStandardizedDataForSigning(noteData) {
         const dataToSign = {
@@ -459,16 +454,16 @@ class SadatBanknoteApp {
     }
     
     // =================================================================
-    // مدیریت کلید و UI
+    // Key Management
     // =================================================================
     async handleGenerateAndExportKeys() {
-        const password = prompt("یک رمز عبور قوی برای رمزگذاری فایل کلید خصوصی خود وارد کنید:");
+        const password = prompt("Enter a strong password to encrypt your private key file:");
         if (!password) {
-            this.updateKeyStatus('<span class="invalid">❌ عملیات لغو شد. رمز عبور الزامی است.</span>');
+            this.updateKeyStatus('<span class="invalid">❌ Operation cancelled. Password is required.</span>');
             return;
         }
 
-        this.updateKeyStatus('<span class="info">⏳ در حال تولید جفت کلید Falcon-512 و رمزگذاری... لطفاً صبر کنید.</span>');
+        this.updateKeyStatus('<span class="info">⏳ Generating Falcon-512 key pair and encrypting... Please wait.</span>');
         try {
             const keyPair = await this.falconApi.keypair();
             this.activeKeys.publicKey = keyPair.publicKey;
@@ -479,12 +474,12 @@ class SadatBanknoteApp {
             const encryptedPrivate = await this.encryptPrivateKey(keyPair.privateKey, password);
             this.downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json');
 
-            this.updateKeyStatus('<span class="valid">✅ جفت کلید جدید با موفقیت تولید و ذخیره شد.</span>');
+            this.updateKeyStatus('<span class="valid">✅ New key pair successfully generated and saved.</span>');
             this.updateControlsState(true, true);
             this.handleCreateNewNote();
         } catch (e) {
             console.error("Key generation failed:", e);
-            this.updateKeyStatus(`<span class="invalid">❌ تولید کلید با شکست مواجه شد: ${e.message}</span>`);
+            this.updateKeyStatus(`<span class="invalid">❌ Key generation failed: ${e.message}</span>`);
         }
     }
 
@@ -493,12 +488,12 @@ class SadatBanknoteApp {
         if (!file) return;
         try {
             const data = JSON.parse(await file.text());
-            if (!data.keyData) throw new Error("فرمت فایل کلید عمومی نامعتبر است.");
+            if (!data.keyData) throw new Error("Invalid public key file format.");
             this.activeKeys.publicKey = this.base64ToUint8Array(data.keyData);
-            this.updateKeyStatus('<span class="valid">✅ کلید عمومی با موفقیت وارد شد.</span>');
+            this.updateKeyStatus('<span class="valid">✅ Public key successfully imported.</span>');
             this.updateControlsState(!!this.activeKeys.privateKey, true);
         } catch (error) {
-            this.updateKeyStatus(`<span class="invalid">❌ خطا در وارد کردن کلید عمومی: ${error.message}</span>`);
+            this.updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`);
         }
         event.target.value = '';
     }
@@ -506,21 +501,21 @@ class SadatBanknoteApp {
     async handleImportPrivateKey(event) {
         const file = event.target.files[0];
         if (!file) return;
-        const password = prompt("رمز عبور فایل کلید خصوصی را وارد کنید:");
+        const password = prompt("Enter the password for the private key file:");
         if (!password) {
-            this.updateKeyStatus('<span class="invalid">❌ عملیات لغو شد. رمز عبور الزامی است.</span>');
+            this.updateKeyStatus('<span class="invalid">❌ Operation cancelled. Password is required.</span>');
             return;
         }
         try {
             const encryptedData = JSON.parse(await file.text());
-            this.updateKeyStatus('<span class="info">⏳ در حال رمزگشایی و وارد کردن کلید خصوصی...</span>');
+            this.updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>');
             const privateKey = await this.decryptPrivateKey(encryptedData, password);
             this.activeKeys.privateKey = privateKey;
-            this.updateKeyStatus('<span class="valid">✅ کلید خصوصی با موفقیت وارد شد.</span>');
+            this.updateKeyStatus('<span class="valid">✅ Private key successfully imported.</span>');
             this.updateControlsState(true, !!this.activeKeys.publicKey);
             this.handleCreateNewNote();
         } catch (error) {
-            this.updateKeyStatus(`<span class="invalid">❌ خطا در رمزگشایی یا وارد کردن کلید. رمز عبور یا فایل را بررسی کنید: ${error.message}</span>`);
+            this.updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing key. Check password or file: ${error.message}</span>`);
         }
         event.target.value = '';
     }
@@ -538,17 +533,17 @@ class SadatBanknoteApp {
     }
     
     // =================================================================
-    // منطق اصلی اسکناس
+    // Main Banknote Logic
     // =================================================================
     async createNoteData(amount, index = 0) {
         if (!this.activeKeys.privateKey) {
-            alert("خطا: کلید خصوصی برای امضای اسکناس فعال نیست.");
+            alert("Error: No private key is active to sign the banknote.");
             return null;
         }
         
         const validatedAmount = parseInt(amount);
         if (isNaN(validatedAmount) || validatedAmount <= 0) {
-            alert("مقدار اسکناس باید یک عدد مثبت باشد.");
+            alert("Banknote amount must be a positive number.");
             return null;
         }
         
@@ -572,20 +567,20 @@ class SadatBanknoteApp {
 
     async handleCreateNewNote() {
         const amount = document.getElementById("amount-input").value;
-        this.updateKeyStatus('<span class="info">⏳ در حال تولید اسکناس جدید...</span>');
+        this.updateKeyStatus('<span class="info">⏳ Generating a new banknote...</span>');
         
         try {
             const noteData = await this.createNoteData(amount);
             if (noteData) {
                 await this.drawNoteOnCanvas(this.canvas, noteData, this.canvas.width, this.canvas.height);
                 this.currentNoteData = noteData;
-                this.updateKeyStatus('<span class="valid">✅ طراحی اسکناس جدید آماده است.</span>');
+                this.updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
             } else {
-                this.updateKeyStatus('<span class="invalid">❌ تولید اسکناس جدید با شکست مواجه شد.</span>');
+                this.updateKeyStatus('<span class="invalid">❌ Failed to generate a new banknote.</span>');
             }
         } catch (e) {
             console.error("Error creating new note:", e);
-            this.updateKeyStatus(`<span class="invalid">❌ خطای داخلی در تولید اسکناس: ${e.message}</span>`);
+            this.updateKeyStatus(`<span class="invalid">❌ Internal error while generating banknote: ${e.message}</span>`);
         }
     }
 
@@ -594,16 +589,16 @@ class SadatBanknoteApp {
         const amount = document.getElementById("amount-input").value;
         const resultDiv = document.getElementById('key-status');
         
-        // چک کردن پشتیبانی از File System Access API
+        // Check for File System Access API support
         if (window.showDirectoryPicker) {
             try {
                 const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                resultDiv.innerHTML = `<span class="info">⏳ در حال پردازش ${quantity} اسکناس... لطفاً صبر کنید.</span>`;
+                resultDiv.innerHTML = `<span class="info">⏳ Processing ${quantity} banknotes... Please wait.</span>`;
                 
                 for (let i = 0; i < quantity; i++) {
                     const noteData = await this.createNoteData(amount, i);
                     if (!noteData) {
-                        resultDiv.innerHTML = `<span class="invalid">❌ دانلود دسته‌ای متوقف شد.</span>`;
+                        resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped.</span>`;
                         return;
                     }
                     
@@ -618,29 +613,29 @@ class SadatBanknoteApp {
                     await writable.write(blob);
                     await writable.close();
                     
-                    resultDiv.innerHTML = `<span class="info">✅ اسکناس ${i + 1} از ${quantity} ذخیره شد.</span>`;
+                    resultDiv.innerHTML = `<span class="info">✅ Banknote ${i + 1} of ${quantity} saved.</span>`;
                 }
                 
-                resultDiv.innerHTML = `<span class="valid">✅ با موفقیت ${quantity} اسکناس در پوشه انتخابی شما ذخیره شد.</span>`;
+                resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknotes to your selected folder.</span>`;
                 this.handleCreateNewNote();
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    resultDiv.innerHTML = `<span class="info">عملیات انتخاب پوشه توسط کاربر لغو شد.</span>`;
+                    resultDiv.innerHTML = `<span class="info">Operation cancelled by user.</span>`;
                 } else {
                     console.error("Batch download failed:", error);
-                    resultDiv.innerHTML = `<span class="invalid">❌ خطا در ذخیره فایل: ${error.message}</span>`;
+                    resultDiv.innerHTML = `<span class="invalid">❌ Error saving files: ${error.message}</span>`;
                 }
             }
         } else {
-            // fallback به روش ZIP
-            resultDiv.innerHTML = `<span class="info">⚠️ مرورگر شما از انتخاب پوشه پشتیبانی نمی‌کند. در حال دانلود فایل فشرده...</span>`;
+            // Fallback to ZIP download
+            resultDiv.innerHTML = `<span class="info">⚠️ Your browser does not support folder selection. Downloading as a ZIP file...</span>`;
             try {
                 const zip = new JSZip();
                 
                 for (let i = 0; i < quantity; i++) {
                     const noteData = await this.createNoteData(amount, i);
                     if (!noteData) {
-                        resultDiv.innerHTML = `<span class="invalid">❌ دانلود دسته‌ای متوقف شد.</span>`;
+                        resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped.</span>`;
                         return;
                     }
                     
@@ -656,21 +651,21 @@ class SadatBanknoteApp {
                 const zipBlob = await zip.generateAsync({type:"blob"});
                 this.downloadFile(zipBlob, `SADAT-NOTES-BATCH-${Date.now()}.zip`, 'application/zip');
                 
-                resultDiv.innerHTML = `<span class="valid">✅ با موفقیت ${quantity} اسکناس در قالب فایل ZIP ذخیره شد.</span>`;
+                resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknotes as a ZIP file.</span>`;
                 this.handleCreateNewNote();
             } catch (error) {
                  console.error("Batch download failed:", error);
-                 resultDiv.innerHTML = `<span class="invalid">❌ خطا: ${error.message}</span>`;
+                 resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
             }
         }
     }
 
     // =================================================================
-    // اعتبارسنجی اسکناس
+    // Banknote Validation
     // =================================================================
     async handleVerifyNoteManually() {
         if (!this.activeKeys.publicKey) {
-            this.updateValidationResult('<span class="invalid">❌ کلید عمومی برای تأیید امضا وارد نشده است.</span>');
+            this.updateValidationResult('<span class="invalid">❌ No public key loaded for signature verification.</span>');
             return;
         }
         
@@ -680,7 +675,7 @@ class SadatBanknoteApp {
         const signatureBase64 = document.getElementById('verify-signature').value;
 
         if (!amount || !serial || !verificationKey || !signatureBase64) {
-            this.updateValidationResult('<span class="invalid">❌ لطفاً تمام فیلدها را پر کنید.</span>');
+            this.updateValidationResult('<span class="invalid">❌ Please fill in all fields.</span>');
             return;
         }
 
@@ -698,7 +693,7 @@ class SadatBanknoteApp {
         const file = event.target.files[0];
         if (!file) return;
 
-        this.updateValidationResult('<span class="info">⏳ در حال پردازش تصویر و استخراج داده‌ها...</span>');
+        this.updateValidationResult('<span class="info">⏳ Processing image and extracting data...</span>');
         
         try {
             const image = new Image();
@@ -722,15 +717,15 @@ class SadatBanknoteApp {
                     document.getElementById('verify-verification-key').value = noteData.verificationKey;
                     document.getElementById('verify-signature').value = noteData.signature;
 
-                    this.updateValidationResult('<span class="info">✅ داده‌ها از تصویر استخراج شد. در حال تأیید...</span>');
+                    this.updateValidationResult('<span class="info">✅ Data extracted from image. Verifying...</span>');
                     await this._processVerification(noteData, noteData.signature);
                 } else {
-                    this.updateValidationResult('<span class="invalid">❌ کد QR در تصویر یافت نشد.</span>');
+                    this.updateValidationResult('<span class="invalid">❌ No QR code found in the image.</span>');
                 }
                 URL.revokeObjectURL(image.src);
             };
         } catch (error) {
-            this.updateValidationResult(`<span class="invalid">❌ خطای پردازش تصویر: ${error.message}</span>`);
+            this.updateValidationResult(`<span class="invalid">❌ Error processing image: ${error.message}</span>`);
         } finally {
             event.target.value = '';
         }
@@ -738,7 +733,7 @@ class SadatBanknoteApp {
 
     async _processVerification(noteData, signatureBase64) {
         if (!this.activeKeys.publicKey) {
-            this.updateValidationResult('<span class="invalid">❌ کلید عمومی برای تأیید امضا وارد نشده است.</span>');
+            this.updateValidationResult('<span class="invalid">❌ No public key loaded for signature verification.</span>');
             return;
         }
         
@@ -749,23 +744,23 @@ class SadatBanknoteApp {
             const isValid = await this.verifySignature(stringToVerify, signatureBytes, this.activeKeys.publicKey);
             
             if (isValid) {
-                this.updateValidationResult('<span class="valid">✅ امضا معتبر است. این اسکناس اصل است.</span>');
+                this.updateValidationResult('<span class="valid">✅ Signature is valid. This banknote is authentic.</span>');
             } else {
-                this.updateValidationResult('<span class="invalid">❌ امضا نامعتبر است. این اسکناس جعلی است یا تغییر کرده است.</span>');
+                this.updateValidationResult('<span class="invalid">❌ Signature is invalid. This banknote is fake or has been tampered with.</span>');
             }
         } catch (e) {
-            this.updateValidationResult(`<span class="invalid">❌ خطای تأیید: ${e.message}</span>`);
+            this.updateValidationResult(`<span class="invalid">❌ Verification error: ${e.message}</span>`);
         }
     }
     
     // =================================================================
-    // توابع کمکی گرافیکی
+    // Graphical Helper Functions
     // =================================================================
     H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
     
     async drawNoteOnCanvas(targetCanvas, noteData, width, height) {
         return new Promise(async (resolve, reject) => {
-            if (!noteData || Object.keys(noteData).length === 0) return reject("داده‌های اسکناس فراهم نشده است.");
+            if (!noteData || Object.keys(noteData).length === 0) return reject("Banknote data not provided.");
     
             const ctx = targetCanvas.getContext("2d");
             const { amount, verificationKey, serial, visualHash } = noteData;
@@ -783,19 +778,19 @@ class SadatBanknoteApp {
             this.drawNoisePattern(ctx, visualHash, w, h);
     
             ctx.shadowColor="rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; ctx.shadowOffsetX=2*scale; ctx.shadowOffsetY=2*scale;
-            ctx.fillStyle="#EAEAEA"; ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='right';
-            ctx.fillText(serial.substring(4),w-(150*scale),160*scale); ctx.fillText(verificationKey.substring(4),w-(150*scale),280*scale);
-            ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="left";
+            ctx.fillStyle="#EAEAEA"; ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='left';
+            ctx.fillText(serial.substring(4),150*scale,160*scale); ctx.fillText(verificationKey.substring(4),150*scale,280*scale);
+            ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right";
             ctx.shadowBlur=12*scale; ctx.shadowOffsetX=4*scale; ctx.shadowOffsetY=4*scale;
-            ctx.fillText(amount.toString(),120*scale,190*scale); ctx.shadowColor="transparent";
+            ctx.fillText(amount.toString(),w-(120*scale),190*scale); ctx.shadowColor="transparent";
     
             const qrCanvas = document.createElement("canvas");
             const qrSize = 380 * scale;
             QRCode.toCanvas(qrCanvas, JSON.stringify(noteData), { width: qrSize, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#FFFFFF' } }, (err) => {
                 if (err) { reject(err); return; }
-                ctx.drawImage(qrCanvas, 150 * scale, h - (520 * scale), qrSize, qrSize);
-                ctx.font=`${30*scale}px 'Vazirmatn'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
-                ctx.fillText("توسط بانک سادات به صورت دیجیتال امضا شده است (Falcon-512)", w/2, h-60*scale);
+                ctx.drawImage(qrCanvas, w - (150 * scale) - qrSize, h - (520 * scale), qrSize, qrSize);
+                ctx.font=`${30*scale}px 'Poppins'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
+                ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-512)", w/2, h-60*scale);
                 resolve();
             });
         });
@@ -808,7 +803,7 @@ class SadatBanknoteApp {
     g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
     // =================================================================
-    // رمزنگاری و رمزگشایی کلید خصوصی با Web Crypto API
+    // Private Key Encryption/Decryption with Web Crypto API
     // =================================================================
     AES_ALGO = "AES-GCM";
     PBKDF2_ITERATIONS = 100000;
@@ -867,7 +862,7 @@ class SadatBanknoteApp {
     }
 }
 
-// ایجاد نمونه از کلاس و شروع برنامه
+// Instantiate the app and start it
 const app = new SadatBanknoteApp();
 app.init();
 </script>
