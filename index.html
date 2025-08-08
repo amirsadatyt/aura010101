@@ -6,7 +6,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -205,24 +204,6 @@
             border-radius: 4px;
         }
 
-        .data-heading {
-            color: var(--accent-color-1);
-            margin-top: 15px;
-            margin-bottom: 8px;
-            font-size: 14px;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 6px;
-            font-weight: 600;
-            font-family: var(--primary-font);
-        }
-
-        .comparison-item {
-            margin-top: 10px;
-            padding: 8px 10px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            border-left: 3px solid var(--accent-color-2);
-        }
         code {
             background: var(--medium-bg);
             padding: 2px 6px;
@@ -240,7 +221,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using RSA-PSS, LSB Steganography, and JAB Code.</p>
+        <p>A secure, verifiable digital currency concept using RSA-PSS and JAB Code.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
@@ -537,66 +518,9 @@ function downloadFile(data, filename, type) {
     URL.revokeObjectURL(url);
 }
 
-
 // ===================================================================================
-// LSB Steganography Module
+// LSB Steganography Module (Removed - No longer used for encoding/decoding)
 // ===================================================================================
-const LSB = (() => {
-    const MESSAGE_TERMINATOR = "00000000";
-
-    function messageToBinary(message) {
-        return message.split('').map(char => {
-            return char.charCodeAt(0).toString(2).padStart(8, '0');
-        }).join('') + MESSAGE_TERMINATOR;
-    }
-
-    function encode(ctx, message) {
-        const binaryMessage = messageToBinary(message);
-        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-        const data = imageData.data;
-        
-        if (binaryMessage.length > data.length / 4 * 3) {
-            throw new Error("Message is too long to be encoded in the image.");
-        }
-
-        let dataIndex = 0;
-        for (let i = 0; i < binaryMessage.length; i++) {
-            if ((dataIndex + 1) % 4 === 0) {
-                dataIndex++;
-            }
-            const bit = parseInt(binaryMessage[i], 10);
-            data[dataIndex] = (data[dataIndex] & 0xFE) | bit;
-            dataIndex++;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-    }
-
-    function decode(ctx) {
-        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-        const data = imageData.data;
-        let binaryMessage = "";
-        let byte = "";
-        let decodedMessage = "";
-
-        for (let i = 0; i < data.length; i++) {
-            if ((i + 1) % 4 === 0) continue;
-            const lsb = data[i] & 1;
-            byte += lsb;
-            
-            if (byte.length === 8) {
-                if (byte === MESSAGE_TERMINATOR) {
-                    return decodedMessage;
-                }
-                decodedMessage += String.fromCharCode(parseInt(byte, 2));
-                byte = "";
-            }
-        }
-        return null;
-    }
-
-    return { encode, decode };
-})();
 
 
 // ===================================================================================
@@ -625,7 +549,6 @@ async function handleFileSelect(event) {
 
     const resultDiv = document.getElementById('validation-result');
     resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
-    let isFullyValid = true;
 
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
@@ -637,7 +560,7 @@ async function handleFileSelect(event) {
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
 
-        // --- VALIDATION PIPELINE ---
+        // --- SIMPLIFIED VALIDATION PIPELINE ---
         
         // Step 1: Read JAB Code
         resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Code...</span>`;
@@ -656,61 +579,14 @@ async function handleFileSelect(event) {
 
         if (!isSignatureValid) {
             resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. The banknote data is forged or has been tampered with.</span>`;
+            resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">❌ VERDICT: Forgery detected.</span>`;
             resultDiv.innerHTML = resultHTML;
             return;
         }
         resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified by the issuing bank's public key.</span>`;
 
-        // Step 3: Verify LSB Steganography
-        resultHTML += `\n\n<span class="info">3. Extracting and verifying hidden LSB data...</span>`;
-        resultDiv.innerHTML = resultHTML;
-        const decodedSignature = LSB.decode(tempCtx);
-
-        if (!decodedSignature || decodedSignature !== barcodeData.signature) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Steganographic signature is missing or does not match the JAB Code data. The banknote's image has been modified or replaced.</span>`;
-            resultDiv.innerHTML = resultHTML;
-            isFullyValid = false;
-            return;
-        }
-        resultHTML += `\n<span class="valid">✅ 3. Hidden LSB signature extracted and successfully matched. Integrity of the image is confirmed.</span>`;
-
-
-        // Step 4: Perform Graphical Integrity Check
-        resultHTML += `\n\n<span class="info">4. Performing graphical integrity check...</span>`;
-        resultDiv.innerHTML = resultHTML;
-        
-        const expectedVisualHash = await BankCrypto.hashMessage(barcodeData.signature);
-        const referenceCanvas = document.createElement('canvas');
-        referenceCanvas.width = tempCanvas.width;
-        referenceCanvas.height = tempCanvas.height;
-        await drawNoteOnCanvas(referenceCanvas, {...barcodeData, visualHash: expectedVisualHash}, referenceCanvas.width, referenceCanvas.height, false);
-        
-        const differencePercentage = compareImages(tempCanvas, referenceCanvas, 35);
-        
-        if (differencePercentage > 0.15) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Graphical tampering detected. Image differs by ${differencePercentage.toFixed(2)}% from original (Threshold: >0.15%).</span>`;
-            isFullyValid = false;
-        } else {
-            resultHTML += `\n<span class="valid">✅ 4. Graphical integrity check passed (${differencePercentage.toFixed(2)}% difference).</span>`;
-        }
-        
-        // Step 5: Perform OCR Cross-Check
-        if (isFullyValid) {
-            resultHTML += `\n\n<span class="info">5. Performing Optical Character Recognition (OCR)...</span>`;
-            resultDiv.innerHTML = resultHTML;
-            const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-            const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
-            resultHTML += `\n<span class="valid">✅ 5. OCR scan complete.</span>\n`;
-            resultHTML += `\n<div class="data-heading">Final Security Cross-Check</div>`;
-            const comparison = compareDataAndOCR(barcodeData, ocrResult);
-            resultHTML += `<div class="comparison-item"><strong>Amount:</strong>\n  Expected: <code>${comparison.expected.amount}</code>, Found: <code>${comparison.found.amount || '(missing)'}</code>, Status: ${comparison.match.amount ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
-            if (!comparison.match.amount) isFullyValid = false;
-            resultHTML += `<div class="comparison-item"><strong>Serial & Key:</strong>\n  Serial Match: ${comparison.match.serial ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}, Key Match: ${comparison.match.key ? '<span class="valid">✅</span>' : '<span class="invalid">❌</span>'}</div>`;
-            if (!comparison.match.serial || !comparison.match.key) isFullyValid = false;
-        }
-
         // --- FINAL VERDICT ---
-        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">${isFullyValid ? '✅ VERDICT: Banknote is authentic.' : '❌ VERDICT: Forgery detected.'}</span>`;
+        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
         resultDiv.innerHTML = resultHTML;
     };
     img.src = fileUrl;
@@ -731,34 +607,6 @@ async function validateDigitalSignature(barcodeData) {
     }
 }
 
-function compareImages(canvas1, canvas2, tolerance = 30) {
-    const ctx1 = canvas1.getContext('2d');
-    const ctx2 = canvas2.getContext('2d');
-    const imageData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height);
-    const imageData2 = ctx2.getImageData(0, 0, canvas1.width, canvas2.height);
-    const data1 = imageData1.data;
-    const data2 = imageData2.data;
-    let diffPixels = 0;
-    const totalPixels = canvas1.width * canvas1.height;
-    for (let i = 0; i < data1.length; i += 4) {
-        const r1 = data1[i] & 0xFE;
-        const g1 = data1[i+1] & 0xFE;
-        const b1 = data1[i+2] & 0xFE;
-        const r2 = data2[i] & 0xFE;
-        const g2 = data2[i+1] & 0xFE;
-        const b2 = data2[i+2] & 0xFE;
-
-        const rDiff = Math.abs(r1 - r2);
-        const gDiff = Math.abs(g1 - g2);
-        const bDiff = Math.abs(b1 - b2);
-        
-        if (rDiff > tolerance || gDiff > tolerance || bDiff > tolerance) {
-            diffPixels++;
-        }
-    }
-    return (diffPixels / totalPixels) * 100;
-}
-
 async function readBarcodeFromCanvas(canvasToCheck) {
     const barcodeRegion = { x: 800, y: 210, width: 420, height: 420 };
     const tempCanvas = document.createElement('canvas');
@@ -776,44 +624,6 @@ async function readBarcodeFromCanvas(canvasToCheck) {
         console.error("JAB Code decoding failed:", error);
         return null;
     }
-}
-
-async function validateNoteForCreation(noteData, targetCanvas) {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = targetCanvas.width;
-    tempCanvas.height = targetCanvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
-
-    await drawNoteOnCanvas(tempCanvas, noteData, tempCanvas.width, tempCanvas.height, true);
-
-    const barcodeData = await readBarcodeFromCanvas(tempCanvas);
-    if (!barcodeData) return false;
-    
-    // Compare essential data (excluding signature/hash which might have rounding differences in JSON stringify)
-    if (barcodeData.amount !== noteData.amount || barcodeData.serial !== noteData.serial) {
-        return false;
-    }
-
-    const whitelist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ,-:';
-    const ocrResult = await Tesseract.recognize(tempCanvas, 'eng', { tessedit_char_whitelist: whitelist });
-    const comparison = compareDataAndOCR(barcodeData, ocrResult);
-
-    return comparison.match.amount && comparison.match.serial && comparison.match.key;
-}
-
-function compareDataAndOCR(barcodeData, ocrResult) {
-    const text = ocrResult.data.text.replace(/[\s,:.-]/g, '').toUpperCase();
-    const expectedAmount = String(barcodeData.amount);
-    const expectedSerial = barcodeData.serial.substring(4); 
-    const expectedKey = barcodeData.verificationKey.substring(4);
-    const isAmountMatch = text.includes(expectedAmount);
-    const isSerialMatch = text.includes(expectedSerial);
-    const isKeyMatch = text.includes(expectedKey);
-    return {
-        expected: { amount: expectedAmount },
-        found: { amount: text.match(/\d+/g)?.join('') },
-        match: { amount: isAmountMatch, serial: isSerialMatch, key: isKeyMatch }
-    };
 }
 
 // ===================================================================================
@@ -857,7 +667,7 @@ window.handleCreateNewNote = async function() {
     const noteData = await createNoteData(amount);
     if (noteData) {
         currentNoteData = noteData;
-        await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height, true);
+        await drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height);
         updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
     } else {
         updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>');
@@ -889,34 +699,19 @@ window.handleDownloadBatch = async function() {
         offscreenCanvas.height = canvas.height;
 
         for (let i = 0; i < quantity; i++) {
-            let noteData = null;
-            let isNoteValid = false;
-            let attempts = 0;
-            while (!isNoteValid && attempts < 10) {
-                noteData = await createNoteData(amount, i);
-                if (!noteData) {
-                    resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key available.</span>`;
-                    return;
-                }
-                isNoteValid = await validateNoteForCreation(noteData, offscreenCanvas);
-                if (!isNoteValid) {
-                    resultDiv.innerHTML = `<span class="invalid">❌ Note ${i + 1} failed OCR check on attempt ${attempts + 1}. Regenerating...</span>`;
-                }
-                attempts++;
+            resultDiv.innerHTML = `<span class="info">Generating banknote ${i + 1} of ${quantity}...</span>`;
+            const noteData = await createNoteData(amount, i);
+            if (!noteData) {
+                resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key available.</span>`;
+                return;
             }
             
-            if (isNoteValid) {
-                await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height, true);
-                const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-                const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
-            } else {
-                 resultDiv.innerHTML = `<span class="invalid">❌ Failed to create a valid banknote after multiple attempts. Batch download stopped.</span>`;
-                 return;
-            }
+            await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height);
+            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SECURE-${noteData.serial}.png`, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
         }
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
         await handleCreateNewNote();
@@ -925,12 +720,12 @@ window.handleDownloadBatch = async function() {
     }
 }
 
-async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteganography = true) {
+async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
     return new Promise(async (resolve, reject) => {
         if (Object.keys(noteData).length === 0) return reject("No note data provided.");
 
         const ctx = targetCanvas.getContext("2d");
-        const { amount, verificationKey, serial, visualHash, signature } = noteData;
+        const { amount, verificationKey, serial, visualHash } = noteData;
 
         const w = width;
         const h = height;
@@ -965,7 +760,6 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
         ctx.shadowColor = "transparent";
 
         const dataString = JSON.stringify(noteData);
-        // Use JAB Code V4
         const jabCodeBase64 = jabcode.encode_message(dataString, 4, null); 
         const jabCodeImg = new Image();
         
@@ -981,16 +775,8 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height, applySteg
             ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
             ctx.textAlign = "center";
             ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
-
-            if (applySteganography && signature) {
-                try {
-                    LSB.encode(ctx, signature);
-                } catch (lsbError) {
-                    console.error("LSB Encoding Error:", lsbError);
-                    reject(lsbError);
-                    return;
-                }
-            }
+            
+            // LSB.encode call removed
             resolve();
         };
         jabCodeImg.onerror = (err) => {
