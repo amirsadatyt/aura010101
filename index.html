@@ -141,7 +141,6 @@ const BankCrypto = (() => {
         const dilithiumKeys = await cryptoApis.dilithium.keypair();
 
         // 3. Certify Intermediate with Root: SPHINCS+ signs Dilithium's public key
-        // The sign function in sphincs+ and dilithium returns the signature directly.
         const sphincsCertOnDilithium = await cryptoApis.sphincs.sign(dilithiumKeys.publicKey, sphincsKeys.privateKey);
 
         // 4. Generate Terminal: Falcon
@@ -150,7 +149,7 @@ const BankCrypto = (() => {
         // 5. Certify Terminal with Intermediate: Dilithium signs Falcon's public key
         const dilithiumCertOnFalcon = await cryptoApis.dilithium.sign(falconKeys.publicKey, dilithiumKeys.privateKey);
 
-        // ✅ FIX APPLIED HERE: Removed .signature from sphincsCertOnDilithium and dilithiumCertOnFalcon
+        // Corrected Code: .signature is removed as sphincs/dilithium sign() returns the signature directly
         return {
             sphincs: sphincsKeys,
             dilithium: { ...dilithiumKeys, sphincsCert: sphincsCertOnDilithium },
@@ -160,7 +159,7 @@ const BankCrypto = (() => {
 
     async function signNoteData(data, privateKey) {
         if (!privateKey) throw new Error("Falcon private key is not available for signing.");
-        // The Falcon library's sign function returns an object { signature: ... }
+        // Falcon's sign() returns an object { signature: ... }, so this is correct.
         const { signature } = await cryptoApis.falcon.sign(new TextEncoder().encode(data), privateKey);
         return signature;
     }
@@ -177,7 +176,6 @@ const BankCrypto = (() => {
 
         if (!validatorRootKey) throw new Error("SPHINCS+ root public key is not loaded for validation.");
 
-        // Step 1: Verify the Issuing Authority (Dilithium key) using the Root key (SPHINCS+)
         const isDilithiumKeyValid = await cryptoApis.sphincs.verify(
             dilithiumCert,
             dilithiumPublicKey,
@@ -185,7 +183,6 @@ const BankCrypto = (() => {
         );
         if (!isDilithiumKeyValid) throw new Error("Chain of Trust broken at Level 1: SPHINCS+ -> Dilithium. Root key does not certify the issuing key.");
 
-        // Step 2: Verify the Terminal Authority (Falcon key) using the now-trusted Issuing key (Dilithium)
         const isFalconKeyValid = await cryptoApis.dilithium.verify(
             falconCert,
             falconPublicKey,
@@ -193,7 +190,6 @@ const BankCrypto = (() => {
         );
         if (!isFalconKeyValid) throw new Error("Chain of Trust broken at Level 2: Dilithium -> Falcon. Issuing key does not certify the terminal key.");
 
-        // Step 3: Verify the note data itself using the now-trusted Terminal key (Falcon)
         const isNoteValid = await cryptoApis.falcon.verify(
             noteSignature,
             new TextEncoder().encode(notePayload),
@@ -215,12 +211,12 @@ function getStandardizedDataForSigning(noteData) {
 function createQrPayload(noteData, keyChain) {
     const notePayloadString = getStandardizedDataForSigning(noteData);
     const parts = [
-        notePayloadString, // Note data itself
+        notePayloadString,
         arrayBufferToBase64(keyChain.dilithium.publicKey),
         arrayBufferToBase64(keyChain.dilithium.sphincsCert),
         arrayBufferToBase64(keyChain.falcon.publicKey),
         arrayBufferToBase64(keyChain.falcon.dilithiumCert),
-        arrayBufferToBase64(noteData.signature) // Falcon signature on note data
+        arrayBufferToBase64(noteData.signature)
     ];
     return parts.join('|');
 }
@@ -236,7 +232,7 @@ function parseQrPayload(payloadString) {
             falconPublicKey: base64ToUint8Array(parts[3]),
             falconCert: base64ToUint8Array(parts[4]),
             noteSignature: base64ToUint8Array(parts[5]),
-            noteData: JSON.parse(parts[0]) // For display purposes
+            noteData: JSON.parse(parts[0])
         };
     } catch (e) {
         console.error("Failed to parse QR payload:", e);
@@ -256,13 +252,10 @@ function updateControlsState(isEnabled) {
 // ===================================================================================
 
 async function handleGenerateAndExportKeys() {
-    // 1. Update the UI immediately and disable buttons to prevent multi-clicks
     updateKeyStatus('<span class="info">⏳ Scheduling key generation... The browser may be unresponsive during this intensive process.</span>');
     document.getElementById('generate-keys-button').disabled = true;
     updateControlsState(false);
 
-    // 2. Schedule the heavy computation to run after the UI updates.
-    // This timeout gives the browser a moment to render the status message above before freezing.
     setTimeout(async () => {
         try {
             updateKeyStatus('<span class="info">⏳ Generating Cerberus trust chain (SPHINCS+, Dilithium, Falcon)... Please wait.</span>');
@@ -292,10 +285,9 @@ async function handleGenerateAndExportKeys() {
             updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${e.message}</span>`);
             updateControlsState(false);
         } finally {
-            // Re-enable the main generate button regardless of outcome so the user can try again.
             document.getElementById('generate-keys-button').disabled = false;
         }
-    }, 50); // A small delay is enough to yield to the event loop.
+    }, 50);
 }
 
 function handleImportPrivateKeyBundle(event) {
@@ -372,7 +364,7 @@ async function handleFileSelect(event) {
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
 
         resultDiv.innerHTML = `<span class="info">1. Reading digital trust chain from QR Code...</span>`;
-        const imageData = tempCtx.getImageData(800, 210, 420, 420); // QR region
+        const imageData = tempCtx.getImageData(800, 210, 420, 420);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         
         if (!code || !code.data) {
@@ -445,8 +437,6 @@ async function handleCreateNewNote() {
 }
 
 async function handleDownloadBatch() {
-     // Batch downloading requires regenerating notes. This can be slow.
-     // For this PoC, it's simplified to download multiple copies of newly generated notes.
     if (!activeKeys.falcon.privateKey) {
         alert("Error: No private key active. Please generate a chain.");
         return;
@@ -480,7 +470,7 @@ async function handleDownloadBatch() {
             resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
         }
         resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
-        await handleCreateNewNote(); // Show a new one on screen
+        await handleCreateNewNote();
     } catch (error) {
         resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
     }
@@ -520,7 +510,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, keyChain, width, height)
 
         QRCode.toCanvas(qrCanvas, qrPayload, { 
             width: qrSize, 
-            errorCorrectionLevel: 'Q', // Higher error correction for complex data
+            errorCorrectionLevel: 'Q',
             color: { dark: '#000000', light: '#FFFFFF' } 
         }, (err) => {
             if (err) { reject(err); return; }
