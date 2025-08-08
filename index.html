@@ -519,11 +519,6 @@ function downloadFile(data, filename, type) {
 }
 
 // ===================================================================================
-// LSB Steganography Module (Removed - No longer used for encoding/decoding)
-// ===================================================================================
-
-
-// ===================================================================================
 // Validation Logic
 // ===================================================================================
 document.getElementById('validator-input').addEventListener('change', handleFileSelect);
@@ -608,11 +603,28 @@ async function validateDigitalSignature(barcodeData) {
 }
 
 async function readBarcodeFromCanvas(canvasToCheck) {
-    const barcodeRegion = { x: 800, y: 210, width: 420, height: 420 };
+    // ## FIX STARTS HERE ##
+    // The canvas being checked is the full banknote canvas (e.g., 1350x750).
+    // We must calculate the exact region of the barcode to avoid scanning the noisy background.
+    const w = canvasToCheck.width;
+    const h = canvasToCheck.height;
+    const scale = w / 1350;
+
+    // These values MUST match the drawing logic in the 'drawNoteOnCanvas' function.
+    const barcodeSize = 380 * scale;
+    const barcodeX = w - (150 * scale) - barcodeSize;
+    const barcodeY = h - (520 * scale);
+    
+    // Define the precise region to crop from the main canvas.
+    const barcodeRegion = { x: barcodeX, y: barcodeY, width: barcodeSize, height: barcodeSize };
+    // ## FIX ENDS HERE ##
+
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = barcodeRegion.width;
     tempCanvas.height = barcodeRegion.height;
     const tempCtx = tempCanvas.getContext('2d');
+    
+    // Copy only the exact barcode area (which has a white background) to the temporary canvas for decoding.
     tempCtx.drawImage(canvasToCheck, barcodeRegion.x, barcodeRegion.y, barcodeRegion.width, barcodeRegion.height, 0, 0, barcodeRegion.width, barcodeRegion.height);
     
     const imageDataUrl = tempCanvas.toDataURL("image/png");
@@ -776,7 +788,6 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
             ctx.textAlign = "center";
             ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
             
-            // LSB.encode call removed
             resolve();
         };
         jabCodeImg.onerror = (err) => {
