@@ -123,7 +123,6 @@ const base64ToUint8Array = (base64) => {
 // ===================================================================================
 // Cerberus Multi-Signature Crypto Logic
 // ===================================================================================
-// NOTE: These functions now only perform crypto operations. UI is handled separately.
 async function generateRootKeys() {
     return await cryptoApis.sphincs.keypair();
 }
@@ -161,9 +160,14 @@ async function verifyChainAndNote(qrData, validatorRootKey) {
 // UI Handlers for Staged Key Generation
 // ===================================================================================
 
-const keyGenControls = document.getElementById('key-gen-controls');
-
 function updateKeyGenerationUI(stage) {
+    // *** FIX: Get the DOM element INSIDE the function to ensure the DOM is ready. ***
+    const keyGenControls = document.getElementById('key-gen-controls');
+    if (!keyGenControls) {
+        console.error("Fatal UI Error: #key-gen-controls element not found in DOM.");
+        return;
+    }
+
     keyGenControls.innerHTML = ''; // Clear previous controls
     let button;
     switch(stage) {
@@ -235,7 +239,6 @@ async function handleGenerateTerminalKey() {
         try {
             activeKeys.falcon = await generateAndCertifyTerminalKeys(activeKeys.dilithium.privateKey);
 
-            // All keys generated, now export them
             const rootPublicKeyFile = {
                 description: "Sadat Bank Root Public Key (SPHINCS+)",
                 publicKey: arrayBufferToBase64(activeKeys.sphincs.publicKey)
@@ -496,15 +499,13 @@ async function main() {
         ]);
         cryptoApis = { falcon, dilithium, sphincs };
         updateKeyStatus('<span class="info">Ready. Please start the key generation process.</span>');
-        updateKeyGenerationUI('start'); // Initialize the first step button
+        updateKeyGenerationUI('start');
     } catch (e) {
         console.error("Failed to load PQC modules:", e);
         updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load crypto modules. Check file paths.</span>`);
         alert("Error: Failed to load cryptographic modules. See console.");
     }
     
-    // Event listeners are now set on dynamically created buttons.
-    // Additional static listeners:
     document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
     document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
     document.getElementById('import-root-cert').addEventListener('change', handleImportRootCert);
