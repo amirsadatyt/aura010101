@@ -96,9 +96,7 @@
 </div>
 
 <script type="module">
-// --- Final Code Implementation ---
-// The original imports are static, so we will handle the status messaging within the main function
-// based on the success or failure of the `pqcSign...` functions being available.
+// Import Post-Quantum Cryptographic Libraries
 import pqcSignFalcon512 from './falconNew.js';
 import pqcSignDilithium5 from './dilithium5.js';
 import pqcSignSphincsSha256_128sSimple from './sphincs+.js';
@@ -131,6 +129,7 @@ const base64ToUint8Array = (base64) => {
 /**
  * A centralized function for professional status logging.
  * Updates the UI element and logs to the browser console.
+ * @param {string} targetId - The ID of the element to update.
  * @param {string} message - The message to display. Can contain HTML.
  * @param {string} type - 'info', 'valid', or 'invalid' for styling.
  */
@@ -560,7 +559,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, keyChain, width, height)
     });
 }
 
-function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
+function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,y2,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
 function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
 function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
