@@ -69,13 +69,8 @@
 
     <div class="section">
         <h2>Bank Key Management (Cerberus Protocol)</h2>
-        <div class="controls-grid">
-            <button id="generate-keys-button">🔑 Generate & Export Full Trust Chain</button>
-            <label for="import-private-key-bundle" class="sub-button">
-                Import Private Key Bundle
-            </label>
-            <input type="file" id="import-private-key-bundle" accept=".json" style="display: none;">
-        </div>
+        <div id="key-gen-controls" class="controls-grid">
+            </div>
         <div id="key-status">Key chain status will be displayed here.</div>
     </div>
 
@@ -128,81 +123,156 @@ const base64ToUint8Array = (base64) => {
 // ===================================================================================
 // Cerberus Multi-Signature Crypto Logic
 // ===================================================================================
+// NOTE: These functions now only perform crypto operations. UI is handled separately.
+async function generateRootKeys() {
+    return await cryptoApis.sphincs.keypair();
+}
+async function generateAndCertifyIssuingKeys(rootPrivateKey) {
+    const dilithiumKeys = await cryptoApis.dilithium.keypair();
+    const cert = await cryptoApis.sphincs.sign(dilithiumKeys.publicKey, rootPrivateKey);
+    return { ...dilithiumKeys, sphincsCert: cert.signature };
+}
+async function generateAndCertifyTerminalKeys(issuingPrivateKey) {
+    const falconKeys = await cryptoApis.falcon.keypair();
+    const cert = await cryptoApis.dilithium.sign(falconKeys.publicKey, issuingPrivateKey);
+    return { ...falconKeys, dilithiumCert: cert.signature };
+}
+async function signNoteData(data, privateKey) {
+    const { signature } = await cryptoApis.falcon.sign(new TextEncoder().encode(data), privateKey);
+    return signature;
+}
+async function verifyChainAndNote(qrData, validatorRootKey) {
+    const { notePayload, dilithiumPublicKey, dilithiumCert, falconPublicKey, falconCert, noteSignature } = qrData;
+    if (!validatorRootKey) throw new Error("SPHINCS+ root public key is not loaded.");
 
-const BankCrypto = (() => {
-    async function generateCerberusChain() {
-        if (!cryptoApis.sphincs || !cryptoApis.dilithium || !cryptoApis.falcon) {
-            throw new Error("One or more crypto modules are not initialized.");
-        }
-        // 1. Generate Root: SPHINCS+
-        const sphincsKeys = await cryptoApis.sphincs.keypair();
+    const isDilithiumKeyValid = await cryptoApis.sphincs.verify(dilithiumCert, dilithiumPublicKey, validatorRootKey);
+    if (!isDilithiumKeyValid) throw new Error("Chain Broken L1: SPHINCS+ -> Dilithium.");
 
-        // 2. Generate Intermediate: Dilithium
-        const dilithiumKeys = await cryptoApis.dilithium.keypair();
+    const isFalconKeyValid = await cryptoApis.dilithium.verify(falconCert, falconPublicKey, dilithiumPublicKey);
+    if (!isFalconKeyValid) throw new Error("Chain Broken L2: Dilithium -> Falcon.");
 
-        // 3. Certify Intermediate with Root: SPHINCS+ signs Dilithium's public key
-        const sphincsCertOnDilithium = await cryptoApis.sphincs.sign(dilithiumKeys.publicKey, sphincsKeys.privateKey);
-
-        // 4. Generate Terminal: Falcon
-        const falconKeys = await cryptoApis.falcon.keypair();
-
-        // 5. Certify Terminal with Intermediate: Dilithium signs Falcon's public key
-        const dilithiumCertOnFalcon = await cryptoApis.dilithium.sign(falconKeys.publicKey, dilithiumKeys.privateKey);
-
-        return {
-            sphincs: sphincsKeys,
-            dilithium: { ...dilithiumKeys, sphincsCert: sphincsCertOnDilithium.signature },
-            falcon: { ...falconKeys, dilithiumCert: dilithiumCertOnFalcon.signature }
-        };
-    }
-
-    async function signNoteData(data, privateKey) {
-        if (!privateKey) throw new Error("Falcon private key is not available for signing.");
-        const { signature } = await cryptoApis.falcon.sign(new TextEncoder().encode(data), privateKey);
-        return signature;
-    }
+    const isNoteValid = await cryptoApis.falcon.verify(noteSignature, new TextEncoder().encode(notePayload), falconPublicKey);
+    if (!isNoteValid) throw new Error("Note Integrity Failed.");
     
-    async function verifyChainAndNote(qrData, validatorRootKey) {
-        const {
-            notePayload,
-            dilithiumPublicKey,
-            dilithiumCert,
-            falconPublicKey,
-            falconCert,
-            noteSignature
-        } = qrData;
+    return true;
+}
 
-        if (!validatorRootKey) throw new Error("SPHINCS+ root public key is not loaded for validation.");
+// ===================================================================================
+// UI Handlers for Staged Key Generation
+// ===================================================================================
 
-        // Step 1: Verify the Issuing Authority (Dilithium key) using the Root key (SPHINCS+)
-        const isDilithiumKeyValid = await cryptoApis.sphincs.verify(
-            dilithiumCert,
-            dilithiumPublicKey,
-            validatorRootKey
-        );
-        if (!isDilithiumKeyValid) throw new Error("Chain of Trust broken at Level 1: SPHINCS+ -> Dilithium. Root key does not certify the issuing key.");
+const keyGenControls = document.getElementById('key-gen-controls');
 
-        // Step 2: Verify the Terminal Authority (Falcon key) using the now-trusted Issuing key (Dilithium)
-        const isFalconKeyValid = await cryptoApis.dilithium.verify(
-            falconCert,
-            falconPublicKey,
-            dilithiumPublicKey
-        );
-        if (!isFalconKeyValid) throw new Error("Chain of Trust broken at Level 2: Dilithium -> Falcon. Issuing key does not certify the terminal key.");
-
-        // Step 3: Verify the note data itself using the now-trusted Terminal key (Falcon)
-        const isNoteValid = await cryptoApis.falcon.verify(
-            noteSignature,
-            new TextEncoder().encode(notePayload),
-            falconPublicKey
-        );
-        if (!isNoteValid) throw new Error("Note Integrity Check Failed. The banknote data has been tampered with.");
-        
-        return true; // All checks passed
+function updateKeyGenerationUI(stage) {
+    keyGenControls.innerHTML = ''; // Clear previous controls
+    let button;
+    switch(stage) {
+        case 'step2':
+            button = document.createElement('button');
+            button.id = 'generate-step-2-button';
+            button.innerHTML = '🔑 Step 2: Generate & Certify Issuing Key (Dilithium)';
+            button.onclick = handleGenerateIssuingKey;
+            keyGenControls.appendChild(button);
+            break;
+        case 'step3':
+            button = document.createElement('button');
+            button.id = 'generate-step-3-button';
+            button.innerHTML = '🔑 Step 3: Generate, Certify & Export Chain (Falcon)';
+            button.onclick = handleGenerateTerminalKey;
+            keyGenControls.appendChild(button);
+            break;
+        case 'complete':
+            keyGenControls.innerHTML = '<span class="valid">✅ Trust Chain is fully generated and active.</span>';
+            break;
+        case 'start':
+        default:
+            button = document.createElement('button');
+            button.id = 'generate-step-1-button';
+            button.innerHTML = '🔑 Step 1: Generate Root Key (SPHINCS+)';
+            button.onclick = handleGenerateRootKey;
+            keyGenControls.appendChild(button);
+            break;
     }
+}
 
-    return { generateCerberusChain, signNoteData, verifyChainAndNote };
-})();
+async function handleGenerateRootKey() {
+    updateKeyStatus('<span class="info">⏳ Generating SPHINCS+ Root Key Pair... This is the most intensive step and may take a moment. Please wait.</span>');
+    document.getElementById('generate-step-1-button').disabled = true;
+    
+    setTimeout(async () => {
+        try {
+            activeKeys.sphincs = await generateRootKeys();
+            updateKeyStatus('<span class="valid">✅ Step 1 Complete: SPHINCS+ Root Key generated. Proceed to Step 2.</span>');
+            updateKeyGenerationUI('step2');
+        } catch (e) {
+            updateKeyStatus(`<span class="invalid">❌ Error in Step 1: ${e.message}</span>`);
+            updateKeyGenerationUI('start');
+        }
+    }, 50);
+}
+
+async function handleGenerateIssuingKey() {
+    updateKeyStatus('<span class="info">⏳ Generating Dilithium Issuing Key and certifying it with the Root Key...</span>');
+    document.getElementById('generate-step-2-button').disabled = true;
+
+    setTimeout(async () => {
+        try {
+            activeKeys.dilithium = await generateAndCertifyIssuingKeys(activeKeys.sphincs.privateKey);
+            updateKeyStatus('<span class="valid">✅ Step 2 Complete: Dilithium Issuing Key generated and certified. Proceed to Step 3.</span>');
+            updateKeyGenerationUI('step3');
+        } catch (e) {
+            updateKeyStatus(`<span class="invalid">❌ Error in Step 2: ${e.message}</span>`);
+            updateKeyGenerationUI('step2'); // Allow retry of step 2
+        }
+    }, 50);
+}
+
+async function handleGenerateTerminalKey() {
+    updateKeyStatus('<span class="info">⏳ Generating Falcon Terminal Key, certifying it, and bundling all files for export...</span>');
+    document.getElementById('generate-step-3-button').disabled = true;
+
+    setTimeout(async () => {
+        try {
+            activeKeys.falcon = await generateAndCertifyTerminalKeys(activeKeys.dilithium.privateKey);
+
+            // All keys generated, now export them
+            const rootPublicKeyFile = {
+                description: "Sadat Bank Root Public Key (SPHINCS+)",
+                publicKey: arrayBufferToBase64(activeKeys.sphincs.publicKey)
+            };
+            const privateBundleFile = {
+                description: "Sadat Bank Private Key Bundle (DO NOT SHARE)",
+                sphincs_sk: arrayBufferToBase64(activeKeys.sphincs.privateKey),
+                dilithium_sk: arrayBufferToBase64(activeKeys.dilithium.privateKey),
+                falcon_sk: arrayBufferToBase64(activeKeys.falcon.privateKey)
+            };
+            
+            downloadFile(JSON.stringify(rootPublicKeyFile, null, 2), 'SADAT-ROOT-PUBLIC.json', 'application/json');
+            downloadFile(JSON.stringify(privateBundleFile, null, 2), 'SADAT-PRIVATE-BUNDLE.json', 'application/json');
+
+            updateKeyStatus('<span class="valid">✅ Step 3 Complete! Trust chain is fully generated and exported. The new keys are now active.</span>');
+            updateKeyGenerationUI('complete');
+            updateControlsState(true);
+            await handleCreateNewNote();
+        } catch (e) {
+            updateKeyStatus(`<span class="invalid">❌ Error in Step 3: ${e.message}</span>`);
+            updateKeyGenerationUI('step3'); // Allow retry of step 3
+        }
+    }, 50);
+}
+
+function downloadFile(data, filename, type) {
+    const blob = new Blob([data], { type: type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// ===================================================================================
+// Banknote Creation, Validation, and Other Functions (Mostly Unchanged)
+// ===================================================================================
 
 function getStandardizedDataForSigning(noteData) {
     const dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp };
@@ -212,12 +282,12 @@ function getStandardizedDataForSigning(noteData) {
 function createQrPayload(noteData, keyChain) {
     const notePayloadString = getStandardizedDataForSigning(noteData);
     const parts = [
-        notePayloadString, // Note data itself
+        notePayloadString,
         arrayBufferToBase64(keyChain.dilithium.publicKey),
         arrayBufferToBase64(keyChain.dilithium.sphincsCert),
         arrayBufferToBase64(keyChain.falcon.publicKey),
         arrayBufferToBase64(keyChain.falcon.dilithiumCert),
-        arrayBufferToBase64(noteData.signature) // Falcon signature on note data
+        arrayBufferToBase64(noteData.signature)
     ];
     return parts.join('|');
 }
@@ -233,81 +303,15 @@ function parseQrPayload(payloadString) {
             falconPublicKey: base64ToUint8Array(parts[3]),
             falconCert: base64ToUint8Array(parts[4]),
             noteSignature: base64ToUint8Array(parts[5]),
-            noteData: JSON.parse(parts[0]) // For display purposes
+            noteData: JSON.parse(parts[0])
         };
-    } catch (e) {
-        console.error("Failed to parse QR payload:", e);
-        return null;
-    }
+    } catch (e) { console.error("Failed to parse QR payload:", e); return null; }
 }
-
 
 function updateKeyStatus(message) { document.getElementById('key-status').innerHTML = message; }
 function updateControlsState(isEnabled) {
     document.getElementById('create-note-button').disabled = !isEnabled;
     document.getElementById('download-batch-button').disabled = !isEnabled;
-}
-
-// ===================================================================================
-// UI Handlers for Key Management
-// ===================================================================================
-
-async function handleGenerateAndExportKeys() {
-    updateKeyStatus('<span class="info">⏳ Generating Cerberus trust chain (SPHINCS+, Dilithium, Falcon)... This may take a moment.</span>');
-    try {
-        const chain = await BankCrypto.generateCerberusChain();
-        activeKeys = chain;
-
-        // Prepare files for download
-        const rootPublicKeyFile = {
-            description: "Sadat Bank Root Public Key (SPHINCS+)",
-            publicKey: arrayBufferToBase64(chain.sphincs.publicKey)
-        };
-
-        const privateBundleFile = {
-            description: "Sadat Bank Private Key Bundle (DO NOT SHARE)",
-            sphincs_sk: arrayBufferToBase64(chain.sphincs.privateKey),
-            dilithium_sk: arrayBufferToBase64(chain.dilithium.privateKey),
-            falcon_sk: arrayBufferToBase64(chain.falcon.privateKey)
-        };
-        
-        downloadFile(JSON.stringify(rootPublicKeyFile, null, 2), 'SADAT-ROOT-PUBLIC.json', 'application/json');
-        downloadFile(JSON.stringify(privateBundleFile, null, 2), 'SADAT-PRIVATE-BUNDLE.json', 'application/json');
-
-        updateKeyStatus('<span class="valid">✅ New Cerberus trust chain generated and exported! The new keys are now active. You must import the root public key in the validation section to verify notes.</span>');
-        updateControlsState(true);
-        await handleCreateNewNote();
-    } catch (e) {
-        console.error("Key generation failed:", e);
-        updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${e.message}</span>`);
-    }
-}
-
-function handleImportPrivateKeyBundle(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const bundle = JSON.parse(e.target.result);
-            if (!bundle.sphincs_sk || !bundle.dilithium_sk || !bundle.falcon_sk) {
-                throw new Error("Invalid private key bundle file format.");
-            }
-            // This is a simplified import; in a real scenario, you'd need the public keys too.
-            // For this PoC, we assume generation is the primary way to get a full chain.
-            // This import is primarily for the signing keys.
-            activeKeys.sphincs.privateKey = base64ToUint8Array(bundle.sphincs_sk);
-            activeKeys.dilithium.privateKey = base64ToUint8Array(bundle.dilithium_sk);
-            activeKeys.falcon.privateKey = base64ToUint8Array(bundle.falcon_sk);
-            
-            updateKeyStatus('<span class="invalid">❌ Private key bundle imported for signing, but a full chain is not available. Please generate a new chain for full functionality.</span>');
-            // updateControlsState(true); // We don't enable controls because we don't have the full public chain.
-        } catch (error) {
-            updateKeyStatus(`<span class="invalid">❌ Error importing private key bundle: ${error.message}</span>`);
-        }
-    };
-    reader.readAsText(file);
-    event.target.value = '';
 }
 
 function handleImportRootCert(event) {
@@ -329,28 +333,15 @@ function handleImportRootCert(event) {
     event.target.value = '';
 }
 
-
-function downloadFile(data, filename, type) {
-    const blob = new Blob([data], { type: type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-}
-
-// ===================================================================================
-// Validation Logic
-// ===================================================================================
 async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
     if (!rootPublicKey) {
-        alert("CRITICAL ERROR: No Root Public Key (SPHINCS+) is loaded. Cannot establish a chain of trust.");
+        alert("CRITICAL ERROR: No Root Public Key (SPHINCS+) is loaded.");
         return;
     }
     const resultDiv = document.getElementById('validation-result');
-    resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
+    resultDiv.innerHTML = `<span class="info">⏳ Preparing image...</span>`;
     
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -361,31 +352,24 @@ async function handleFileSelect(event) {
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
 
         resultDiv.innerHTML = `<span class="info">1. Reading digital trust chain from QR Code...</span>`;
-        const imageData = tempCtx.getImageData(800, 210, 420, 420); // QR region
+        const imageData = tempCtx.getImageData(800, 210, 420, 420);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         
-        if (!code || !code.data) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`;
-            return;
-        }
-        
+        if (!code || !code.data) { resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable.</span>`; return; }
         const qrData = parseQrPayload(code.data);
-        if (!qrData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code data is corrupt or has an invalid format.</span>`;
-            return;
-        }
+        if (!qrData) { resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code data is corrupt.</span>`; return; }
         
-        let resultHTML = `<span class="valid">✅ 1. Digital trust chain successfully read.</span>\n`;
+        let resultHTML = `<span class="valid">✅ 1. Digital trust chain read.</span>\n`;
         resultHTML += `Amount: ${qrData.noteData.amount}, Serial: ${qrData.noteData.serial}`;
         resultHTML += `\n\n<span class="info">2. Verifying Cerberus trust chain...</span>`;
         resultDiv.innerHTML = resultHTML;
 
         try {
-            await BankCrypto.verifyChainAndNote(qrData, rootPublicKey);
+            await verifyChainAndNote(qrData, rootPublicKey);
             resultHTML += `\n<span class="valid">   L1: SPHINCS+ -> Dilithium... OK</span>`;
             resultHTML += `\n<span class="valid">   L2: Dilithium -> Falcon... OK</span>`;
             resultHTML += `\n<span class="valid">   L3: Falcon -> Banknote Data... OK</span>`;
-            resultHTML += `\n\n<span class="valid">✅ 2. Cerberus trust chain and note integrity confirmed.</span>`;
+            resultHTML += `\n\n<span class="valid">✅ 2. Trust chain and integrity confirmed.</span>`;
             resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
             resultDiv.innerHTML = resultHTML;
         } catch(e) {
@@ -397,71 +381,78 @@ async function handleFileSelect(event) {
     event.target.value = '';
 }
 
-
-// ===================================================================================
-// Banknote Creation Logic
-// ===================================================================================
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
 
-async function createNoteData(amount) {
+async function createNoteData(amount, index = 0) {
     if (!activeKeys.falcon.privateKey) {
         alert("Error: No active key chain for signing banknotes. Please generate a new chain.");
         return null;
     }
+    const now = Date.now();
     const noteData = {
         amount: parseInt(amount) || 0,
-        serial: Date.now().toString().slice(-8),
-        timestamp: Date.now()
+        serial: (now + index).toString().slice(-8),
+        timestamp: now
     };
     const stringToSign = getStandardizedDataForSigning(noteData);
-    const signatureBytes = await BankCrypto.signNoteData(stringToSign, activeKeys.falcon.privateKey);
-    noteData.signature = signatureBytes;
+    noteData.signature = await signNoteData(stringToSign, activeKeys.falcon.privateKey);
     return noteData;
 }
 
 async function handleCreateNewNote() {
     const amount = document.getElementById("amount-input").value;
-    updateKeyStatus('<span class="info">⏳ Generating new banknote with Cerberus signature...</span>');
     const noteData = await createNoteData(amount);
     if (noteData) {
         currentNoteData = noteData;
         await drawNoteOnCanvas(canvas, noteData, activeKeys, canvas.width, canvas.height);
-        updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
-    } else {
-        updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>');
     }
 }
 
 async function handleDownloadBatch() {
-     // This function would need significant adjustment for batch efficiency,
-     // as generating a full chain per note is too slow.
-     // For this PoC, it's simplified to download the current note.
-    const link = document.createElement("a");
-    link.download = `SADAT-NOTE-CERBERUS-${currentNoteData.serial}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    if (!activeKeys.falcon.privateKey) { alert("Error: No private key active."); return; }
+    if (!window.showDirectoryPicker) { alert("Batch download not supported by browser."); return; }
+    
+    const quantity = parseInt(document.getElementById('quantity-input').value) || 1;
+    const amount = document.getElementById("amount-input").value;
+    const resultDiv = document.getElementById('validation-result');
+    try {
+        const dirHandle = await window.showDirectoryPicker();
+        resultDiv.innerHTML = `<span class="info">Processing ${quantity} banknote(s)... Please wait.</span>`;
+        const offscreenCanvas = document.createElement('canvas');
+        offscreenCanvas.width = canvas.width; offscreenCanvas.height = canvas.height;
+        for (let i = 0; i < quantity; i++) {
+            const noteData = await createNoteData(amount, i);
+            if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped.</span>`; return; }
+            await drawNoteOnCanvas(offscreenCanvas, noteData, activeKeys, offscreenCanvas.width, offscreenCanvas.height);
+            const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-CERBERUS-${noteData.serial}.png`, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            resultDiv.innerHTML = `<span class="info">Successfully saved banknote ${i + 1} of ${quantity}.</span>`;
+        }
+        resultDiv.innerHTML = `<span class="valid">✅ Successfully saved ${quantity} banknote(s).</span>`;
+        await handleCreateNewNote();
+    } catch (error) {
+        resultDiv.innerHTML = `<span class="invalid">❌ Error: ${error.message}</span>`;
+    }
 }
 
 async function drawNoteOnCanvas(targetCanvas, noteData, keyChain, width, height) {
     return new Promise(async (resolve, reject) => {
-        if (Object.keys(noteData).length === 0) return reject("No note data provided.");
         const ctx = targetCanvas.getContext("2d");
         const { amount, serial } = noteData;
         const w = width, h = height, scale = w / 1350;
-        
         const visualHash = arrayBufferToBase64(noteData.signature);
-
         const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
         const baseHue = H(visualHash, 0, 0, 360);
         bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
         bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, w, h);
-        
         drawWatermark(ctx, visualHash, w, h);
         drawKochGuilloche(ctx, visualHash, w, h);
         drawNoisePattern(ctx, visualHash, w, h);
-
         ctx.shadowColor="rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; ctx.shadowOffsetX=2*scale; ctx.shadowOffsetY=2*scale;
         ctx.fillStyle="#EAEAEA"; ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='left';
         ctx.fillText(serial,150*scale,160*scale); 
@@ -469,15 +460,11 @@ async function drawNoteOnCanvas(targetCanvas, noteData, keyChain, width, height)
         ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right";
         ctx.shadowBlur=12*scale; ctx.shadowOffsetX=4*scale; ctx.shadowOffsetY=4*scale;
         ctx.fillText(amount.toString(),w-(120*scale),190*scale); ctx.shadowColor="transparent";
-
         const qrCanvas = document.createElement("canvas");
         const qrSize = 380 * scale;
         const qrPayload = createQrPayload(noteData, keyChain);
-
         QRCode.toCanvas(qrCanvas, qrPayload, { 
-            width: qrSize, 
-            errorCorrectionLevel: 'Q', // Higher error correction for complex data
-            color: { dark: '#000000', light: '#FFFFFF' } 
+            width: qrSize, errorCorrectionLevel: 'Q', color: { dark: '#000000', light: '#FFFFFF' } 
         }, (err) => {
             if (err) { reject(err); return; }
             const qrX = w - (150 * scale) - qrSize;
@@ -485,14 +472,12 @@ async function drawNoteOnCanvas(targetCanvas, noteData, keyChain, width, height)
             ctx.fillStyle = 'white';
             ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), qrSize + (40 * scale), qrSize + (40 * scale));
             ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
-
             ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
             ctx.fillText("Signed by Cerberus Protocol (SPHINCS+/Dilithium/Falcon)", w/2, h-60*scale);
             resolve();
         });
     });
 }
-
 function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
 function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
 function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
@@ -510,18 +495,18 @@ async function main() {
             pqcSignSphincsSha256_128sSimple()
         ]);
         cryptoApis = { falcon, dilithium, sphincs };
-        updateKeyStatus('<span class="info">Ready. Please generate a new key chain or import keys to begin.</span>');
+        updateKeyStatus('<span class="info">Ready. Please start the key generation process.</span>');
+        updateKeyGenerationUI('start'); // Initialize the first step button
     } catch (e) {
         console.error("Failed to load PQC modules:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load crypto modules. Check that 'falconNew.js', 'dilithium5.js', and 'sphincs+.js' are in the same directory.</span>`);
-        alert("Error: Failed to load cryptographic modules. See the console for details.");
-        return;
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load crypto modules. Check file paths.</span>`);
+        alert("Error: Failed to load cryptographic modules. See console.");
     }
     
-    document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
+    // Event listeners are now set on dynamically created buttons.
+    // Additional static listeners:
     document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
     document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
-    document.getElementById('import-private-key-bundle').addEventListener('change', handleImportPrivateKeyBundle);
     document.getElementById('import-root-cert').addEventListener('change', handleImportRootCert);
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
 }
