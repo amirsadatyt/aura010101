@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [Professional Batch Edition]</title>
+    <title>Sadat Digital Banknote [Fixed Professional Edition]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -65,6 +65,7 @@
                 <span class="input-label">Amount:</span>
                 <input type="number" id="amount-input" value="50000">
                 <button id="create-note-button" disabled>🎨 Create New Design</button>
+                <button id="download-note-button" disabled>📦 Download Current Note</button>
             </div>
         </div>
         
@@ -80,7 +81,7 @@
         <div class="section">
             <h2>Bank Key Management</h2>
             <div class="controls-grid">
-                <button id="generate-keys-button">🔑 Generate First Key Pair</button>
+                <button id="generate-keys-button">🔑 Generate New Identity & Download Keys</button>
                 <label for="import-public-key" class="sub-button">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     Import Public Key
@@ -118,9 +119,9 @@
         };
 
         class UIManager {
-            constructor() { this.elements = { keyStatus: document.getElementById('key-status'), validationResult: document.getElementById('validation-result'), createNoteBtn: document.getElementById('create-note-button'), batchBtn: document.getElementById('batch-generate-button'), genKeysBtn: document.getElementById('generate-keys-button') }; }
+            constructor() { this.elements = { keyStatus: document.getElementById('key-status'), validationResult: document.getElementById('validation-result'), createNoteBtn: document.getElementById('create-note-button'), batchBtn: document.getElementById('batch-generate-button'), downloadNoteBtn: document.getElementById('download-note-button'), genKeysBtn: document.getElementById('generate-keys-button') }; }
             setStatus(el, type, msg) { this.elements[el].innerHTML = `<span class="${type}">${msg}</span>`; }
-            updateControlsState(isEnabled) { this.elements.createNoteBtn.disabled = !isEnabled; this.elements.batchBtn.disabled = !isEnabled; }
+            updateControlsState(isEnabled) { this.elements.createNoteBtn.disabled = !isEnabled; this.elements.batchBtn.disabled = !isEnabled; this.elements.downloadNoteBtn.disabled = !isEnabled; }
             setButtonLoading(btn, isLoading) {
                 if (!isLoading) {
                     if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
@@ -160,6 +161,7 @@
         class BanknoteApp {
             constructor() {
                 this.canvas = document.getElementById("noteCanvas");
+                this.ctx = this.canvas.getContext("2d");
                 this.ui = new UIManager();
                 this.crypto = new CryptoManager();
                 this.jabcode = new JabcodeJSInterface();
@@ -169,6 +171,7 @@
             async init() {
                 this.ui.updateControlsState(false);
                 this.ui.setStatus('keyStatus', 'info', '⏳ Loading Falcon-512 Crypto Module...');
+                this.drawInitialCanvas();
                 try {
                     await this.crypto.init();
                     this.ui.setStatus('keyStatus', 'info', 'Ready. Please generate a new key pair or import existing keys to begin.');
@@ -178,28 +181,94 @@
                 }
                 this.attachEventListeners();
             }
+            
+            drawInitialCanvas() {
+                this.ctx.fillStyle = '#10101a';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                this.ctx.font = "bold 32px 'Poppins'";
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText("Generate or Import a Key Pair to Begin", this.canvas.width / 2, this.canvas.height / 2);
+            }
 
             attachEventListeners() {
-                document.getElementById('generate-keys-button').addEventListener('click', () => this.handleGenerateFirstKeys());
+                document.getElementById('generate-keys-button').addEventListener('click', () => this.handleGenerateKeysAndDownload());
                 document.getElementById('create-note-button').addEventListener('click', () => this.handleCreateNewNote());
+                document.getElementById('download-note-button').addEventListener('click', () => this.handleDownloadCurrentNote());
                 document.getElementById('batch-generate-button').addEventListener('click', () => this.handleBatchGeneration());
                 document.getElementById('import-public-key').addEventListener('change', (e) => this.handleImportKey(e, 'public'));
                 document.getElementById('import-private-key').addEventListener('change', (e) => this.handleImportKey(e, 'private'));
                 document.getElementById('validator-input').addEventListener('change', (e) => this.handleFileValidation(e));
             }
 
-            async handleGenerateFirstKeys() {
-                this.ui.setButtonLoading(this.ui.elements.genKeysBtn, true);
+            async handleGenerateKeysAndDownload() {
+                const button = this.ui.elements.genKeysBtn;
+                this.ui.setButtonLoading(button, true);
                 try {
-                    this.ui.setStatus('keyStatus', 'info', '⏳ Generating initial key pair...');
+                    const password = prompt("Create a strong password to encrypt your new private key file:");
+                    if (!password) throw new Error("Key generation cancelled. Password is required.");
+
+                    this.ui.setStatus('keyStatus', 'info', '⏳ Generating new identity key pair...');
                     this.state.activeKeys = await this.crypto.generateNewKeyPair();
+                    
+                    this.ui.setStatus('keyStatus', 'info', '📦 Preparing key files for download...');
+                    const publicKeyJson = JSON.stringify({ keyData: Utils.arrayBufferToBase64(this.state.activeKeys.publicKey) }, null, 2);
+                    const encryptedPrivateJson = JSON.stringify(await this.crypto.encryptPrivateKey(this.state.activeKeys.privateKey, password), null, 2);
+
+                    const zip = new JSZip();
+                    zip.file('publicKey.json', publicKeyJson);
+                    zip.file('privateKey_encrypted.json', encryptedPrivateJson);
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(zipBlob);
+                    a.download = `SadatBank_Identity_${Date.now()}.zip`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+
                     this.ui.updateControlsState(true);
                     await this.handleCreateNewNote();
-                    this.ui.setStatus('keyStatus', 'valid', '✅ Initial key pair active. Ready to create and download banknotes.');
-                } catch(e) {
+                    this.ui.setStatus('keyStatus', 'valid', '✅ New identity created and downloaded. Ready to create banknotes.');
+
+                } catch (e) {
                     this.ui.setStatus('keyStatus', 'invalid', `❌ Key generation failed: ${e.message}`);
+                    this.ui.updateControlsState(!!this.state.activeKeys.privateKey);
                 } finally {
-                    this.ui.setButtonLoading(this.ui.elements.genKeysBtn, false);
+                    this.ui.setButtonLoading(button, false);
+                }
+            }
+            
+            async handleDownloadCurrentNote() {
+                const button = this.ui.elements.downloadNoteBtn;
+                this.ui.setButtonLoading(button, true);
+                try {
+                    if (!this.state.activeKeys.privateKey) throw new Error("No active private key.");
+                    if (Object.keys(this.state.currentNoteData).length === 0) throw new Error("No banknote data available to download.");
+                    const password = prompt("Enter a password to encrypt the private key for this download:");
+                    if (!password) throw new Error("Download cancelled. Password is required.");
+                    this.ui.setStatus('keyStatus', 'info', '📦 Creating banknote package...');
+
+                    const banknoteBlob = await new Promise(resolve => this.canvas.toBlob(resolve, 'image/png'));
+                    const noteSerial = this.state.currentNoteData.serial;
+                    const files = [
+                        { name: `${noteSerial}_banknote.png`, data: banknoteBlob },
+                        { name: `${noteSerial}_data.json`, data: JSON.stringify(this.state.currentNoteData, null, 2) },
+                        { name: `${noteSerial}_public_key.json`, data: JSON.stringify({ keyData: Utils.arrayBufferToBase64(this.state.activeKeys.publicKey) }, null, 2) },
+                        { name: `${noteSerial}_private_key_encrypted.json`, data: JSON.stringify(await this.crypto.encryptPrivateKey(this.state.activeKeys.privateKey, password), null, 2) }
+                    ];
+
+                    const zip = new JSZip();
+                    files.forEach(file => zip.file(file.name, file.data));
+                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(zipBlob); a.download = `${noteSerial}_package.zip`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    this.ui.setStatus('keyStatus', 'valid', `✅ Banknote package downloaded as a ZIP file.`);
+                } catch(e) {
+                    this.ui.setStatus('keyStatus', 'invalid', `❌ Download failed: ${e.message}`);
+                } finally {
+                    this.ui.setButtonLoading(button, false);
                 }
             }
 
@@ -209,15 +278,14 @@
                 try {
                     const count = parseInt(document.getElementById('batch-count-input').value, 10);
                     if (isNaN(count) || count < 1) throw new Error("Invalid quantity specified.");
-                    
-                    const password = prompt(`Enter a password to encrypt the ${count} private key files for this batch:`);
+                    const password = prompt(`Enter a password to encrypt the ${count} unique private key files for this batch:`);
                     if (!password) throw new Error("Batch generation cancelled. Password is required.");
 
                     const zip = new JSZip();
                     const offscreenCanvas = document.createElement('canvas');
                     offscreenCanvas.width = this.canvas.width;
                     offscreenCanvas.height = this.canvas.height;
-
+                    
                     for (let i = 0; i < count; i++) {
                         this.ui.setStatus('keyStatus', 'info', `⏳ Generating banknote ${i + 1} of ${count}...`);
                         
@@ -237,16 +305,15 @@
                     }
 
                     this.ui.setStatus('keyStatus', 'info', `📦 Compiling ZIP file...`);
-                    const zipBlob = await zip.generateAsync({ type: "blob" });
+                    const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(zipBlob);
                     a.download = `Banknote_Batch_${count}_${Date.now()}.zip`;
                     a.click();
                     URL.revokeObjectURL(a.href);
-                    this.ui.setStatus('keyStatus', 'valid', `✅ Successfully generated and downloaded a ZIP package with ${count} unique banknotes.`);
-
+                    this.ui.setStatus('keyStatus', 'valid', `✅ Successfully downloaded ZIP package with ${count} unique banknotes.`);
                 } catch (e) {
-                     this.ui.setStatus('keyStatus', 'invalid', `❌ Failed: ${e.message}`);
+                     this.ui.setStatus('keyStatus', 'invalid', `❌ Batch generation failed: ${e.message}`);
                 } finally {
                     this.ui.setButtonLoading(button, false);
                 }
@@ -317,10 +384,10 @@
                 try {
                     const imageDataUri = canvasToCheck.toDataURL('image/png');
                     const base64Compressed = await this.jabcode.decode_message(imageDataUri);
-                    const compressedData = new Uint8Array(atob(base64Compressed).split("").map(char => char.charCodeAt(0)));
+                    const compressedData = Utils.base64ToUint8Array(base64Compressed);
                     const jsonString = pako.inflate(compressedData, { to: 'string' });
                     return JSON.parse(jsonString);
-                } catch (error) { return null; }
+                } catch (error) { console.error("JAB Code read/decompress failed:", error); return null; }
             }
             
             async createNoteData(amount, privateKey, index = 0) {
