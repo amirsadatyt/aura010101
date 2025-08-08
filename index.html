@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Super-Hybrid Crypto)</title>
+    <title>Sadat Digital Banknote (Hybrid Falcon-1024 + SPHINCS+ Signatures & SHAKE256)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -50,7 +50,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using a Super-Hybrid Signature and SHAKE256 Hashing.</p>
+        <p>A secure, verifiable digital currency concept using Hybrid Falcon-1024 + SPHINCS+ Signatures and SHAKE256 Hashing.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
@@ -96,24 +96,23 @@
     </div>
 </div>
 
-<script src="./sphincs+.js"></script>
-<script src="./pqc-sign-falcon-1024.min.js"></script>
-<script src="./elliptic.min.js"></script>
 <script type="module">
 // Import cryptographic libraries as modules
+import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+import pqcSignSphincsPlus from './sphincs+.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-import { Argon2 } from './argon2.js';
+import { Argon2 } from './argon2-wrapper.js';
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
-let activeKeys = { publicKey: null, privateKey: null };
-
-// --- Third-party Crypto APIs ---
-let superSphincsApi = null;
+let activeKeys = { 
+    publicKey: { falcon: null, sphincs: null }, 
+    privateKey: { falcon: null, sphincs: null }
+};
 let falconApi = null;
-let ellipticApi = null;
+let sphincsApi = null;
 
 // --- Utility Functions ---
 const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -130,17 +129,16 @@ const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte =>
 const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
 // ===================================================================================
-// Super-Hybrid Crypto Logic
+// Hybrid Key Management and Crypto Logic
 // ===================================================================================
-
-const SuperHybridCrypto = (() => {
+const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
     const AES_KEY_LENGTH = 256;
     const ARGON2_KEY_LENGTH = 32; // 256 bits
 
-    function hashMessage(message) {
-        // Use a single, strong hash for all signatures
-        return shake256(message, 1536);
+    function hashMessageForSigning(message) {
+        const hexHash = shake256(message, 1536);
+        return hexToUint8Array(hexHash);
     }
 
     function hashMessageForVisual(message) {
@@ -148,103 +146,65 @@ const SuperHybridCrypto = (() => {
     }
     
     async function generateNewKeyPair() {
-        if (!falconApi || !superSphincsApi || !ellipticApi) {
-            throw new Error("One or more cryptographic APIs not initialized.");
-        }
-
-        // Generate Falcon key pair
+        if (!falconApi || !sphincsApi) throw new Error("Cryptographic APIs not initialized.");
         const falconKeyPair = await falconApi.keypair();
-
-        // Generate SPHINCS+ key pair
-        const superSphincsKeyPair = await superSphincsApi.keyPair();
-
-        // Generate ECDSA key pair (secp256k1)
-        const ecdsaKeyPair = ellipticApi.genKeyPair();
-
-        const hybridPrivateKey = {
-            falcon: arrayBufferToBase64(falconKeyPair.privateKey),
-            sphincs: arrayBufferToBase64(superSphincsKeyPair.privateKey),
-            ecdsa: ecdsaKeyPair.getPrivate('hex')
+        const sphincsKeyPair = await sphincsApi.keyPair();
+        return {
+            falcon: falconKeyPair,
+            sphincs: sphincsKeyPair
         };
-        const hybridPublicKey = {
-            falcon: arrayBufferToBase64(falconKeyPair.publicKey),
-            sphincs: arrayBufferToBase64(superSphincsKeyPair.publicKey),
-            ecdsa: ecdsaKeyPair.getPublic(true, 'hex')
-        };
-
-        return { hybridPrivateKey, hybridPublicKey };
     }
 
-    async function signData(data, hybridPrivateKey) {
-        if (!falconApi || !superSphincsApi || !ellipticApi) {
-            throw new Error("One or more cryptographic APIs not initialized.");
+    async function signData(data, privateKeys) {
+        if (!privateKeys.falcon || !privateKeys.sphincs) {
+            throw new Error("Hybrid private keys are not available for signing.");
         }
-
-        const dataHash = hashMessage(data);
-        const dataHashBytes = hexToUint8Array(dataHash);
-
-        const falconPrivKeyBytes = base64ToUint8Array(hybridPrivateKey.falcon);
-        const falconSignature = await falconApi.sign(dataHashBytes, falconPrivKeyBytes);
-
-        const sphincsPrivKeyBytes = base64ToUint8Array(hybridPrivateKey.sphincs);
-        const sphincsSignature = await superSphincsApi.signDetached(dataHashBytes, sphincsPrivKeyBytes, null, true);
+        if (!falconApi || !sphincsApi) {
+            throw new Error("Cryptographic APIs not initialized.");
+        }
         
-        const ecdsaPrivKeyHex = hybridPrivateKey.ecdsa;
-        const ecdsaKeyPair = ellipticApi.keyFromPrivate(ecdsaPrivKeyHex, 'hex');
-        const ecdsaSignature = ecdsaKeyPair.sign(dataHash, 'hex');
-
-        const hybridSignature = {
-            falcon: arrayBufferToBase64(falconSignature.signature),
-            sphincs: arrayBufferToBase64(sphincsSignature),
-            ecdsa: ecdsaSignature.toDER('hex')
-        };
-
+        const dataHash = hashMessageForSigning(data);
+        
+        const falconSignature = await falconApi.sign(dataHash, privateKeys.falcon);
+        const sphincsSignature = await sphincsApi.signDetached(dataHash, privateKeys.sphincs);
+        
+        // Combine signatures into a hybrid signature
+        const hybridSignature = new Uint8Array(falconSignature.length + sphincsSignature.length);
+        hybridSignature.set(falconSignature);
+        hybridSignature.set(sphincsSignature, falconSignature.length);
+        
         return hybridSignature;
     }
 
-    async function verifySignature(hybridSignature, data, hybridPublicKey) {
-        if (!falconApi || !superSphincsApi || !ellipticApi) {
-            throw new Error("One or more cryptographic APIs not initialized.");
+    async function verifySignature(hybridSignature, data, publicKeys) {
+        if (!publicKeys.falcon || !publicKeys.sphincs) {
+            throw new Error("Hybrid public keys are not available for verification.");
         }
-
-        const dataHash = hashMessage(data);
-        const dataHashBytes = hexToUint8Array(dataHash);
-
-        // 1. Verify Falcon signature
-        const falconPubKeyBytes = base64ToUint8Array(hybridPublicKey.falcon);
-        const falconSignatureBytes = base64ToUint8Array(hybridSignature.falcon);
-        const falconValid = await falconApi.verify(falconSignatureBytes, dataHashBytes, falconPubKeyBytes);
-        
-        if (!falconValid) {
-            console.error("Falcon signature failed verification.");
-            return false;
+        if (!falconApi || !sphincsApi) {
+            throw new Error("Cryptographic APIs not initialized.");
         }
         
-        // 2. Verify SPHINCS+ signature
-        const sphincsPubKeyBytes = base64ToUint8Array(hybridPublicKey.sphincs);
-        const sphincsSignatureBytes = base64ToUint8Array(hybridSignature.sphincs);
-        const sphincsValid = await superSphincsApi.verifyDetached(uint8ArrayToHex(sphincsSignatureBytes), uint8ArrayToHex(dataHashBytes), uint8ArrayToHex(sphincsPubKeyBytes));
+        const dataHash = hashMessageForSigning(data);
+
+        // Separate the hybrid signature
+        const falconSignatureLength = await falconApi.bytes;
+        const sphincsSignatureLength = await sphincsApi.bytes;
         
-        if (!sphincsValid) {
-            console.error("SuperSPHINCS signature failed verification.");
+        if (hybridSignature.length !== falconSignatureLength + sphincsSignatureLength) {
+            console.error("Hybrid signature has incorrect length.");
             return false;
         }
 
-        // 3. Verify ECDSA signature
-        const ecdsaPubKeyHex = hybridPublicKey.ecdsa;
-        const ecdsaSignatureHex = hybridSignature.ecdsa;
-        const ecdsaKeyPair = ellipticApi.keyFromPublic(ecdsaPubKeyHex, 'hex');
-        const ecdsaValid = ecdsaKeyPair.verify(dataHash, ecdsaSignatureHex, 'hex');
-        
-        if (!ecdsaValid) {
-            console.error("ECDSA signature failed verification.");
-            return false;
-        }
+        const falconSignature = hybridSignature.slice(0, falconSignatureLength);
+        const sphincsSignature = hybridSignature.slice(falconSignatureLength);
 
-        // All signatures must be valid
-        return falconValid && sphincsValid && ecdsaValid;
+        // Verify both signatures
+        const isFalconValid = await falconApi.verify(falconSignature, dataHash, publicKeys.falcon);
+        const isSphincsValid = await sphincsApi.verifyDetached(sphincsSignature, dataHash, publicKeys.sphincs);
+        
+        return isFalconValid && isSphincsValid;
     }
-
+    
     async function argon2DeriveKey(password, salt) {
         const passwordBytes = new TextEncoder().encode(password);
         const saltBytes = new TextEncoder().encode(salt);
@@ -262,14 +222,18 @@ const SuperHybridCrypto = (() => {
         return result.hash;
     }
     
-    async function encryptPrivateKey(privateKey, password) {
+    async function encryptPrivateKeys(privateKeys, password) {
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         
         const keyMaterial = await argon2DeriveKey(password, salt);
         const derivedKey = await window.crypto.subtle.importKey("raw", keyMaterial, { name: AES_ALGO }, false, ["encrypt"]);
         
-        const encodedKey = new TextEncoder().encode(JSON.stringify(privateKey));
+        const keyData = {
+            falcon: arrayBufferToBase64(privateKeys.falcon),
+            sphincs: arrayBufferToBase64(privateKeys.sphincs)
+        };
+        const encodedKey = new TextEncoder().encode(JSON.stringify(keyData));
         
         const encryptedKey = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, derivedKey, encodedKey);
         
@@ -280,7 +244,7 @@ const SuperHybridCrypto = (() => {
         };
     }
     
-    async function decryptPrivateKey(encryptedData, password) {
+    async function decryptPrivateKeys(encryptedData, password) {
         const salt = base64ToUint8Array(encryptedData.salt);
         const iv = base64ToUint8Array(encryptedData.iv);
         const cipherText = base64ToUint8Array(encryptedData.cipherText);
@@ -289,21 +253,19 @@ const SuperHybridCrypto = (() => {
         const derivedKey = await window.crypto.subtle.importKey("raw", keyMaterial, { name: AES_ALGO }, false, ["decrypt"]);
         
         const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, derivedKey, cipherText);
-        const privateKey = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
+        const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
         
-        return privateKey;
+        return {
+            falcon: base64ToUint8Array(keyObject.falcon),
+            sphincs: base64ToUint8Array(keyObject.sphincs)
+        };
     }
 
-    return { generateNewKeyPair, signData, verifySignature, encryptPrivateKey, decryptPrivateKey, hashMessageForVisual };
+    return { generateNewKeyPair, signData, verifySignature, encryptPrivateKeys, decryptPrivateKeys, hashMessageForVisual };
 })();
 
 function getStandardizedDataForSigning(noteData) {
-    const dataToSign = {
-        amount: noteData.amount,
-        serial: noteData.serial,
-        timestamp: noteData.timestamp,
-        verificationKey: noteData.verificationKey
-    };
+    const dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.verificationKey };
     return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
 }
 
@@ -318,7 +280,7 @@ function createQrPayload(noteData) {
         noteData.serial,
         noteData.timestamp,
         noteData.verificationKey,
-        JSON.stringify(noteData.signature)
+        noteData.signature
     ];
     return parts.join('|');
 }
@@ -339,25 +301,34 @@ async function handleGenerateAndExportKeys() {
         return;
     }
     
-    // Check if Argon2 module is initialized
     if (!Argon2.isReady) {
         updateKeyStatus('<span class="invalid">❌ Argon2 module is not ready. Please wait a moment and try again.</span>');
         return;
     }
     
-    updateKeyStatus('<span class="info">⏳ Generating new Super-Hybrid key pair... This may take a moment.</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new hybrid key pair... (Falcon and SPHINCS+)</span>');
     try {
-        const keyPair = await SuperHybridCrypto.generateNewKeyPair();
-        activeKeys.publicKey = keyPair.hybridPublicKey;
-        activeKeys.privateKey = keyPair.hybridPrivateKey;
+        const keyPair = await BankCrypto.generateNewKeyPair();
+        activeKeys.publicKey.falcon = keyPair.falcon.publicKey;
+        activeKeys.publicKey.sphincs = keyPair.sphincs.publicKey;
+        activeKeys.privateKey.falcon = keyPair.falcon.privateKey;
+        activeKeys.privateKey.sphincs = keyPair.sphincs.privateKey;
         
-        updateKeyStatus('<span class="info">⏳ Encrypting private key with Argon2 and AES... This may take a moment.</span>');
-        downloadFile(JSON.stringify(keyPair.hybridPublicKey, null, 2), 'Sadat-Super-Hybrid-public-key.json', 'application/json');
+        updateKeyStatus('<span class="info">⏳ Encrypting private keys with Argon2 and AES... This may take a moment.</span>');
         
-        const encryptedPrivate = await SuperHybridCrypto.encryptPrivateKey(keyPair.hybridPrivateKey, password);
-        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Super-Hybrid-private-key.json', 'application/json');
+        const publicKeyData = {
+            falcon: arrayBufferToBase64(keyPair.falcon.publicKey),
+            sphincs: arrayBufferToBase64(keyPair.sphincs.publicKey)
+        };
+        downloadFile(JSON.stringify({ keyData: publicKeyData }, null, 2), 'Sadat-hybrid-public-key.json', 'application/json');
         
-        updateKeyStatus('<span class="valid">✅ New Super-Hybrid key pair generated and exported! The new keys are now active.</span>');
+        const encryptedPrivate = await BankCrypto.encryptPrivateKeys({
+            falcon: keyPair.falcon.privateKey,
+            sphincs: keyPair.sphincs.privateKey
+        }, password);
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-hybrid-private-key.json', 'application/json');
+        
+        updateKeyStatus('<span class="valid">✅ New hybrid key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
     } catch (e) {
@@ -373,9 +344,12 @@ async function handleImportPublicKey(event) {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!data.falcon || !data.sphincs || !data.ecdsa) throw new Error("Invalid public key file format.");
-            activeKeys.publicKey = data;
-            updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>');
+            if (!data.keyData || !data.keyData.falcon || !data.keyData.sphincs) {
+                throw new Error("Invalid public key file format.");
+            }
+            activeKeys.publicKey.falcon = base64ToUint8Array(data.keyData.falcon);
+            activeKeys.publicKey.sphincs = base64ToUint8Array(data.keyData.sphincs);
+            updateKeyStatus('<span class="valid">✅ Hybrid public key imported successfully. It is now active for banknote validation.</span>');
         } catch (error) {
             updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`);
         }
@@ -393,7 +367,6 @@ async function handleImportPrivateKey(event) {
         return;
     }
     
-    // Check if Argon2 module is initialized
     if (!Argon2.isReady) {
         updateKeyStatus('<span class="invalid">❌ Argon2 module is not ready. Please wait a moment and try again.</span>');
         return;
@@ -403,9 +376,11 @@ async function handleImportPrivateKey(event) {
     reader.onload = async (e) => {
         try {
             const encryptedData = JSON.parse(e.target.result);
-            updateKeyStatus('<span class="info">⏳ Decrypting private key with Argon2 and AES... This may take a moment.</span>');
-            activeKeys.privateKey = await SuperHybridCrypto.decryptPrivateKey(encryptedData, password);
-            updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>');
+            updateKeyStatus('<span class="info">⏳ Decrypting hybrid private keys with Argon2 and AES... This may take a moment.</span>');
+            const decryptedKeys = await BankCrypto.decryptPrivateKeys(encryptedData, password);
+            activeKeys.privateKey.falcon = decryptedKeys.falcon;
+            activeKeys.privateKey.sphincs = decryptedKeys.sphincs;
+            updateKeyStatus('<span class="valid">✅ Hybrid private keys imported successfully. They are now active for banknote signing.</span>');
             updateControlsState(true);
         } catch (error) {
             updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key. Check your password and file: ${error.message}</span>`);
@@ -430,8 +405,8 @@ function downloadFile(data, filename, type) {
 async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-    if (!activeKeys.publicKey) {
-        alert("Error: No public key is active for validation. Please generate or import one.");
+    if (!activeKeys.publicKey.falcon || !activeKeys.publicKey.sphincs) {
+        alert("Error: No hybrid public key is active for validation. Please generate or import one.");
         return;
     }
     const resultDiv = document.getElementById('validation-result');
@@ -452,7 +427,7 @@ async function handleFileSelect(event) {
         }
 
         let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
-        resultHTML += `\n\n<span class="info">2. Verifying hybrid digital signatures...</span>`;
+        resultHTML += `\n\n<span class="info">2. Verifying hybrid digital signature (Falcon-1024 + SPHINCS+)...</span>`;
         resultDiv.innerHTML = resultHTML;
 
         const isSignatureValid = await validateDigitalSignature(qrData);
@@ -463,7 +438,7 @@ async function handleFileSelect(event) {
             return;
         }
 
-        resultHTML += `\n<span class="valid">✅ 2. Digital signatures confirmed. Authenticity verified.</span>`;
+        resultHTML += `\n<span class="valid">✅ 2. Hybrid digital signature confirmed. Authenticity verified.</span>`;
         resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
         resultDiv.innerHTML = resultHTML;
     };
@@ -474,10 +449,12 @@ async function handleFileSelect(event) {
 async function validateDigitalSignature(qrData) {
     try {
         const { signature } = qrData;
-        if (!signature || !activeKeys.publicKey) return false;
+        if (!signature || !activeKeys.publicKey.falcon || !activeKeys.publicKey.sphincs) {
+            return false;
+        }
         const stringToVerify = getStandardizedDataForSigning(qrData);
-        const hybridSignature = JSON.parse(signature);
-        return await SuperHybridCrypto.verifySignature(hybridSignature, stringToVerify, activeKeys.publicKey);
+        const signatureBytes = base64ToUint8Array(signature);
+        return await BankCrypto.verifySignature(signatureBytes, stringToVerify, activeKeys.publicKey);
     } catch (e) {
         console.error("Signature verification error:", e);
         return false;
@@ -493,7 +470,7 @@ function readQRCodeFromCanvas(canvasToCheck) {
     if (code && code.data) {
         try {
             const parts = code.data.split('|');
-            if (parts.length !== 5) return null; // Verify correct format
+            if (parts.length !== 5) return null;
 
             return {
                 amount: parseInt(parts[0], 10),
@@ -515,8 +492,8 @@ function readQRCodeFromCanvas(canvasToCheck) {
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
 
 async function createNoteData(amount, index = 0) {
-    if (!activeKeys.privateKey) {
-        alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
+    if (!activeKeys.privateKey.falcon || !activeKeys.privateKey.sphincs) {
+        alert("Error: No hybrid private key is active for signing banknotes. Please generate or import a private key.");
         return null;
     }
     const now = Date.now();
@@ -527,9 +504,9 @@ async function createNoteData(amount, index = 0) {
         timestamp: now
     };
     const stringToSign = getStandardizedDataForSigning(noteData);
-    const hybridSignature = await SuperHybridCrypto.signData(stringToSign, activeKeys.privateKey);
-    noteData.signature = JSON.stringify(hybridSignature);
-    noteData.visualHash = SuperHybridCrypto.hashMessageForVisual(noteData.signature);
+    const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
+    noteData.signature = arrayBufferToBase64(signatureBytes);
+    noteData.visualHash = BankCrypto.hashMessageForVisual(noteData.signature);
     return noteData;
 }
 
@@ -547,8 +524,8 @@ async function handleCreateNewNote() {
 }
 
 async function handleDownloadBatch() {
-    if (!activeKeys.privateKey) {
-        alert("Error: No private key is active. Please generate or import one.");
+    if (!activeKeys.privateKey.falcon || !activeKeys.privateKey.sphincs) {
+        alert("Error: No hybrid private key is active. Please generate or import one.");
         return;
     }
     if (!window.showDirectoryPicker) {
@@ -629,13 +606,13 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
             ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
 
             ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
-            ctx.fillText("Digitally Signed by Sadat Bank Authority (Super-Hybrid Crypto)", w/2, h-60*scale);
+            ctx.fillText("Digitally Signed by Sadat Bank Authority (Hybrid Falcon-1024 + SPHINCS+)", w/2, h-60*scale);
             resolve();
         });
     });
 }
 
-function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,y2,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
+function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
 function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
 function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
@@ -644,13 +621,11 @@ function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<200
 // ===================================================================================
 async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading cryptographic modules...</span>');
+    updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 and SPHINCS+ Crypto Modules...</span>');
     try {
         falconApi = await pqcSignFalcon1024();
-        superSphincsApi = await superSphincs;
-        ellipticApi = new elliptic.ec('secp256k1');
+        sphincsApi = await pqcSignSphincsPlus();
         
-        // Wait for Argon2 WebAssembly to be ready
         await new Promise(resolve => {
             if (Argon2.isReady) {
                 resolve();
@@ -662,7 +637,7 @@ async function main() {
             }
         });
         
-        updateKeyStatus('<span class="info">All modules ready. Please generate a new key pair or import existing keys to begin.</span>');
+        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
         console.error("Failed to load a required module:", e);
         updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load required modules. Please check the console and ensure all files are present.</span>`);
@@ -678,8 +653,8 @@ async function main() {
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
 }
 
-// Start the application
 main();
+
 </script>
 </body>
 </html>
