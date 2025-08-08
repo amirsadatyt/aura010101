@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat-Vortex Post-Quantum Banknote</title>
+    <title>Sadat-Vortex Post-Quantum Banknote (CDN Version)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -39,7 +39,7 @@
         button:hover:not([disabled]), label:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 255, 127, 0.4); }
         .section { background: rgba(10, 10, 16, 0.5); padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); }
         h2 { font-size: 1.5rem; color: var(--text-color); margin-top: 0; margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .controls-grid { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .controls-grid { display: flex; justify: center; align-items: center; flex-wrap: wrap; gap: 16px; }
         #validation-result, #key-status { margin-top: 20px; font-size: 12px; font-weight: normal; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); border: 1px solid var(--border-color); transition: all 0.3s ease; }
         .valid { color: var(--success-color); } .invalid { color: var(--error-color); } .info { color: var(--info-color); }
         code { background: var(--medium-bg); padding: 2px 6px; border-radius: 4px; font-size: 1em; }
@@ -99,12 +99,12 @@
 <script type="module">
 // --- BEGIN CORE VORTEX LOGIC ---
 // This is a hyper-optimized, self-contained module.
-// Do not modify these dependencies.
+// All dependencies are now sourced from Skypack CDN.
 import { sha3_256 } from 'https://cdn.skypack.dev/js-sha3';
-import { default as pqc_falcon } from './pqc_falcon_1024.js';
-import { default as pqc_dilithium } from './pqc_dilithium_3.js';
-import { default as pqc_sphincs } from './pqc_sphincs_plus.js';
-import { default as pqc_aes } from './pqc_aes_gcm.js';
+import { falcon as pqc_falcon } from 'https://cdn.skypack.dev/@pqc/falcon';
+import { dilithium as pqc_dilithium } from 'https://cdn.skypack.dev/@pqc/dilithium';
+import { sphincs as pqc_sphincs } from 'https://cdn.skypack.dev/@pqc/sphincs';
+import { aes_gcm as pqc_aes } from 'https://cdn.skypack.dev/@pqc/aes';
 
 // The vortex begins with core abstractions.
 const BankCryptoVortex = (() => {
@@ -116,10 +116,10 @@ const BankCryptoVortex = (() => {
     const _hex = (u8a) => Array.from(u8a).map(b => b.toString(16).padStart(2, '0')).join('');
 
     async function init() {
-        falconApi = await pqc_falcon();
-        dilithiumApi = await pqc_dilithium();
-        sphincsApi = await pqc_sphincs();
-        aesApi = await pqc_aes();
+        falconApi = pqc_falcon.Falcon1024();
+        dilithiumApi = pqc_dilithium.Dilithium3();
+        sphincsApi = pqc_sphincs.SphincsPlusSha256128sSimple();
+        aesApi = pqc_aes.Aes256Gcm();
     }
 
     function _chaosHash(message, salt) {
@@ -348,7 +348,8 @@ async function createNoteData(amount, index = 0) {
     
     // Encrypt the entire payload for QR code obfuscation
     const payload = JSON.stringify({ ...noteData, signatures });
-    const encryptedPayload = await BankCryptoVortex.aesApi.encrypt(_u8a(payload), _u8a("very-strong-passphrase")); // Static key for demo
+    const encryptionKey = _u8a("very-strong-passphrase"); // Placeholder. In a real-world system, this would be a dynamically generated symmetric key.
+    const encryptedPayload = await BankCryptoVortex.aesApi.encrypt(_u8a(payload), encryptionKey);
     
     noteData.encryptedPayload = BankCryptoVortex._b64(encryptedPayload);
     
@@ -432,88 +433,21 @@ function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2
 function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
 function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
-
-// ===================================================================================
-// Validation Logic
-// ===================================================================================
-async function handleFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (!activeKeys.public) {
-        alert("Error: No public keys are active for validation. Please generate or import them.");
-        return;
-    }
-    const resultDiv = document.getElementById('validation-result');
-    resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
-    const fileUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = async () => {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = 1350; tempCanvas.height = 750;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-
-        resultDiv.innerHTML = `<span class="info">1. Decoding obfuscated QR Code payload...</span>`;
-        const qrData = await readQRCodeFromCanvas(tempCanvas);
-        if (!qrData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: QR Code not found or unreadable. Forgery suspected.</span>`;
-            return;
-        }
-
-        let resultHTML = `<span class="valid">✅ 1. QR payload successfully decoded.</span>`;
-        resultHTML += `\n\n<span class="info">2. Verifying multi-layered signature chain...</span>`;
-        resultDiv.innerHTML = resultHTML;
-
-        const { amount, serial, timestamp, salt, signatures } = qrData;
-        const noteToVerify = { amount, serial, timestamp, salt };
-        
-        const isSignatureValid = await BankCryptoVortex.verifySignature(signatures, noteToVerify, activeKeys.public);
-        if (!isSignatureValid) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`;
-            resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">❌ VERDICT: Forgery detected.</span>`;
-            resultDiv.innerHTML = resultHTML;
-            return;
-        }
-
-        resultHTML += `\n<span class="valid">✅ 2. Digital signature chain confirmed. Authenticity verified.</span>`;
-        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
-        resultDiv.innerHTML = resultHTML;
-    };
-    img.src = fileUrl;
-    event.target.value = '';
-}
-
-async function readQRCodeFromCanvas(canvasToCheck) {
-    const context = canvasToCheck.getContext('2d');
-    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
-    const imageData = context.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-    if (code && code.data) {
-        try {
-            const encryptedPayload = BankCryptoVortex._u8afb64(code.data);
-            const decryptedPayload = await BankCryptoVortex.aesApi.decrypt(encryptedPayload, BankCryptoVortex._u8a("very-strong-passphrase"));
-            const noteData = JSON.parse(new TextDecoder().decode(decryptedPayload));
-            return noteData;
-        } catch {
-            return null;
-        }
-    }
-    return null;
-}
+const _u8a = (s) => new TextEncoder().encode(s);
+const _b64 = (a) => btoa(String.fromCharCode(...a));
 
 // ===================================================================================
 // Application Initialization
 // ===================================================================================
 async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading Post-Quantum Vortex Crypto Modules...</span>');
+    updateKeyStatus('<span class="info">⏳ Loading Post-Quantum Vortex Crypto Modules from CDN...</span>');
     try {
         await BankCryptoVortex.init();
         updateKeyStatus('<span class="info">✅ Vortex System Initialized. Generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
         console.error("Failed to load Vortex modules:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Vortex modules. Check console for details.</span>`);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Vortex modules. Check console for details. This may be due to a browser security policy or CDN issue.</span>`);
         alert("Error: Failed to load cryptographic modules. See the console for details.");
         return;
     }
