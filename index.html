@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (Falcon-1024 + SHAKE256)</title>
+    <title>Sadat Digital Banknote (Sadat-Sign + SHAKE256)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -50,7 +50,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using Falcon-1024 Signatures and SHAKE256 Hashing.</p>
+        <p>A secure, verifiable digital currency concept using Sadat-Sign Signatures and SHAKE256 Hashing.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
@@ -98,7 +98,7 @@
 
 <script type="module">
 // Import cryptographic libraries as modules
-import pqcSignFalcon1024 from './sign.js';
+import signBuilder from './sign.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
@@ -106,7 +106,7 @@ const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
 let activeKeys = { publicKey: null, privateKey: null };
-let falconApi = null;
+let signApi = null;
 
 // --- Utility Functions ---
 const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -123,7 +123,7 @@ const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte =>
 const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
 // ===================================================================================
-// Bank Key Management and Falcon-1024 Crypto Logic
+// Bank Key Management and Sadat-Sign Crypto Logic
 // ===================================================================================
 
 const BankCrypto = (() => {
@@ -132,31 +132,33 @@ const BankCrypto = (() => {
     const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
 
-    // The sign.js module handles message hashing internally, so we'll pass the raw message string.
+    function hashMessageForSigning(message) {
+        const hexHash = shake256(message, 1024);
+        return hexToUint8Array(hexHash);
+    }
+
     function hashMessageForVisual(message) {
         return shake256(message, 256);
     }
     
     async function generateNewKeyPair() {
-        if (!falconApi) throw new Error("Falcon API not initialized.");
-        return await falconApi.keypair();
+        if (!signApi) throw new Error("Sign API not initialized.");
+        return await signApi.keypair();
     }
 
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
-        if (!falconApi) throw new Error("Falcon API not initialized.");
-        // The sign.js module expects the raw message, not a pre-hashed one.
-        const messageBytes = new TextEncoder().encode(data);
-        const { signature } = await falconApi.sign(messageBytes, privateKey);
+        if (!signApi) throw new Error("Sign API not initialized.");
+        const dataHash = hashMessageForSigning(data);
+        const { signature } = await signApi.sign(dataHash, privateKey);
         return signature;
     }
 
     async function verifySignature(signature, data, publicKey) {
         if (!publicKey) throw new Error("Public key is not available for verification.");
-        if (!falconApi) throw new Error("Falcon API not initialized.");
-        // The sign.js module expects the raw message, not a pre-hashed one.
-        const messageBytes = new TextEncoder().encode(data);
-        return await falconApi.verify(signature, messageBytes, publicKey);
+        if (!signApi) throw new Error("Sign API not initialized.");
+        const dataHash = hashMessageForSigning(data);
+        return await signApi.verify(signature, dataHash, publicKey);
     }
     
     async function encryptPrivateKey(privateKeyBytes, password) {
@@ -232,16 +234,16 @@ async function handleGenerateAndExportKeys() {
         updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>');
         return;
     }
-    updateKeyStatus('<span class="info">⏳ Generating new Falcon-1024 key pair and encrypting... Please wait.</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new Sadat-Sign key pair and encrypting... Please wait.</span>');
     try {
         const keyPair = await BankCrypto.generateNewKeyPair();
         activeKeys.publicKey = keyPair.publicKey;
         activeKeys.privateKey = keyPair.privateKey;
         const publicKeyB64 = arrayBufferToBase64(keyPair.publicKey);
-        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-1024-public-key.json', 'application/json');
+        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Sign-public-key.json', 'application/json');
         const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
-        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-1024-private-key.json', 'application/json');
-        updateKeyStatus('<span class="valid">✅ New Falcon-1024 key pair generated and exported! The new keys are now active.</span>');
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Sign-private-key.json', 'application/json');
+        updateKeyStatus('<span class="valid">✅ New Sadat-Sign key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
     } catch (e) {
@@ -329,7 +331,7 @@ async function handleFileSelect(event) {
         }
 
         let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
-        resultHTML += `\n\n<span class="info">2. Verifying digital signature (Falcon-1024)...</span>`;
+        resultHTML += `\n\n<span class="info">2. Verifying digital signature (Sadat-Sign)...</span>`;
         resultDiv.innerHTML = resultHTML;
 
         const isSignatureValid = await validateDigitalSignature(qrData);
@@ -506,7 +508,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
             ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
 
             ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
-            ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-1024)", w/2, h-60*scale);
+            ctx.fillText("Digitally Signed by Sadat Bank Authority (Sadat-Sign)", w/2, h-60*scale);
             resolve();
         });
     });
@@ -521,13 +523,13 @@ function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<200
 // ===================================================================================
 async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>');
+    updateKeyStatus('<span class="info">⏳ Loading Sadat-Sign Crypto Module...</span>');
     try {
-        falconApi = await pqcSignFalcon1024();
+        signApi = await signBuilder();
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
-        console.error("Failed to load Falcon module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'sign.js' is in the same directory and your browser supports modern JavaScript.</span>`);
+        console.error("Failed to load Sadat-Sign module:", e);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Sadat-Sign module. Please check that 'sign.js' is in the same directory and your browser supports modern JavaScript.</span>`);
         alert("Error: Failed to load cryptographic module. See the console for details.");
         return;
     }
