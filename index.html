@@ -98,7 +98,7 @@
 
 <script type="module">
 // Import cryptographic libraries as modules
-import signBuilder from './sign.js';
+import pqcSignFalcon1024 from './sign.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
@@ -132,11 +132,7 @@ const BankCrypto = (() => {
     const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
 
-    function hashMessageForSigning(message) {
-        const hexHash = shake256(message, 1024);
-        return hexToUint8Array(hexHash);
-    }
-
+    // The sign.js module handles message hashing internally, so we'll pass the raw message string.
     function hashMessageForVisual(message) {
         return shake256(message, 256);
     }
@@ -149,16 +145,18 @@ const BankCrypto = (() => {
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
         if (!falconApi) throw new Error("Falcon API not initialized.");
-        const dataHash = hashMessageForSigning(data);
-        const { signature } = await falconApi.sign(dataHash, privateKey);
+        // The sign.js module expects the raw message, not a pre-hashed one.
+        const messageBytes = new TextEncoder().encode(data);
+        const { signature } = await falconApi.sign(messageBytes, privateKey);
         return signature;
     }
 
     async function verifySignature(signature, data, publicKey) {
         if (!publicKey) throw new Error("Public key is not available for verification.");
         if (!falconApi) throw new Error("Falcon API not initialized.");
-        const dataHash = hashMessageForSigning(data);
-        return await falconApi.verify(signature, dataHash, publicKey);
+        // The sign.js module expects the raw message, not a pre-hashed one.
+        const messageBytes = new TextEncoder().encode(data);
+        return await falconApi.verify(signature, messageBytes, publicKey);
     }
     
     async function encryptPrivateKey(privateKeyBytes, password) {
@@ -240,9 +238,9 @@ async function handleGenerateAndExportKeys() {
         activeKeys.publicKey = keyPair.publicKey;
         activeKeys.privateKey = keyPair.privateKey;
         const publicKeyB64 = arrayBufferToBase64(keyPair.publicKey);
-        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-public-key.json', 'application/json');
+        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-1024-public-key.json', 'application/json');
         const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
-        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json');
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-1024-private-key.json', 'application/json');
         updateKeyStatus('<span class="valid">✅ New Falcon-1024 key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
@@ -525,11 +523,11 @@ async function main() {
     updateControlsState(false);
     updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>');
     try {
-        falconApi = await signBuilder();
+        falconApi = await pqcSignFalcon1024();
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
         console.error("Failed to load Falcon module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'sign.js' and its WASM files are in the same directory and your browser supports modern JavaScript.</span>`);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'sign.js' is in the same directory and your browser supports modern JavaScript.</span>`);
         alert("Error: Failed to load cryptographic module. See the console for details.");
         return;
     }
