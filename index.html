@@ -20,6 +20,9 @@
             --color-text-secondary: #7F90B1;
             --color-border: rgba(57, 200, 164, 0.2);
             --shadow-light: 0 0 25px rgba(57, 200, 164, 0.25), 0 0 50px rgba(57, 200, 164, 0.1);
+            --success-color: #39C8A4;
+            --error-color: #FF6B6B;
+            --info-color: #B7E4F0;
         }
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; padding: 0; }
@@ -66,19 +69,26 @@
             margin-bottom: 8px;
         }
         .header p { font-size: 1rem; color: var(--color-text-secondary); margin: 0; }
-        canvas {
-            border-radius: 20px;
+        .canvas-container {
+            position: relative;
             margin: 30px 0;
+            width: 100%;
+            padding-bottom: 55.55%; /* Aspect ratio 16:9 for 1350x750 */
+        }
+        #noteCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 20px;
             background: linear-gradient(145deg, #0f121b, #050609);
             cursor: default;
             box-shadow: 0 0 60px rgba(57, 200, 164, 0.1), 0 0 20px rgba(255, 255, 255, 0.05) inset;
-            width: 100%;
-            max-width: 1000px;
-            height: auto;
             border: 1px solid var(--color-stream);
             transition: transform 0.5s ease;
         }
-        canvas:hover { transform: scale(1.01); }
+        #noteCanvas:hover { transform: scale(1.01); }
         .section {
             background: rgba(17, 27, 49, 0.4);
             padding: 30px;
@@ -180,9 +190,9 @@
             position: relative;
             overflow: hidden;
         }
-        .valid { color: var(--color-stream); }
-        .invalid { color: #ff6b6b; }
-        .info { color: var(--color-highlight); }
+        .valid { color: var(--success-color); }
+        .invalid { color: var(--error-color); }
+        .info { color: var(--info-color); }
         #validation-result hr { border-color: rgba(127, 144, 177, 0.2); margin: 20px 0; border-style: dashed; }
         code {
             background: rgba(57, 200, 164, 0.1);
@@ -194,6 +204,32 @@
             border: 1px solid rgba(57, 200, 164, 0.3);
         }
         .icon { width: 22px; height: 22px; }
+
+        /* New styles for advanced visual features */
+        .holographic-strip {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 100%;
+            width: 100px;
+            background: linear-gradient(
+                90deg,
+                rgba(255,255,255,0) 0%,
+                rgba(255,255,255,0.05) 10%,
+                rgba(255,255,255,0.2) 20%,
+                rgba(255,255,255,0.05) 30%,
+                rgba(255,255,255,0) 40%
+            );
+            background-size: 200% 100%;
+            animation: move-hologram 10s infinite linear;
+            pointer-events: none;
+            z-index: 2;
+        }
+        @keyframes move-hologram {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
     </style>
 </head>
 <body>
@@ -203,7 +239,10 @@
         <p>A post-quantum verifiable currency with Falcon-512 & SHAKE256 security protocols.</p>
     </div>
 
-    <canvas id="noteCanvas" width="1350" height="750"></canvas>
+    <div class="canvas-container">
+        <div class="holographic-strip"></div>
+        <canvas id="noteCanvas" width="1350" height="750"></canvas>
+    </div>
 
     <div class="section">
         <h2>Banknote Controls</h2>
@@ -266,6 +305,7 @@ const ctx = canvas.getContext("2d");
 let currentNoteData = {};
 let activeKeys = { publicKey: null, privateKey: null };
 let falconApi = null;
+let mouseX = 0, mouseY = 0;
 
 // --- Utility Functions ---
 const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -631,22 +671,17 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
         const { amount, verificationKey, serial, visualHash } = noteData;
         const w = width, h = height, scale = w / 1350;
 
-        // Quantum Gradient Background
+        // Base Background
         const bgGradient = ctx.createLinearGradient(0, 0, w, h);
         bgGradient.addColorStop(0, '#0F1524');
         bgGradient.addColorStop(0.5, '#0A0D14');
         bgGradient.addColorStop(1, '#0F1524');
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, w, h);
-
-        // Holographic & Data Stream Effects
-        drawQuantumGrid(ctx, visualHash, w, h);
-        drawDataStreams(ctx, visualHash, w, h);
-        drawNoisePattern(ctx, visualHash, w, h);
-
-        // Security features
-        drawWatermark(ctx, visualHash, w, h);
-        drawKochGuilloche(ctx, visualHash, w, h);
+        
+        // Advanced Visual Security Layers
+        drawDynamicMicroTexture(ctx, visualHash, w, h);
+        drawNanoparticleEffect(ctx, mouseX, mouseY, w, h);
 
         // Text Elements
         ctx.shadowColor="rgba(0,0,0,0.8)"; ctx.shadowBlur=10*scale; ctx.shadowOffsetX=3*scale; ctx.shadowOffsetY=3*scale;
@@ -686,11 +721,40 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
     });
 }
 
-function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1.5*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.08)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
-function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.03)`;g_ctx.lineWidth=6*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
-function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<40000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.1, hue=H(hash,(i%30)+4,160,200); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
-function drawQuantumGrid(g_ctx, hash, w, h) { g_ctx.save(); g_ctx.strokeStyle = 'rgba(57, 200, 164, 0.05)'; g_ctx.lineWidth = 1; for (let i = 0; i < 20; i++) { const stepX = w / 20, stepY = h / 20; g_ctx.beginPath(); g_ctx.moveTo(i * stepX, 0); g_ctx.lineTo(i * stepX, h); g_ctx.stroke(); g_ctx.beginPath(); g_ctx.moveTo(0, i * stepY); g_ctx.lineTo(w, i * stepY); g_ctx.stroke(); } g_ctx.restore(); }
-function drawDataStreams(g_ctx, hash, w, h) { g_ctx.save(); g_ctx.lineWidth = 2; g_ctx.lineCap = 'round'; for (let i = 0; i < 5; i++) { const startX = H(hash, i * 4, 0, w), startY = H(hash, i * 4 + 2, 0, h); const endX = H(hash, i * 4 + 4, 0, w), endY = H(hash, i * 4 + 6, 0, h); const hue = H(hash, i * 4 + 8, 160, 200); const opacity = 0.05 + Math.random() * 0.1; g_ctx.strokeStyle = `hsla(${hue}, 80%, 70%, ${opacity})`; g_ctx.beginPath(); g_ctx.moveTo(startX, startY); g_ctx.lineTo(endX, endY); g_ctx.stroke(); } g_ctx.restore(); }
+function drawDynamicMicroTexture(g_ctx, hash, w, h) {
+    g_ctx.save();
+    g_ctx.globalAlpha = 0.05;
+    for (let i = 0; i < 50000; i++) {
+        const x = (H(hash, (i*2)%256, 0, w) + Math.sin(Date.now() / 1000 * H(hash, (i*2)%256, 1, 5))) % w;
+        const y = (H(hash, (i*2+2)%256, 0, h) + Math.cos(Date.now() / 1000 * H(hash, (i*2+2)%256, 1, 5))) % h;
+        const hue = H(hash, (i*2+4)%256, 160, 200);
+        g_ctx.fillStyle = `hsla(${hue}, 50%, 80%, 1)`;
+        g_ctx.fillRect(x, y, 1, 1);
+    }
+    g_ctx.restore();
+}
+
+function drawNanoparticleEffect(g_ctx, lightX, lightY, w, h) {
+    g_ctx.save();
+    g_ctx.globalAlpha = 0.02; // Invisible by default
+    const lightRadius = 150;
+    const distance = Math.sqrt(Math.pow(lightX - w/2, 2) + Math.pow(lightY - h/2, 2));
+
+    if (distance < lightRadius) {
+        g_ctx.globalAlpha = 0.3 - (distance/lightRadius * 0.3);
+    }
+    
+    // Draw the hidden pattern
+    g_ctx.strokeStyle = `rgba(183, 228, 240, 0.2)`;
+    g_ctx.lineWidth = 1;
+    for (let i = 0; i < 15; i++) {
+        g_ctx.beginPath();
+        g_ctx.arc(w/2, h/2, (50 + i * 20), 0, 2 * Math.PI);
+        g_ctx.stroke();
+    }
+    g_ctx.restore();
+}
+
 
 // ===================================================================================
 // Application Initialization
@@ -714,11 +778,28 @@ async function main() {
     document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey);
     document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey);
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = (e.clientX - rect.left) / rect.width * canvas.width;
+        mouseY = (e.clientY - rect.top) / rect.height * canvas.height;
+        if (currentNoteData && currentNoteData.visualHash) {
+            drawNoteOnCanvas(canvas, currentNoteData, canvas.width, canvas.height);
+        }
+    });
+
+    // Initial dummy data to display the visual features
+    await drawNoteOnCanvas(canvas, {
+        amount: 50000,
+        verificationKey: 'A1B2C3D4',
+        serial: '12345678',
+        visualHash: shake256('initial_state', 256),
+        signature: 'dummy_sig'
+    }, canvas.width, canvas.height);
 }
 
 // Start the application
 main();
-
 </script>
 </body>
 </html>
