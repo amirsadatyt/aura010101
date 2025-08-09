@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+l<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
@@ -416,13 +416,11 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // --- FIX: Add amount and verificationKey to the payload functions ---
     const createJabCodePayload = (noteData) => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
         const verificationKeyBytes = textEncoder.encode(noteData.verificationKey);
 
-        // Add 12 bytes for the new data (4 for amount, 8 for verification key)
         const bufferSize = 4 + 8 + 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
@@ -466,7 +464,6 @@ const BanknoteLogic = (() => {
         };
         return JSON.stringify(publicData);
     };
-    // --- END FIX ---
     
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
@@ -478,7 +475,7 @@ const BanknoteLogic = (() => {
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, qrPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
-            Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
+            Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error creating banknote: ${error.message}`, 'error');
             console.error(error);
         }
     };
@@ -547,8 +544,6 @@ const BanknoteLogic = (() => {
                     const fullCtx = fullCanvas.getContext('2d');
                     fullCtx.drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
 
-                    // --- FIX: Updated coordinates for the new two-barcode layout ---
-                    // This region now correctly targets the larger, more complex JAB Code.
                     const jabRegion = { x: 980, y: 380, width: 220, height: 220 };
 
                     const jabCanvas = document.createElement('canvas');
@@ -615,82 +610,95 @@ const BanknoteDrawer = (() => {
     function drawWatermark(ctx, hash, w, h) { /* Complex drawing code can be inserted here */ }
     function drawNoise(ctx, hash, w, h) { /* Complex drawing code can be inserted here */ }
     
-    return {
-        // --- FIX: Updated drawing logic to include two barcodes (QR and JAB) ---
-        drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload, qrPayload, width, height) => {
-            const ctx = targetCanvas.getContext("2d");
-            const { amount, serial, verificationKey, signatureTwo } = noteData;
-            const scale = width / 1350;
-            const visualHash = shake256(signatureTwo, 256);
+    // --- FIX: Heavily refactored drawing logic for robustness and two barcodes ---
+    async function drawNoteOnCanvas(targetCanvas, noteData, jabPayload, qrPayload, width, height) {
+        const ctx = targetCanvas.getContext("2d");
+        const { amount, serial, verificationKey, signatureTwo } = noteData;
+        const scale = width / 1350;
+        const visualHash = shake256(signatureTwo, 256);
 
-            // Background and generative art
-            const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-            const baseHue = H(visualHash, 0, 0, 360);
-            bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
-            bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
-            ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, width, height);
-            drawWatermark(ctx, visualHash, width, height);
-            drawGuilloche(ctx, visualHash, width, height);
-            drawNoise(ctx, visualHash, width, height);
+        // Draw background and generative art first
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+        const baseHue = H(visualHash, 0, 0, 360);
+        bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
+        bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
+        ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, width, height);
+        drawWatermark(ctx, visualHash, width, height);
+        drawGuilloche(ctx, visualHash, width, height);
+        drawNoise(ctx, visualHash, width, height);
 
-            // Text details
-            ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
-            ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
-            ctx.fillStyle = "#EAEAEA"; ctx.textAlign = 'left';
-            ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
-            ctx.fillText(serial, 150 * scale, 160 * scale);
-            ctx.fillText(verificationKey, 150 * scale, 280 * scale);
-            ctx.font = `bold ${150 * scale}px 'Roboto Mono'`; ctx.textAlign = "right";
-            ctx.shadowBlur = 12 * scale; ctx.shadowOffsetX = 4 * scale; ctx.shadowOffsetY = 4 * scale;
-            ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
-            ctx.shadowColor = "transparent";
+        // Draw text details
+        ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
+        ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
+        ctx.fillStyle = "#EAEAEA"; ctx.textAlign = 'left';
+        ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
+        ctx.fillText(serial, 150 * scale, 160 * scale);
+        ctx.fillText(verificationKey, 150 * scale, 280 * scale);
+        ctx.font = `bold ${150 * scale}px 'Roboto Mono'`; ctx.textAlign = "right";
+        ctx.shadowBlur = 12 * scale; ctx.shadowOffsetX = 4 * scale; ctx.shadowOffsetY = 4 * scale;
+        ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
+        ctx.shadowColor = "transparent";
 
-            // Barcodes
-            const qrCanvas = document.createElement("canvas");
+        // --- Barcode Generation with Robust Error Handling ---
+        let qrCanvas, jabImg;
+        try {
+            // Step 1: Generate QR Code data
+            qrCanvas = document.createElement("canvas");
+            await QRCode.toCanvas(qrCanvas, qrPayload, { width: 180 * scale, errorCorrectionLevel: 'M', margin: 1 });
+
+            // Step 2: Generate JAB Code data
             const jabCodeBase64 = jabcode.encode_message(jabPayload);
-            const jabImg = new Image();
-            
-            const qrPromise = QRCode.toCanvas(qrCanvas, qrPayload, { width: 180 * scale, errorCorrectionLevel: 'M', margin: 1 });
-            const jabPromise = new Promise((resolve, reject) => {
-                jabImg.onload = resolve;
-                jabImg.onerror = reject;
-                jabImg.src = jabCodeBase64;
+            if (!jabCodeBase64 || !jabCodeBase64.startsWith('data:image/png')) {
+                throw new Error("JAB encoder returned invalid or empty data.");
+            }
+            jabImg = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => reject(new Error("Failed to load generated JAB code image from data URL."));
+                img.src = jabCodeBase64;
             });
 
-            try {
-                await Promise.all([qrPromise, jabPromise]);
-
-                // --- Draw QR Code (Top) ---
-                const qrX = 1000 * scale;
-                const qrY = 100 * scale;
-                ctx.fillStyle = 'white';
-                ctx.fillRect(qrX - 20 * scale, qrY - 20 * scale, 180 * scale + 40 * scale, 180 * scale + 40 * scale);
-                ctx.drawImage(qrCanvas, qrX, qrY);
-                ctx.font = `bold ${18 * scale}px 'Poppins'`; ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.textAlign = "center";
-                ctx.fillText("PUBLIC INFO (SCAN WITH ANY APP)", qrX + (90 * scale), qrY - 35 * scale);
-
-                // --- Draw JAB Code (Bottom) ---
-                const jabX = 1000 * scale;
-                const jabY = 400 * scale;
-                ctx.fillStyle = 'white';
-                ctx.fillRect(jabX - 20 * scale, jabY - 20 * scale, 180 * scale + 40 * scale, 180 * scale + 40 * scale);
-                ctx.drawImage(jabImg, jabX, jabY, 180 * scale, 180 * scale);
-                ctx.font = `bold ${18 * scale}px 'Poppins'`;
-                ctx.fillText("SECURITY SEAL (VALIDATE WITH THIS APP)", jabX + (90 * scale), jabY - 35 * scale);
-
-                ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
-                ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
-            } catch (err) {
-                console.error("Barcode Generation Error:", err);
-                ctx.fillStyle = 'red';
-                ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
-                ctx.textAlign = 'center';
-                ctx.fillText("BARCODE ERROR", width - (320 * scale), height/2);
-                throw err; // Propagate error
-            }
+        } catch (err) {
+            console.error("Barcode Generation Error:", err);
+            // If generation fails, draw a big visible error on the canvas
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, width, height);
+            ctx.font = `bold ${50 * scale}px 'Poppins'`;
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+            ctx.fillText("BARCODE GENERATION FAILED", width / 2, height / 2);
+            ctx.font = `${25 * scale}px 'Poppins'`;
+            ctx.fillText(err.message, width / 2, height / 2 + 60 * scale);
+            throw err; // Propagate the error to stop further processing
         }
-    };
+
+        // --- Draw QR Code (Top) ---
+        const qrX = 1000 * scale;
+        const qrY = 100 * scale;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(qrX - 20 * scale, qrY - 20 * scale, 180 * scale + 40 * scale, 180 * scale + 40 * scale);
+        ctx.drawImage(qrCanvas, qrX, qrY);
+        ctx.font = `bold ${18 * scale}px 'Poppins'`; ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.textAlign = "center";
+        ctx.fillText("PUBLIC INFO (SCAN WITH ANY APP)", qrX + (90 * scale), qrY - 35 * scale);
+
+        // --- Draw JAB Code (Bottom) ---
+        const jabX = 1000 * scale;
+        const jabY = 400 * scale;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(jabX - 20 * scale, jabY - 20 * scale, 180 * scale + 40 * scale, 180 * scale + 40 * scale);
+        ctx.drawImage(jabImg, jabX, jabY, 180 * scale, 180 * scale);
+        ctx.font = `bold ${18 * scale}px 'Poppins'`;
+        ctx.fillText("SECURITY SEAL (VALIDATE WITH THIS APP)", jabX + (90 * scale), jabY - 35 * scale);
+
+        // --- Draw Footer ---
+        ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
+        ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
+    }
+    
+    return { drawNoteOnCanvas };
 })();
+// --- END FIX ---
+
 
 async function main() {
     Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Crypto Module...', 'info');
