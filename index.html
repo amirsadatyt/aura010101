@@ -411,15 +411,19 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
+    // --- FIX: Add amount and verificationKey to the binary payload ---
     const createBinaryPayload = (noteData) => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
+        const verificationKeyBytes = textEncoder.encode(noteData.verificationKey);
 
-        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        const bufferSize = 4 + 8 + 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
 
+        view.setUint32(offset, noteData.amount, false); offset += 4;
+        new Uint8Array(buffer, offset).set(verificationKeyBytes); offset += 8;
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
         new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
         new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
@@ -436,6 +440,8 @@ const BanknoteLogic = (() => {
         const textDecoder = new TextDecoder();
         let offset = 0;
 
+        const amount = view.getUint32(offset, false); offset += 4;
+        const verificationKey = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
         const timestamp = view.getUint32(offset, false); offset += 4;
         const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
         const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
@@ -443,8 +449,9 @@ const BanknoteLogic = (() => {
         const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
         const signatureTwo = buffer.subarray(offset);
         
-        return { timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
+        return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
     };
+    // --- END FIX ---
     
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
@@ -508,7 +515,6 @@ const BanknoteLogic = (() => {
     return {
         handleCreateAndSignNotes,
         handleDownloadBatch,
-        // --- FIX: Isolate JAB Code from banknote before decoding to improve reliability ---
         handleFileSelectForValidation: async (event) => {
             const file = event.target.files[0];
             if (!file || !state.masterPublicKey) return;
@@ -518,29 +524,23 @@ const BanknoteLogic = (() => {
             const img = new Image();
             img.onload = async () => {
                 try {
-                    // Create a temporary canvas to hold the full banknote image
                     const fullCanvas = document.createElement('canvas');
                     fullCanvas.width = 1350;
                     fullCanvas.height = 750;
                     const fullCtx = fullCanvas.getContext('2d');
                     fullCtx.drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
 
-                    // Define the precise region where the JAB Code is drawn
                     const jabRegion = { x: 800, y: 210, width: 420, height: 420 };
 
-                    // Create a second, smaller canvas to hold ONLY the JAB code
                     const jabCanvas = document.createElement('canvas');
                     jabCanvas.width = jabRegion.width;
                     jabCanvas.height = jabRegion.height;
                     const jabCtx = jabCanvas.getContext('2d');
                     
-                    // Copy the JAB code region from the full image to the smaller canvas
                     jabCtx.drawImage(fullCanvas, jabRegion.x, jabRegion.y, jabRegion.width, jabRegion.height, 0, 0, jabRegion.width, jabRegion.height);
 
-                    // Convert the clean, isolated JAB code canvas to a Data URL
                     const jabDataUrl = jabCanvas.toDataURL();
                     
-                    // Decode the isolated JAB code image
                     const decodedText = await jabcode.decode_message(jabDataUrl);
 
                     if (!decodedText) {
@@ -569,7 +569,9 @@ const BanknoteLogic = (() => {
                         resultDiv.innerHTML = resultHTML;
                         return;
                     }
-                    resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+                    resultHTML += `<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n`;
+                    resultHTML += `<span class="info">ℹ️ Decoded Amount: ${parsedData.amount}, Key: ${parsedData.verificationKey}</span>\n<hr>`;
+                    resultHTML += `<span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>`;
                     
                     resultDiv.innerHTML = resultHTML;
                 } catch (e) {
@@ -584,7 +586,6 @@ const BanknoteLogic = (() => {
             };
             img.src = URL.createObjectURL(file);
         }
-        // --- END FIX ---
     };
 })();
 
@@ -631,7 +632,6 @@ const BanknoteDrawer = (() => {
                     img.onload = () => {
                         const qrX = width - (150 * scale) - (380 * scale);
                         const qrY = height - (520 * scale);
-                        // Draw a white padded background for the JAB Code to ensure readability
                         ctx.fillStyle = 'white';
                         ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), (380 * scale) + (40 * scale), (380 * scale) + (40 * scale));
                         ctx.drawImage(img, qrX, qrY, 380 * scale, 380 * scale);
