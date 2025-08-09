@@ -404,9 +404,188 @@ const UIHandlers = (() => {
 // ===================================================================================
 // BANKNOTE LOGIC (No changes needed here)
 // ===================================================================================
-const BanknoteLogic = (() => { /* ... Unchanged ... */ })();
-const BanknoteDrawer = (() => { /* ... Unchanged ... */ })();
-
+const BanknoteLogic = (() => { 
+    const getStandardizedDataForSigning = (noteData, forMasterSignature = false) => {
+        let dataToSign;
+        if (forMasterSignature) {
+            dataToSign = { ephemeralPublicKey: noteData.ephemeralPublicKey, signatureOne: noteData.signatureOne };
+        } else {
+            dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp };
+        }
+        return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
+    };
+    const createQrPayload = (noteData) => {
+        const parts = [ noteData.amount, noteData.serial, noteData.timestamp, noteData.ephemeralPublicKey, noteData.signatureOne, noteData.signatureTwo ];
+        return parts.join('|');
+    };
+    const parseQrPayload = (payload) => {
+        const parts = payload.split('|');
+        if (parts.length !== 6) throw new Error("Invalid QR payload format.");
+        return { amount: parseInt(parts[0], 10), serial: parts[1], timestamp: parseInt(parts[2], 10), ephemeralPublicKey: parts[3], signatureOne: parts[4], signatureTwo: parts[5] };
+    };
+    const createNoteData = async (amount) => {
+        if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
+        const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
+        const ephemeralPublicKeyB64 = Utils.arrayBufferToBase64(ephemeralKeyPair.publicKey);
+        const noteData = { amount: parseInt(amount) || 0, serial: Date.now().toString().slice(-8) + Math.random().toString(16).substring(2, 6), timestamp: Date.now(), ephemeralPublicKey: ephemeralPublicKeyB64 };
+        const dataForSigOne = getStandardizedDataForSigning(noteData, false);
+        const sigOneBytes = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
+        noteData.signatureOne = Utils.arrayBufferToBase64(sigOneBytes);
+        const dataForSigTwo = getStandardizedDataForSigning(noteData, true);
+        const sigTwoBytes = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
+        noteData.signatureTwo = Utils.arrayBufferToBase64(sigTwoBytes);
+        return noteData;
+    };
+    return {
+        handleCreateAndSignNotes: async () => {
+            if (!state.masterPrivateKey) {
+                alert("Master Private Key is not active.");
+                return;
+            }
+            const amount = DOMElements.amountInput.value;
+            const quantity = parseInt(DOMElements.quantityInput.value) || 1;
+            Utils.updateStatus(DOMElements.keyGenStatus, `⏳ Creating ${quantity} note(s)...`, 'info');
+            try {
+                const dirHandle = quantity > 1 && window.showDirectoryPicker ? await window.showDirectoryPicker() : null;
+                if(quantity > 1 && !dirHandle){alert("Directory picker not supported."); return;}
+                const offscreenCanvas = document.createElement('canvas');
+                offscreenCanvas.width = 1350;
+                offscreenCanvas.height = 750;
+                for (let i = 0; i < quantity; i++) {
+                    const noteData = await createNoteData(amount);
+                    await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, 1350, 750);
+                    const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
+                    const filename = `SADAT-NOTE-${noteData.serial}.png`;
+                    if (dirHandle) {
+                        const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                    } else {
+                        Utils.downloadFile(blob, filename, 'image/png');
+                    }
+                    if (i === quantity - 1) {
+                        await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, 1350, 750);
+                    }
+                }
+                Utils.updateStatus(DOMElements.keyGenStatus, `✅ Saved ${quantity} note(s).`, 'success');
+            } catch (error) {
+                Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error: ${error.message}`, 'error');
+                console.error(error);
+            } finally {
+                state.masterPrivateKey = null;
+                DOMElements.createNoteButton.disabled = true;
+                // Update the key reconstruction status after clearing the key
+                Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.", 'warning');
+                Utils.log("Key cleared.", 'warning');
+            }
+        },
+        handleFileSelectForValidation: async (event) => {
+            const file = event.target.files[0];
+            if (!file || !state.masterPublicKey) return;
+            const resultDiv = DOMElements.validationResult;
+            Utils.updateStatus(resultDiv, '⏳ Validating...', 'info');
+            const img = new Image();
+            img.onload = async () => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 1350;
+                tempCanvas.height = 750;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+                let resultHTML = '';
+                const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
+                const imageData = tempCtx.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                if (!code || !code.data) {
+                    Utils.updateStatus(resultDiv, '❌ QR Code not found.', 'error');
+                    return;
+                }
+                resultHTML += '<span class="valid">✅ QR Found</span>\n';
+                try {
+                    const parsedData = parseQrPayload(code.data);
+                    const dataForSigOne = getStandardizedDataForSigning(parsedData, false);
+                    const isSigOneValid = await BankCrypto.verifySignature(
+                        Utils.base64ToUint8Array(parsedData.signatureOne),
+                        dataForSigOne,
+                        Utils.base64ToUint8Array(parsedData.ephemeralPublicKey)
+                    );
+                    if (!isSigOneValid) {
+                        resultHTML += '<span class="invalid">❌ Sig 1 Invalid.</span>\n<hr><span>❌ FORGERY</span>';
+                        resultDiv.innerHTML = resultHTML;
+                        return;
+                    }
+                    resultHTML += '<span class="valid">✅ Sig 1 OK</span>\n';
+                    const dataForSigTwo = getStandardizedDataForSigning(parsedData, true);
+                    const isSigTwoValid = await BankCrypto.verifySignature(
+                        Utils.base64ToUint8Array(parsedData.signatureTwo),
+                        dataForSigTwo,
+                        state.masterPublicKey
+                    );
+                    if (!isSigTwoValid) {
+                        resultHTML += '<span class="invalid">❌ Sig 2 Invalid.</span>\n<hr><span>❌ FORGERY</span>';
+                        resultDiv.innerHTML = resultHTML;
+                        return;
+                    }
+                    resultHTML += '<span class="valid">✅ Sig 2 OK</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ AUTHENTIC</span>';
+                    resultDiv.innerHTML = resultHTML;
+                } catch (e) {
+                    Utils.updateStatus(resultDiv, `❌ Error: ${e.message}`, 'error');
+                }
+            };
+            img.src = URL.createObjectURL(file);
+            event.target.value = '';
+        }
+    };
+})();
+const BanknoteDrawer = (() => {
+    const H = (t, i, n, e) => n + (parseInt(t.substring(i, i + 2), 16) % (e - n + 1));
+    const dW = (c, h, w, t) => {};
+    const dK = (c, h, w, t) => {};
+    const dN = (c, h, w, t) => {};
+    return {
+        drawNoteOnCanvas: async (t, n, w, h) => {
+            return new Promise(async (resolve, reject) => {
+                const c = t.getContext("2d"), {amount:a, serial:s, signatureTwo: sig2} = n, scale = w / 1350, vh = shake256(sig2, 256);
+                const bg = c.createLinearGradient(0,0,0,h);
+                const hue=H(vh,0,0,360);
+                bg.addColorStop(0,`hsl(${hue},50%,6%)`);
+                bg.addColorStop(1,`hsl(${hue},40%,4%)`);
+                c.fillStyle=bg;
+                c.fillRect(0,0,w,h);
+                dW(c,vh,w,h);
+                dK(c,vh,w,h);
+                dN(c,vh,w,h);
+                c.shadowColor="rgba(0,0,0,0.7)";
+                c.shadowBlur=8*scale;
+                c.shadowOffsetX=2*scale;
+                c.shadowOffsetY=2*scale;
+                c.fillStyle="#EAEAEA";
+                c.font=`bold ${70*scale}px 'Roboto Mono'`;
+                c.textAlign='left';
+                c.fillText(`SN: ${s}`, 150*scale, 160*scale);
+                c.font=`bold ${150*scale}px 'Roboto Mono'`;
+                c.textAlign="right";
+                c.shadowBlur=12*scale;
+                c.shadowOffsetX=4*scale;
+                c.shadowOffsetY=4*scale;
+                c.fillText(a.toString(), w-(120*scale), 190*scale);
+                c.shadowColor="transparent";
+                const qrC = document.createElement("canvas"), qrS = 380*scale, qrP = createQrPayload(n);
+                QRCode.toCanvas(qrC,qrP,{width:qrS,errorCorrectionLevel:'M',color:{dark:'#000',light:'#FFF'}},err=>{
+                    if(err){reject(err); return;}
+                    const qrX=w-(150*scale)-qrS, qrY=h-(520*scale);
+                    c.fillStyle='white';c.fillRect(qrX-(20*scale),qrY-(20*scale),qrS+(40*scale),qrS+(40*scale));
+                    c.drawImage(qrC,qrX,qrY,qrS,qrS);
+                    c.font=`${30*scale}px 'Roboto Mono'`;
+                    c.fillStyle="rgba(255,255,255,0.4)";
+                    c.textAlign="center";
+                    c.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", w/2, h-60*scale);
+                    resolve();
+                });
+            });
+        }
+    };
+})();
 
 // ===================================================================================
 // APPLICATION INITIALIZATION
@@ -451,9 +630,6 @@ async function main() {
 
 // Start the application
 main();
-
-// Dummy placeholder functions for unchanged code blocks to keep the response clean
-(function(){ const getStandardizedDataForSigning = (noteData, forMasterSignature = false) => { let dataToSign; if (forMasterSignature) { dataToSign = { ephemeralPublicKey: noteData.ephemeralPublicKey, signatureOne: noteData.signatureOne }; } else { dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp }; } return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());}; const createQrPayload = (noteData) => { const parts = [ noteData.amount, noteData.serial, noteData.timestamp, noteData.ephemeralPublicKey, noteData.signatureOne, noteData.signatureTwo ]; return parts.join('|'); }; const parseQrPayload = (payload) => { const parts = payload.split('|'); if (parts.length !== 6) throw new Error("Invalid QR payload format."); return { amount: parseInt(parts[0], 10), serial: parts[1], timestamp: parseInt(parts[2], 10), ephemeralPublicKey: parts[3], signatureOne: parts[4], signatureTwo: parts[5] }; }; const createNoteData = async (amount) => { if (!state.masterPrivateKey) throw new Error("Master Private Key is not active."); const ephemeralKeyPair = await BankCrypto.generateNewKeyPair(); const ephemeralPublicKeyB64 = Utils.arrayBufferToBase64(ephemeralKeyPair.publicKey); const noteData = { amount: parseInt(amount) || 0, serial: Date.now().toString().slice(-8) + Math.random().toString(16).substring(2, 6), timestamp: Date.now(), ephemeralPublicKey: ephemeralPublicKeyB64 }; const dataForSigOne = getStandardizedDataForSigning(noteData, false); const sigOneBytes = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey); noteData.signatureOne = Utils.arrayBufferToBase64(sigOneBytes); const dataForSigTwo = getStandardizedDataForSigning(noteData, true); const sigTwoBytes = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey); noteData.signatureTwo = Utils.arrayBufferToBase64(sigTwoBytes); return noteData; }; BanknoteLogic.handleCreateAndSignNotes = async () => { if (!state.masterPrivateKey) { alert("Master Private Key is not active."); return; } const amount = DOMElements.amountInput.value; const quantity = parseInt(DOMElements.quantityInput.value) || 1; Utils.updateStatus(DOMElements.keyGenStatus, `⏳ Creating ${quantity} note(s)...`, 'info'); try { const dirHandle = quantity > 1 && window.showDirectoryPicker ? await window.showDirectoryPicker() : null; if(quantity > 1 && !dirHandle){alert("Directory picker not supported."); return;} const offscreenCanvas = document.createElement('canvas'); offscreenCanvas.width = 1350; offscreenCanvas.height = 750; for (let i = 0; i < quantity; i++) { const noteData = await createNoteData(amount); await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, 1350, 750); const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png')); const filename = `SADAT-NOTE-${noteData.serial}.png`; if (dirHandle) { const fileHandle = await dirHandle.getFileHandle(filename, { create: true }); const writable = await fileHandle.createWritable(); await writable.write(blob); await writable.close(); } else { Utils.downloadFile(blob, filename, 'image/png'); } if (i === quantity - 1) { await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, 1350, 750); } } Utils.updateStatus(DOMElements.keyGenStatus, `✅ Saved ${quantity} note(s).`, 'success'); } catch (error) { Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error: ${error.message}`, 'error'); console.error(error); } finally { state.masterPrivateKey = null; DOMElements.createNoteButton.disabled = true; Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Key cleared from memory.", 'warning'); Utils.log("Key cleared.", 'warning'); } }; BanknoteLogic.handleFileSelectForValidation = async (event) => { const file = event.target.files[0]; if (!file || !state.masterPublicKey) return; const resultDiv = DOMElements.validationResult; Utils.updateStatus(resultDiv, '⏳ Validating...', 'info'); const img = new Image(); img.onload = async () => { const tempCanvas = document.createElement('canvas'); tempCanvas.width = 1350; tempCanvas.height = 750; const tempCtx = tempCanvas.getContext('2d'); tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height); let resultHTML = ''; const qrRegion = { x: 800, y: 210, width: 420, height: 420 }; const imageData = tempCtx.getImageData(qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (!code || !code.data) { Utils.updateStatus(resultDiv, '❌ QR Code not found.', 'error'); return; } resultHTML += '<span class="valid">✅ QR Found</span>\n'; try { const parsedData = parseQrPayload(code.data); const dataForSigOne = getStandardizedDataForSigning(parsedData, false); const isSigOneValid = await BankCrypto.verifySignature( Utils.base64ToUint8Array(parsedData.signatureOne), dataForSigOne, Utils.base64ToUint8Array(parsedData.ephemeralPublicKey) ); if (!isSigOneValid) { resultHTML += '<span class="invalid">❌ Sig 1 Invalid.</span>\n<hr><span>❌ FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; } resultHTML += '<span class="valid">✅ Sig 1 OK</span>\n'; const dataForSigTwo = getStandardizedDataForSigning(parsedData, true); const isSigTwoValid = await BankCrypto.verifySignature( Utils.base64ToUint8Array(parsedData.signatureTwo), dataForSigTwo, state.masterPublicKey ); if (!isSigTwoValid) { resultHTML += '<span class="invalid">❌ Sig 2 Invalid.</span>\n<hr><span>❌ FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; } resultHTML += '<span class="valid">✅ Sig 2 OK</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ AUTHENTIC</span>'; resultDiv.innerHTML = resultHTML; } catch (e) { Utils.updateStatus(resultDiv, `❌ Error: ${e.message}`, 'error'); } }; img.src = URL.createObjectURL(file); event.target.value = ''; }; const H = (t, i, n, e) => n + (parseInt(t.substring(i, i + 2), 16) % (e - n + 1)); const dW = (c, h, w, t) => {}; const dK = (c, h, w, t) => {}; const dN = (c, h, w, t) => {}; BanknoteDrawer.drawNoteOnCanvas = async (t, n, w, h) => { return new Promise(async (resolve, reject) => { const c = t.getContext("2d"), {amount:a, serial:s, signatureTwo: sig2} = n, scale = w / 1350, vh = shake256(sig2, 256); const bg = c.createLinearGradient(0,0,0,h); const hue=H(vh,0,0,360); bg.addColorStop(0,`hsl(${hue},50%,6%)`); bg.addColorStop(1,`hsl(${hue},40%,4%)`); c.fillStyle=bg; c.fillRect(0,0,w,h); dW(c,vh,w,h); dK(c,vh,w,h); dN(c,vh,w,h); c.shadowColor="rgba(0,0,0,0.7)"; c.shadowBlur=8*scale; c.shadowOffsetX=2*scale; c.shadowOffsetY=2*scale; c.fillStyle="#EAEAEA"; c.font=`bold ${70*scale}px 'Roboto Mono'`; c.textAlign='left'; c.fillText(`SN: ${s}`, 150*scale, 160*scale); c.font=`bold ${150*scale}px 'Roboto Mono'`; c.textAlign="right"; c.shadowBlur=12*scale; c.shadowOffsetX=4*scale; c.shadowOffsetY=4*scale; c.fillText(a.toString(), w-(120*scale), 190*scale); c.shadowColor="transparent"; const qrC = document.createElement("canvas"), qrS = 380*scale, qrP = createQrPayload(n); QRCode.toCanvas(qrC,qrP,{width:qrS,errorCorrectionLevel:'M',color:{dark:'#000',light:'#FFF'}},err=>{ if(err){reject(err); return;} const qrX=w-(150*scale)-qrS, qrY=h-(520*scale); c.fillStyle='white';c.fillRect(qrX-(20*scale),qrY-(20*scale),qrS+(40*scale),qrS+(40*scale)); c.drawImage(qrC,qrX,qrY,qrS,qrS); c.font=`${30*scale}px 'Roboto Mono'`; c.fillStyle="rgba(255,255,255,0.4)"; c.textAlign="center"; c.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", w/2, h-60*scale); resolve(); }); }); }; main().then(()=>{ DOMElements.importPublicKey.addEventListener('change', UIHandlers.handleImportPublicKey); DOMElements.fileKeyInput.addEventListener('change', UIHandlers.handleFileKeyInput); DOMElements.passwordKeyInput.addEventListener('input', UIHandlers.handlePasswordKeyInput); DOMElements.visualKeyInput.addEventListener('change', UIHandlers.handleVisualKeyInput); DOMElements.reconstructKeyButton.addEventListener('click', UIHandlers.handleReconstructKey); DOMElements.createNoteButton.addEventListener('click', BanknoteLogic.handleCreateAndSignNotes); DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation); }); })();
 </script>
 </body>
 </html>
