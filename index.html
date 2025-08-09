@@ -30,7 +30,6 @@
         .container { max-width: 1000px; margin: 0 auto; background: rgba(26, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
         .header { border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 24px; }
         h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .header p { font-size: 1rem; color: var(--text-muted); margin: 0; }
         canvas#noteCanvas { border-radius: 16px; margin-top: 24px; background: #050508; cursor: default; box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); width: 100%; max-width: 1000px; height: auto; border: 1px solid var(--border-color); }
         input, button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
         input[type="number"], input[type="password"] { font-family: var(--mono-font); font-weight: 700; text-align: center; width: 150px; }
@@ -44,7 +43,6 @@
         .controls-grid { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px; }
         .status-box { margin-top: 20px; font-size: 13px; font-weight: normal; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); border: 1px solid var(--border-color); transition: all 0.3s ease; }
         .valid { color: var(--success-color); } .invalid { color: var(--error-color); } .info { color: var(--info-color); } .warning { color: var(--warning-color); }
-        code { background: var(--medium-bg); padding: 2px 6px; border-radius: 4px; font-size: 1em; }
         .input-label { font-size: 0.9rem; color: var(--text-muted); margin-right: -10px; }
         .modal { position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; }
         .modal-content { background-color: var(--medium-bg); padding: 30px; border: 1px solid var(--border-color); width: 80%; max-width: 500px; border-radius: 16px; text-align: center; }
@@ -64,7 +62,6 @@
         <div class="controls-grid">
             <button id="generate-keys-button">🔑 Generate Master Key Pair</button>
             <label for="import-public-key" class="button sub-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 Load Public Key
             </label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
@@ -102,7 +99,6 @@
     <div class="section" id="validator-section">
         <h2><span class="pill">Step 4</span> Validate Banknote</h2>
         <label for="validator-input" class="button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
             Select Banknote Image for Validation
         </label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
@@ -170,7 +166,6 @@ const Utils = {
         for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
         return bytes;
     },
-    hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
     downloadFile: (data, filename, type) => {
         const blob = new Blob([data], { type });
         const url = URL.createObjectURL(blob);
@@ -201,6 +196,7 @@ const Utils = {
 };
 
 const BankCrypto = (() => {
+    // ... (This section has no changes)
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_KEY_LENGTH = 32;
@@ -272,6 +268,7 @@ const BankCrypto = (() => {
 })();
 
 const UIHandlers = (() => {
+    // ... (This section has no changes)
     function updatePuzzleStatus() {
         const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
         let statusHtml = '';
@@ -321,7 +318,7 @@ const UIHandlers = (() => {
                 Utils.updateStatus(DOMElements.keyGenStatus, `❌ Failed to generate keys: ${e.message}`, 'error');
             }
         },
-        handleImportPublicKey: async (event) => { const file = event.target.files[0]; if (!file) return; try { const data = JSON.parse(await file.text()); if (!data.masterPublicKey) throw new Error("Invalid public key file format."); state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey); Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported. Ready to validate banknotes.', 'success'); DOMElements.validatorInput.disabled = false; } catch (error) { Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error importing public key: ${error.message}`, 'error'); } event.target.value = ''; },
+        handleImportPublicKey: async (event) => { const file = event.target.files[0]; if (!file) return; try { const data = JSON.parse(await file.text()); if (!data.masterPublicKey) throw new Error("Invalid public key file format."); state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey); Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported. Ready to validate banknotes.', 'success'); } catch (error) { Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error importing public key: ${error.message}`, 'error'); } event.target.value = ''; },
         handleFileKeyInput: async (event) => { const file = event.target.files[0]; if (!file) return; try { state.puzzlePieces.fileKey = JSON.parse(await file.text()); Utils.log("File Key loaded.", 'success'); } catch(e) { state.puzzlePieces.fileKey = null; Utils.log(`Failed to load File Key: ${e.message}`, 'error'); } updatePuzzleStatus(); event.target.value = ''; },
         handlePasswordKeyInput: (event) => { state.puzzlePieces.passwordKey = event.target.value || null; updatePuzzleStatus(); },
         
@@ -373,7 +370,7 @@ const UIHandlers = (() => {
 })();
 
 const BanknoteLogic = (() => {
-
+    // ... (Helper functions like getStandardizedDataForSigning, createNoteData, etc., have no changes)
     const getStandardizedDataForSigning = (noteData) => JSON.stringify({
         timestamp: noteData.timestamp,
         serial: noteData.serial,
@@ -421,18 +418,12 @@ const BanknoteLogic = (() => {
         let offset = 0;
 
         view.setUint32(offset, noteData.amount, false); offset += 4;
-        
         new Uint8Array(buffer, offset).set(verificationKeyBytes); offset += 8;
-
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
-        
         new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
-        
         new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
-        
         view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
-        
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
 
         return Utils.binaryToString(new Uint8Array(buffer));
@@ -445,35 +436,29 @@ const BanknoteLogic = (() => {
         let offset = 0;
 
         const amount = view.getUint32(offset, false); offset += 4;
-        
         const verificationKey = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-
         const timestamp = view.getUint32(offset, false); offset += 4;
-        
         const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-
         const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
-        
         const sigOneLength = view.getUint16(offset, false); offset += 2;
         const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
-        
         const signatureTwo = buffer.subarray(offset);
         
         return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
     };
     
     const handleCreateAndSignNotes = async () => {
-        if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
+        if (!state.masterPrivateKey) { alert("Master Private Key is not active."); return; }
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const jabPayload = createBinaryPayload(noteData);
 
-            // Compress -> Base64 Encode
+            // **FIX**: Compress the raw binary data and pass the resulting binary string to the drawer
             const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
-            const base64Payload = Utils.arrayBufferToBase64(compressedPayload);
+            const compressedPayloadString = Utils.binaryToString(compressedPayload);
 
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, base64Payload, 1350, 750);
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -482,7 +467,7 @@ const BanknoteLogic = (() => {
     };
     
     const handleDownloadBatch = async () => {
-        if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
+        if (!state.masterPrivateKey) { alert("Master Private Key is not active."); return; }
         const quantity = parseInt(DOMElements.quantityInput.value) || 1;
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and downloading ${quantity} banknote(s)...`, 'info');
         try {
@@ -493,15 +478,15 @@ const BanknoteLogic = (() => {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 const jabPayload = createBinaryPayload(noteData);
                 
-                // Compress -> Base64 Encode
+                // **FIX**: Compress the raw binary data and pass the resulting binary string to the drawer
                 const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
-                const base64Payload = Utils.arrayBufferToBase64(compressedPayload);
+                const compressedPayloadString = Utils.binaryToString(compressedPayload);
 
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, base64Payload, 1350, 750);
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, compressedPayloadString, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
                 if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, base64Payload, 1350, 750);
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
                 }
             }
             
@@ -567,8 +552,8 @@ const BanknoteLogic = (() => {
                         return;
                     }
 
-                    // Base64 Decode -> Decompress
-                    const compressedData = Utils.base64ToUint8Array(decodedText);
+                    // **FIX**: Decompress the data directly from the binary string
+                    const compressedData = Utils.stringToBinary(decodedText);
                     const decompressedData = pako.inflate(compressedData);
                     const originalPayloadString = Utils.binaryToString(decompressedData);
                     
@@ -580,7 +565,7 @@ const BanknoteLogic = (() => {
                     const dataForSigOne = getStandardizedDataForSigning(parsedData);
                     const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
                     if (!isSigOneValid) {
-                        resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                        resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span><br><span>❌ VERDICT: FORGERY</span>';
                         resultDiv.innerHTML = resultHTML;
                         return;
                     }
@@ -589,12 +574,12 @@ const BanknoteLogic = (() => {
                     const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
                     const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
                     if (!isSigTwoValid) {
-                        resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                        resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span><br><span>❌ VERDICT: FORGERY</span>';
                         resultDiv.innerHTML = resultHTML;
                         return;
                     }
                     resultHTML += `<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n`;
-                    resultHTML += `<span class="info">ℹ️ Decoded Amount: ${parsedData.amount}, Key: ${parsedData.verificationKey}</span>\n<hr>`;
+                    resultHTML += `<span class="info">ℹ️ Decoded Amount: ${parsedData.amount}, Key: ${parsedData.verificationKey}</span><br>`;
                     resultHTML += `<span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>`;
                     
                     resultDiv.innerHTML = resultHTML;
@@ -616,10 +601,11 @@ const BanknoteLogic = (() => {
 
 
 const BanknoteDrawer = (() => {
+    // ... (This section has no changes)
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
-    function drawGuilloche(ctx, hash, w, h) { /* Complex drawing code can be inserted here */ }
-    function drawWatermark(ctx, hash, w, h) { /* Complex drawing code can be inserted here */ }
-    function drawNoise(ctx, hash, w, h) { /* Complex drawing code can be inserted here */ }
+    function drawGuilloche(ctx, hash, w, h) { /* ... */ }
+    function drawWatermark(ctx, hash, w, h) { /* ... */ }
+    function drawNoise(ctx, hash, w, h) { /* ... */ }
     
     return {
         drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload, width, height) => {
