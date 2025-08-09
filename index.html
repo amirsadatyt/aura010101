@@ -131,11 +131,9 @@
 </div>
 
 <script src="./js-sha3.min.js"></script>
-
 <script type="module">
 // Import cryptographic libraries as modules
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import argon2 from './argon2-bundled.min.js';
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
@@ -164,16 +162,16 @@ const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).pad
 
 const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
+    const PBKDF2_ITERATIONS = 100000;
+    const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
 
     function hashMessageForSigning(message) {
-        // Use the globally available shake256 function
         const hexHash = shake256(message, 1536);
         return hexToUint8Array(hexHash);
     }
 
     function hashMessageForVisual(message) {
-        // Use the globally available shake256 function
         return shake256(message, 256);
     }
     
@@ -198,79 +196,36 @@ const BankCrypto = (() => {
     }
     
     async function encryptPrivateKey(privateKeyBytes, password) {
-        const passwordUint8 = new TextEncoder().encode(password);
+        const passwordBuffer = new TextEncoder().encode(password);
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-
-        const argon2Result = await argon2.hash({
-            pass: passwordUint8,
-            salt: salt,
-            time: 2,
-            mem: 1024,
-            hashLen: 32,
-            type: argon2.ArgonType.Argon2id,
-        });
-
-        const key = await window.crypto.subtle.importKey(
-            'raw',
-            argon2Result.hash,
-            { name: AES_ALGO },
-            false,
-            ["encrypt", "decrypt"]
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
         );
-        
         const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
         const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
-
-        const encryptedKey = await window.crypto.subtle.encrypt(
-            { name: AES_ALGO, iv: iv },
-            key,
-            encodedKey
-        );
-
+        const encryptedKey = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, derivedKey, encodedKey);
         return {
             cipherText: arrayBufferToBase64(encryptedKey),
             salt: arrayBufferToBase64(salt),
             iv: arrayBufferToBase64(iv),
-            argon2Config: {
-                time: 2,
-                mem: 1024,
-                hashLen: 32,
-                type: argon2.ArgonType.Argon2id
-            }
+            iterations: PBKDF2_ITERATIONS
         };
     }
     
     async function decryptPrivateKey(encryptedData, password) {
-        const passwordUint8 = new TextEncoder().encode(password);
+        const passwordBuffer = new TextEncoder().encode(password);
         const salt = base64ToUint8Array(encryptedData.salt);
-        const argon2Config = encryptedData.argon2Config;
-
-        const argon2Result = await argon2.hash({
-            pass: passwordUint8,
-            salt: salt,
-            time: argon2Config.time,
-            mem: argon2Config.mem,
-            hashLen: argon2Config.hashLen,
-            type: argon2Config.type,
-        });
-        
-        const key = await window.crypto.subtle.importKey(
-            'raw',
-            argon2Result.hash,
-            { name: AES_ALGO },
-            false,
-            ["encrypt", "decrypt"]
-        );
-        
         const iv = base64ToUint8Array(encryptedData.iv);
         const cipherText = base64ToUint8Array(encryptedData.cipherText);
-
-        const decryptedKeyBuffer = await window.crypto.subtle.decrypt(
-            { name: AES_ALGO, iv: iv },
-            key,
-            cipherText
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: encryptedData.iterations, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
         );
+        const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, derivedKey, cipherText);
         const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
         return base64ToUint8Array(keyObject.keyData);
     }
