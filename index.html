@@ -454,7 +454,8 @@ const BanknoteLogic = (() => {
         if (forMasterSignature) {
             dataToSign = { ephemeralPublicKey: noteData.ephemeralPublicKey, signatureOne: noteData.signatureOne };
         } else {
-            dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp };
+            // Add verificationKey to the first signature data
+            dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.verificationKey };
         }
         return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
     };
@@ -467,15 +468,27 @@ const BanknoteLogic = (() => {
 
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
+        
         const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
         const ephemeralPublicKeyB64 = Utils.arrayBufferToBase64(ephemeralKeyPair.publicKey);
-        const noteData = { amount: parseInt(amount) || 0, serial: Date.now().toString().slice(-8) + Math.random().toString(16).substring(2, 6), timestamp: Date.now(), ephemeralPublicKey: ephemeralPublicKeyB64 };
+        
+        const noteData = {
+            amount: parseInt(amount) || 0,
+            serial: Date.now().toString().slice(-8) + Math.random().toString(16).substring(2, 6),
+            timestamp: Date.now(),
+            ephemeralPublicKey: ephemeralPublicKeyB64,
+            // Create a verification key from the ephemeral public key to display on the note
+            verificationKey: ephemeralPublicKeyB64.substring(0, 8).toUpperCase()
+        };
+        
         const dataForSigOne = getStandardizedDataForSigning(noteData, false);
         const sigOneBytes = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
         noteData.signatureOne = Utils.arrayBufferToBase64(sigOneBytes);
+        
         const dataForSigTwo = getStandardizedDataForSigning(noteData, true);
         const sigTwoBytes = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
         noteData.signatureTwo = Utils.arrayBufferToBase64(sigTwoBytes);
+        
         return noteData;
     };
     
@@ -581,6 +594,10 @@ const BanknoteLogic = (() => {
                 resultHTML += '<span class="valid">✅ QR Found</span>\n';
                 try {
                     const parsedData = parseQrPayload(code.data);
+                    
+                    // Re-create the verification key from the ephemeral public key for validation
+                    parsedData.verificationKey = parsedData.ephemeralPublicKey.substring(0, 8).toUpperCase();
+
                     const dataForSigOne = getStandardizedDataForSigning(parsedData, false);
                     const isSigOneValid = await BankCrypto.verifySignature(
                         Utils.base64ToUint8Array(parsedData.signatureOne),
@@ -617,138 +634,94 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER -- PROFESSIONAL APPEARANCE MODULE
+// BANKNOTE DRAWER -- PROFESSIONAL APPEARANCE MODULE (MERGED)
 // ===================================================================================
 const BanknoteDrawer = (() => {
-    // Helper function to derive values from a hash string
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
 
-    /**
-     * Draws a complex guilloche pattern based on a Koch snowflake fractal.
-     * The pattern's parameters (iterations, size, rotation, colors) are derived from the note's hash.
-     */
     function drawKochGuilloche(g_ctx, hash, w, h) {
         g_ctx.save();
         g_ctx.translate(w / 2, h / 2);
         const s = w / 1350;
-        const it = H(hash, 2, 2, 4); // Iterations
-        const sz = w * (H(hash, 4, 10, 20) / 100); // Size
-        const aO = (H(hash, 6, 0, 360) / 360) * Math.PI * 2; // Angle Offset
-        const nL = H(hash, 8, 3, 6); // Number of Lines
-        const hO = H(hash, 10, 0, 360); // Hue Offset
-
-        function drawKochLine(x1, y1, x2, y2, l) {
-            if (l === 0) {
-                g_ctx.lineTo(x2, y2);
-                return;
-            }
-            const dx = x2 - x1, dy = y2 - y1;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const unitX = dx / dist, unitY = dy / dist;
-            const p1x = x1 + unitX * dist / 3, p1y = y1 + unitY * dist / 3;
-            const p2x = x1 + unitX * dist * 2 / 3, p2y = y1 + unitY * dist * 2 / 3;
-            const p3x = p1x + unitX * dist / 6 - unitY * dist * Math.sqrt(3) / 6, p3y = p1y + unitY * dist / 6 + unitX * dist * Math.sqrt(3) / 6;
-            
-            drawKochLine(x1, y1, p1x, p1y, l - 1);
-            drawKochLine(p1x, p1y, p3x, p3y, l - 1);
-            drawKochLine(p3x, p3y, p2x, p2y, l - 1);
-            drawKochLine(p2x, p2y, x2, y2, l - 1);
+        const it = H(hash, 2, 2, 4);
+        const sz = w * (H(hash, 4, 10, 20) / 100);
+        const aO = (H(hash, 6, 0, 360) / 360) * Math.PI * 2;
+        const nL = H(hash, 8, 3, 6);
+        const hO = H(hash, 10, 0, 360);
+        function d(x1, y1, x2, y2, l) {
+            if (l === 0) { g_ctx.lineTo(x2, y2); return; }
+            const dx = x2 - x1, dy = y2 - y1, di = Math.sqrt(dx * dx + dy * dy), ux = dx / di, uy = dy / di;
+            const p1x = x1 + ux * di / 3, p1y = y1 + uy * di / 3, p2x = x1 + ux * di * 2 / 3, p2y = y1 + uy * di * 2 / 3;
+            const p3x = p1x + ux * di / 6 - uy * di * Math.sqrt(3) / 6, p3y = p1y + uy * di / 6 + ux * di * Math.sqrt(3) / 6;
+            d(x1, y1, p1x, p1y, l - 1); d(p1x, p1y, p3x, p3y, l - 1); d(p3x, p3y, p2x, p2y, l - 1); d(p2x, p2y, x2, y2, l - 1);
         }
-
-        g_ctx.lineWidth = 1 * s;
-        g_ctx.lineJoin = 'bevel';
-        g_ctx.lineCap = 'round';
-
+        g_ctx.lineWidth = 1 * s; g_ctx.lineJoin = 'bevel'; g_ctx.lineCap = 'round';
         for (let i = 0; i < nL; i++) {
-            const hue = (hO + i * (360 / nL)) % 360;
-            g_ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.15)`;
-            const lineAngle = (i / nL) * Math.PI * 2 + aO;
-            const x1 = Math.cos(lineAngle) * sz, y1 = Math.sin(lineAngle) * sz;
-            const x2 = Math.cos(lineAngle + Math.PI) * sz, y2 = Math.sin(lineAngle + Math.PI) * sz;
-            g_ctx.beginPath();
-            g_ctx.moveTo(x1, y1);
-            drawKochLine(x1, y1, x2, y2, it);
-            g_ctx.stroke();
+            const hu = (hO + i * (360 / nL)) % 360;
+            g_ctx.strokeStyle = `hsla(${hu}, 70%, 60%, 0.15)`;
+            const lA = (i / nL) * Math.PI * 2 + aO, x1 = Math.cos(lA) * sz, y1 = Math.sin(lA) * sz, x2 = Math.cos(lA + Math.PI) * sz, y2 = Math.sin(lA + Math.PI) * sz;
+            g_ctx.beginPath(); g_ctx.moveTo(x1, y1); d(x1, y1, x2, y2, it); g_ctx.stroke();
         }
         g_ctx.restore();
     }
 
-    /**
-     * Draws a subtle, spiraling watermark pattern in the background.
-     * The number of spirals, their size, and color are derived from the note's hash.
-     */
     function drawWatermark(g_ctx, hash, w, h) {
         g_ctx.save();
         g_ctx.translate(w / 2, h / 2);
-        const s = w / 1350;
-        const nS = H(hash, 16, 3, 6); // Number of Spirals
-        const sR = w * (H(hash, 18, 10, 25) / 100) * s; // Spiral Radius
-        const hue = H(hash, 20, 0, 360);
-        g_ctx.strokeStyle = `hsla(${hue}, 50%, 80%, 0.05)`;
+        const s = w / 1350, nS = H(hash, 16, 3, 6), sR = w * (H(hash, 18, 10, 25) / 100) * s, hu = H(hash, 20, 0, 360);
+        g_ctx.strokeStyle = `hsla(${hu}, 50%, 80%, 0.05)`;
         g_ctx.lineWidth = 4 * s;
-
         for (let i = 0; i < nS; i++) {
             g_ctx.beginPath();
-            const startAngle = (i / nS) * Math.PI * 2 + H(hash, 22, 0, 100) / 100;
-            const endAngle = startAngle + H(hash, 24, 6, 12) * Math.PI;
-            for (let t = startAngle; t < endAngle; t += 0.05) {
-                const r = sR * (t - startAngle) / (endAngle - startAngle);
-                const x = r * Math.cos(t), y = r * Math.sin(t);
-                if (t === startAngle) g_ctx.moveTo(x, y);
-                else g_ctx.lineTo(x, y);
+            const sA = (i / nS) * Math.PI * 2 + H(hash, 22, 0, 100) / 100, eA = sA + H(hash, 24, 6, 12) * Math.PI;
+            for (let t = sA; t < eA; t += 0.05) {
+                const r = sR * (t - sA) / (eA - sA), x = r * Math.cos(t), y = r * Math.sin(t);
+                if (t === sA) g_ctx.moveTo(x, y); else g_ctx.lineTo(x, y);
             }
             g_ctx.stroke();
         }
         g_ctx.restore();
     }
 
-    /**
-     * Adds a fine layer of colored noise to the entire banknote for texture.
-     * The color of each noise particle is derived from the note's hash.
-     */
     function drawNoisePattern(g_ctx, hash, w, h) {
         g_ctx.save();
         for (let i = 0; i < 20000; i++) {
-            const x = Math.random() * w, y = Math.random() * h;
-            const o = Math.random() * 0.15;
-            const hue = H(hash, (i % 30) + 4, 0, 360);
+            const x = Math.random() * w, y = Math.random() * h, o = Math.random() * 0.15, hue = H(hash, (i % 30) + 4, 0, 360);
             g_ctx.fillStyle = `hsla(${hue}, 50%, 80%, ${o})`;
             g_ctx.fillRect(x, y, 1, 1);
         }
         g_ctx.restore();
     }
     
-    // Main function to orchestrate the drawing of the banknote.
     return {
         drawNoteOnCanvas: async (targetCanvas, noteData, width, height) => {
             return new Promise(async (resolve, reject) => {
                 const ctx = targetCanvas.getContext("2d");
-                const { amount, serial, signatureTwo } = noteData;
+                const { amount, serial, signatureTwo, verificationKey } = noteData;
                 const scale = width / 1350;
                 const visualHash = shake256(signatureTwo, 256);
 
-                // 1. Draw Background Gradient
                 const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
                 const baseHue = H(visualHash, 0, 0, 360);
                 bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
                 bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
                 ctx.fillStyle = bgGradient;
                 ctx.fillRect(0, 0, width, height);
-
-                // 2. Draw Security Features
+                
                 drawWatermark(ctx, visualHash, width, height);
                 drawKochGuilloche(ctx, visualHash, width, height);
                 drawNoisePattern(ctx, visualHash, width, height);
 
-                // 3. Draw Text Information
                 ctx.shadowColor = "rgba(0,0,0,0.7)";
                 ctx.shadowBlur = 8 * scale;
                 ctx.shadowOffsetX = 2 * scale;
                 ctx.shadowOffsetY = 2 * scale;
                 ctx.fillStyle = "#EAEAEA";
-                ctx.font = `bold ${70 * scale}px 'Roboto Mono'`;
+                ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
                 ctx.textAlign = 'left';
-                ctx.fillText(`SN: ${serial}`, 150 * scale, 160 * scale);
+                ctx.fillText(serial, 150 * scale, 160 * scale);
+                ctx.fillText(verificationKey, 150 * scale, 280 * scale);
+                
                 ctx.font = `bold ${150 * scale}px 'Roboto Mono'`;
                 ctx.textAlign = "right";
                 ctx.shadowBlur = 12 * scale;
@@ -757,7 +730,6 @@ const BanknoteDrawer = (() => {
                 ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
                 ctx.shadowColor = "transparent";
 
-                // 4. Draw QR Code
                 const qrCanvas = document.createElement("canvas");
                 const qrSize = 380 * scale;
                 const qrPayload = createQrPayload(noteData);
@@ -774,7 +746,6 @@ const BanknoteDrawer = (() => {
                     ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), qrSize + (40 * scale), qrSize + (40 * scale));
                     ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
 
-                    // 5. Draw Footer Text
                     ctx.font = `${30 * scale}px 'Roboto Mono'`;
                     ctx.fillStyle = "rgba(255,255,255,0.4)";
                     ctx.textAlign = "center";
@@ -785,7 +756,6 @@ const BanknoteDrawer = (() => {
         }
     };
 })();
-
 
 // ===================================================================================
 // APPLICATION INITIALIZATION
