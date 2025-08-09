@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
+    <script src="./pako.min.js"></script>
+    
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -466,7 +468,12 @@ const BanknoteLogic = (() => {
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const jabPayload = createBinaryPayload(noteData);
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
+
+            // Compress the payload before encoding
+            const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
+            const compressedPayloadString = Utils.binaryToString(compressedPayload);
+
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -485,11 +492,16 @@ const BanknoteLogic = (() => {
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 const jabPayload = createBinaryPayload(noteData);
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, 1350, 750);
+                
+                // Compress the payload before encoding
+                const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
+                const compressedPayloadString = Utils.binaryToString(compressedPayload);
+
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, compressedPayloadString, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
                 if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
                 }
             }
             
@@ -503,7 +515,7 @@ const BanknoteLogic = (() => {
                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
-                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder. Your browser may not support directory selection.`, 'success');
+                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
             }
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -554,11 +566,16 @@ const BanknoteLogic = (() => {
                         Utils.updateStatus(resultDiv, '❌ JAB Code not found or unreadable on the banknote.', 'error');
                         return;
                     }
+
+                    // Decompress the data after reading from the JAB code
+                    const compressedData = Utils.stringToBinary(decodedText);
+                    const decompressedData = pako.inflate(compressedData);
+                    const originalPayloadString = Utils.binaryToString(decompressedData);
                     
-                    let resultHTML = '<span class="valid">✅ JAB Code Found. Verifying signatures...</span>\n';
+                    let resultHTML = '<span class="valid">✅ JAB Code Found & Decompressed. Verifying signatures...</span>\n';
                     resultDiv.innerHTML = resultHTML;
 
-                    const parsedData = parseBinaryPayload(decodedText);
+                    const parsedData = parseBinaryPayload(originalPayloadString);
                     
                     const dataForSigOne = getStandardizedDataForSigning(parsedData);
                     const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
@@ -582,7 +599,7 @@ const BanknoteLogic = (() => {
                     
                     resultDiv.innerHTML = resultHTML;
                 } catch (e) {
-                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt.`, 'error');
+                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt or fail decompression.`, 'error');
                     console.error(e);
                 } finally {
                     event.target.value = '';
