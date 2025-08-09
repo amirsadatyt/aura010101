@@ -197,7 +197,21 @@ const Utils = {
     log: (message, type = 'info') => {
         const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
         console.log(`[Sadat System] ${icon} ${message}`);
+    },
+    // --- FIX: Add binary-to-string helpers back for compact payloads ---
+    binaryToString: (binaryPayload) => {
+        let str = '';
+        binaryPayload.forEach(b => { str += String.fromCharCode(b); });
+        return str;
+    },
+    stringToBinary: (str) => {
+        const binaryPayload = new Uint8Array(str.length);
+        for (let i = 0; i < str.length; i++) {
+            binaryPayload[i] = str.charCodeAt(i);
+        }
+        return binaryPayload;
     }
+    // --- END FIX ---
 };
 
 // ===================================================================================
@@ -331,9 +345,6 @@ const UIHandlers = (() => {
         handleFileKeyInput: async (event) => { const file = event.target.files[0]; if (!file) return; try { state.puzzlePieces.fileKey = JSON.parse(await file.text()); Utils.log("File Key loaded.", 'success'); } catch(e) { state.puzzlePieces.fileKey = null; Utils.log(`Failed to load File Key: ${e.message}`, 'error'); } updatePuzzleStatus(); event.target.value = ''; },
         handlePasswordKeyInput: (event) => { state.puzzlePieces.passwordKey = event.target.value || null; updatePuzzleStatus(); },
         
-        // --- FIX 1: VISUAL KEY UPLOAD ---
-        // The jabcode library expects a base64 data string, not a raw file object.
-        // This fix reads the file as a Data URL first, then passes it to the decoder.
         handleVisualKeyInput: (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -363,9 +374,8 @@ const UIHandlers = (() => {
                  Utils.log("Failed to read the image file.", 'error');
                  updatePuzzleStatus();
             };
-            reader.readAsDataURL(file); // Read the file as a base64 data URL.
+            reader.readAsDataURL(file);
         },
-        // --- END FIX 1 ---
 
         handleReconstructKey: async () => { 
             const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
@@ -393,11 +403,15 @@ const BanknoteLogic = (() => {
         serial: noteData.serial,
     }, ['timestamp', 'serial']);
 
-    const getStandardizedDataForMasterSig = (noteData) => JSON.stringify({
-        ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
-        signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne)
-    }, ['ephemeralPublicKey', 'signatureOne']);
-
+    const getStandardizedDataForMasterSig = (noteData) => {
+        // Create a temporary object with base64 strings for consistent hashing
+        const tempNoteData = {
+            ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
+            signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne)
+        };
+        return JSON.stringify(tempNoteData, Object.keys(tempNoteData).sort());
+    };
+    
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
         const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
@@ -421,34 +435,49 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    const createJabCodePayload = (noteData) => {
-        const payload = {
-            s: noteData.serial,
-            t: noteData.timestamp,
-            pk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
-            s1: Utils.arrayBufferToBase64(noteData.signatureOne),
-            s2: Utils.arrayBufferToBase64(noteData.signatureTwo)
-        };
-        return JSON.stringify(payload);
+    // --- FIX: Re-implement compact binary payload to prevent data-too-large errors ---
+    const createBinaryPayload = (noteData) => {
+        const textEncoder = new TextEncoder();
+        const serialBytes = textEncoder.encode(noteData.serial);
+
+        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        const buffer = new ArrayBuffer(bufferSize);
+        const view = new DataView(buffer);
+        let offset = 0;
+
+        view.setUint32(offset, noteData.timestamp, false); offset += 4;
+        new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
+        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
+        view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
+        new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
+        new Uint8Array(buffer, offset).set(noteData.signatureTwo);
+
+        return Utils.binaryToString(new Uint8Array(buffer)); // Convert binary buffer to a string for the encoder
     };
 
-    const parseJabCodePayload = (jsonString) => {
-        const payload = JSON.parse(jsonString);
-        return {
-            serial: payload.s,
-            timestamp: payload.t,
-            ephemeralPublicKey: Utils.base64ToUint8Array(payload.pk),
-            signatureOne: Utils.base64ToUint8Array(payload.s1),
-            signatureTwo: Utils.base64ToUint8Array(payload.s2)
-        };
+    const parseBinaryPayload = (binaryString) => {
+        const buffer = Utils.stringToBinary(binaryString);
+        const view = new DataView(buffer.buffer);
+        const textDecoder = new TextDecoder();
+        let offset = 0;
+
+        const timestamp = view.getUint32(offset, false); offset += 4;
+        const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
+        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
+        const sigOneLength = view.getUint16(offset, false); offset += 2;
+        const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
+        const signatureTwo = buffer.subarray(offset);
+        
+        return { timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
     };
+    // --- END FIX ---
     
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const jabPayload = createJabCodePayload(noteData);
+            const jabPayload = createBinaryPayload(noteData); // Use the compact binary payload
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
@@ -467,19 +496,15 @@ const BanknoteLogic = (() => {
             const notesToDownload = [];
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                const jabPayload = createJabCodePayload(noteData);
+                const jabPayload = createBinaryPayload(noteData); // Use the compact binary payload
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
-                if (i === quantity - 1) { // Display last note on main canvas
+                if (i === quantity - 1) {
                     await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
                 }
             }
             
-            // --- FIX 2: BATCH DOWNLOAD FOLDER SELECTION ---
-            // Changed "quantity > 1" to "quantity >= 1" to allow folder selection
-            // for any batch download, including a single note.
-            // This API is only available in secure contexts (https:// or localhost) on modern browsers.
             if (quantity >= 1 && window.showDirectoryPicker) {
                  const dirHandle = await window.showDirectoryPicker();
                  for (const note of notesToDownload) {
@@ -492,17 +517,14 @@ const BanknoteLogic = (() => {
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder. Your browser may not support directory selection.`, 'success');
             }
-            // --- END FIX 2 ---
-
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
         } finally {
-            // For security, clear the private key from memory after a sensitive operation
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
-            updatePuzzleStatus(); // Reset puzzle status visually
+            UIHandlers.handlePasswordKeyInput({target:{value:null}}); // Clear password state
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.", 'warning');
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch download complete. For security, the Master Key has been cleared from memory. Please reactivate in Step 2 for more actions.`, 'success');
             Utils.log("Key cleared for security after batch operation.", 'warning');
@@ -527,7 +549,7 @@ const BanknoteLogic = (() => {
                 let resultHTML = '<span class="valid">✅ JAB Code Found. Verifying signatures...</span>\n';
                 resultDiv.innerHTML = resultHTML;
 
-                const parsedData = parseJabCodePayload(decodedText);
+                const parsedData = parseBinaryPayload(decodedText); // Use the binary parser
                 
                 const dataForSigOne = getStandardizedDataForSigning(parsedData);
                 const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
@@ -612,7 +634,10 @@ const BanknoteDrawer = (() => {
                         ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
                         resolve();
                     };
-                    img.onerror = reject;
+                    img.onerror = (err) => {
+                        // Pass the error object to reject
+                        reject(new Error("Failed to load generated JAB Code image."));
+                    };
                     img.src = jabCodeBase64;
                 } catch (err) {
                      console.error("JAB Code Generation Error:", err);
@@ -621,7 +646,7 @@ const BanknoteDrawer = (() => {
                      ctx.textAlign = 'center';
                      const centerX = width - (150 * scale) - (190 * scale);
                      const centerY = height - (330 * scale);
-                     ctx.fillText("JAB DATA TOO LARGE", centerX, centerY);
+                     ctx.fillText("JAB CODE ERROR", centerX, centerY);
                      reject(err);
                 }
             });
