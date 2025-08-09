@@ -131,13 +131,8 @@
 <script type="module">
     // Import cryptographic libraries as modules
     import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-    // CHANGED: Using local path for js-sha3
     import { shake256 } from './js-sha3.min.js';
-    // The argon2-bundled.min.js script is now loaded in the <head> and provides the global 'argon2' object
 
-    // --- The rest of your JavaScript code does NOT need to change. ---
-    // --- It already uses the global 'argon2' object, which the new file provides. ---
-    
     // --- Global State ---
     const state = {
         falconApi: null,
@@ -209,7 +204,6 @@
         const ARGON2_KEY_LENGTH = 32;
 
         async function argon2DeriveKey(password, salt) {
-            // This function works as-is with the new bundled library
             return argon2.hash({
                 pass: new TextEncoder().encode(password),
                 salt: salt,
@@ -287,8 +281,7 @@
         };
     })();
 
-    // --- The rest of the code (UI Handlers, Banknote Logic, etc.) is unchanged... ---
-    // [The rest of your extensive JavaScript logic goes here, exactly as it was]
+    // --- UI Handlers ---
     const UIHandlers = (() => {
     function updatePuzzleStatus() {
         const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
@@ -303,6 +296,16 @@
     
     return {
         async handleGenerateAndExportKeys() {
+            // FIXED: Added a defensive check to ensure the cryptographic module is ready.
+            // This prevents silent failures if the module didn't initialize correctly.
+            if (!state.falconApi || typeof state.falconApi.keypair !== 'function') {
+                const errorMessage = '❌ Critical Error: The Falcon-1024 crypto module is not initialized. Please refresh the page. If the problem persists, check the browser console for loading errors.';
+                Utils.updateStatus(DOMElements.keyGenStatus, errorMessage, 'error');
+                Utils.log('Attempted to generate keys, but falconApi is not available.', 'error');
+                alert(errorMessage);
+                return;
+            }
+
             const password = prompt("Enter a strong password. This will be your 'Password Key' (Piece 2/3).");
             if (!password) {
                 Utils.updateStatus(DOMElements.keyGenStatus, '❌ Key generation cancelled. Password is required.', 'error');
@@ -371,7 +374,7 @@ The new Public Key is now active for validation.`, 'success');
         Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Crypto Module...', 'info');
         try {
             state.falconApi = await pqcSignFalcon1024();
-            // The bundled Argon2 script loads automatically, no special initialization needed.
+            // The bundled Argon2 script loads automatically.
             Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
             Utils.log("All cryptographic modules initialized successfully.", 'success');
         } catch (e) {
@@ -392,7 +395,8 @@ The new Public Key is now active for validation.`, 'success');
         DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
     }
 
-    main();
+    // It's best practice to run the main logic after the DOM is fully loaded.
+    document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
