@@ -61,9 +61,7 @@
         <h2><span class="pill">Step 1</span> Master Keys</h2>
         <div class="controls-grid">
             <button id="generate-keys-button">🔑 Generate Master Key Pair</button>
-            <label for="import-public-key" class="button sub-button">
-                Load Public Key
-            </label>
+            <label for="import-public-key" class="button sub-button">Load Public Key</label>
             <input type="file" id="import-public-key" accept=".json" style="display: none;">
         </div>
          <div id="key-gen-status" class="status-box"></div>
@@ -98,9 +96,7 @@
 
     <div class="section" id="validator-section">
         <h2><span class="pill">Step 4</span> Validate Banknote</h2>
-        <label for="validator-input" class="button">
-            Select Banknote Image for Validation
-        </label>
+        <label for="validator-input" class="button">Select Banknote Image for Validation</label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
         <div id="validation-result" class="status-box"></div>
     </div>
@@ -166,6 +162,7 @@ const Utils = {
         for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
         return bytes;
     },
+    hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
     downloadFile: (data, filename, type) => {
         const blob = new Blob([data], { type });
         const url = URL.createObjectURL(blob);
@@ -196,7 +193,6 @@ const Utils = {
 };
 
 const BankCrypto = (() => {
-    // ... (This section has no changes)
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_KEY_LENGTH = 32;
@@ -268,7 +264,6 @@ const BankCrypto = (() => {
 })();
 
 const UIHandlers = (() => {
-    // ... (This section has no changes)
     function updatePuzzleStatus() {
         const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
         let statusHtml = '';
@@ -370,7 +365,6 @@ const UIHandlers = (() => {
 })();
 
 const BanknoteLogic = (() => {
-    // ... (Helper functions like getStandardizedDataForSigning, createNoteData, etc., have no changes)
     const getStandardizedDataForSigning = (noteData) => JSON.stringify({
         timestamp: noteData.timestamp,
         serial: noteData.serial,
@@ -454,7 +448,6 @@ const BanknoteLogic = (() => {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const jabPayload = createBinaryPayload(noteData);
 
-            // **FIX**: Compress the raw binary data and pass the resulting binary string to the drawer
             const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
             const compressedPayloadString = Utils.binaryToString(compressedPayload);
 
@@ -478,7 +471,6 @@ const BanknoteLogic = (() => {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 const jabPayload = createBinaryPayload(noteData);
                 
-                // **FIX**: Compress the raw binary data and pass the resulting binary string to the drawer
                 const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
                 const compressedPayloadString = Utils.binaryToString(compressedPayload);
 
@@ -552,7 +544,6 @@ const BanknoteLogic = (() => {
                         return;
                     }
 
-                    // **FIX**: Decompress the data directly from the binary string
                     const compressedData = Utils.stringToBinary(decodedText);
                     const decompressedData = pako.inflate(compressedData);
                     const originalPayloadString = Utils.binaryToString(decompressedData);
@@ -601,7 +592,6 @@ const BanknoteLogic = (() => {
 
 
 const BanknoteDrawer = (() => {
-    // ... (This section has no changes)
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
     function drawGuilloche(ctx, hash, w, h) { /* ... */ }
     function drawWatermark(ctx, hash, w, h) { /* ... */ }
