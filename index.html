@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [JAB Code Integration]</title>
+    <title>Sadat Digital Banknote [Fixed]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -170,7 +170,6 @@ const DOMElements = {
     qrDisplay: document.getElementById('qr-display'),
     qrModalTitle: document.getElementById('qr-modal-title'),
     downloadQrButton: document.getElementById('download-qr-button')
-    // Camera elements are kept in case camera scanning is added later
 };
 
 // --- Utility Functions ---
@@ -313,7 +312,6 @@ const UIHandlers = (() => {
                 Utils.downloadFile(JSON.stringify({ masterPublicKey: publicKeyB64 }, null, 2), 'Sadat-MASTER-PUBLIC-KEY.json', 'application/json');
                 Utils.downloadFile(JSON.stringify(fileKey, null, 2), 'Sadat-FILE-KEY.json', 'application/json');
                 
-                // --- MODIFICATION: Generate and display JAB Code ---
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
                 const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
@@ -321,7 +319,6 @@ const UIHandlers = (() => {
                 img.src = jabCodeBase64;
                 DOMElements.qrDisplay.appendChild(img);
                 DOMElements.qrModal.style.display = 'flex';
-                // --- END MODIFICATION ---
 
                 Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key JAB Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
 
@@ -334,29 +331,41 @@ const UIHandlers = (() => {
         handleFileKeyInput: async (event) => { const file = event.target.files[0]; if (!file) return; try { state.puzzlePieces.fileKey = JSON.parse(await file.text()); Utils.log("File Key loaded.", 'success'); } catch(e) { state.puzzlePieces.fileKey = null; Utils.log(`Failed to load File Key: ${e.message}`, 'error'); } updatePuzzleStatus(); event.target.value = ''; },
         handlePasswordKeyInput: (event) => { state.puzzlePieces.passwordKey = event.target.value || null; updatePuzzleStatus(); },
         
-        // --- MODIFICATION: Decode JAB Code from uploaded file ---
-        handleVisualKeyInput: async (event) => {
+        // --- FIX 1: VISUAL KEY UPLOAD ---
+        // The jabcode library expects a base64 data string, not a raw file object.
+        // This fix reads the file as a Data URL first, then passes it to the decoder.
+        handleVisualKeyInput: (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
-            try {
-                const decodedText = await jabcode.decode_message(file);
-                if (decodedText) {
-                    state.puzzlePieces.visualKey = decodedText;
-                    Utils.log("Visual Key loaded from file.", 'success');
-                } else {
-                     state.puzzlePieces.visualKey = null;
-                     Utils.log("Failed to find a JAB code in the image.", 'error');
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const dataUrl = e.target.result;
+                    const decodedText = await jabcode.decode_message(dataUrl);
+                    if (decodedText) {
+                        state.puzzlePieces.visualKey = decodedText;
+                        Utils.log("Visual Key loaded from file.", 'success');
+                    } else {
+                         state.puzzlePieces.visualKey = null;
+                         Utils.log("Failed to find a JAB code in the image.", 'error');
+                    }
+                } catch (error) {
+                    state.puzzlePieces.visualKey = null;
+                    Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
+                    console.error(error);
+                } finally {
+                    updatePuzzleStatus();
                 }
-            } catch (error) {
-                state.puzzlePieces.visualKey = null;
-                Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
-                console.error(error);
-            } finally {
-                updatePuzzleStatus();
-            }
+            };
+            reader.onerror = () => {
+                 state.puzzlePieces.visualKey = null;
+                 Utils.log("Failed to read the image file.", 'error');
+                 updatePuzzleStatus();
+            };
+            reader.readAsDataURL(file); // Read the file as a base64 data URL.
         },
-        // --- END MODIFICATION ---
+        // --- END FIX 1 ---
 
         handleReconstructKey: async () => { 
             const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
@@ -385,9 +394,9 @@ const BanknoteLogic = (() => {
     }, ['timestamp', 'serial']);
 
     const getStandardizedDataForMasterSig = (noteData) => JSON.stringify({
-        ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), // Use Base64 for consistent JSON
+        ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
         signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne)
-    }, ['ephemeralPublicKey', 'signatureOne']); // Sort keys
+    }, ['ephemeralPublicKey', 'signatureOne']);
 
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
@@ -412,9 +421,7 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // --- MODIFICATION: createQrPayload now creates the payload for a JAB Code ---
     const createJabCodePayload = (noteData) => {
-        // JAB Code can handle text well, so we can use a compact JSON string.
         const payload = {
             s: noteData.serial,
             t: noteData.timestamp,
@@ -441,7 +448,6 @@ const BanknoteLogic = (() => {
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            // --- MODIFICATION: Use JAB Code payload ---
             const jabPayload = createJabCodePayload(noteData);
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
@@ -461,7 +467,6 @@ const BanknoteLogic = (() => {
             const notesToDownload = [];
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                 // --- MODIFICATION: Use JAB Code payload ---
                 const jabPayload = createJabCodePayload(noteData);
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
@@ -470,27 +475,36 @@ const BanknoteLogic = (() => {
                     await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
                 }
             }
-            if (quantity > 1 && window.showDirectoryPicker) {
+            
+            // --- FIX 2: BATCH DOWNLOAD FOLDER SELECTION ---
+            // Changed "quantity > 1" to "quantity >= 1" to allow folder selection
+            // for any batch download, including a single note.
+            // This API is only available in secure contexts (https:// or localhost) on modern browsers.
+            if (quantity >= 1 && window.showDirectoryPicker) {
                  const dirHandle = await window.showDirectoryPicker();
                  for (const note of notesToDownload) {
                     const fileHandle = await dirHandle.getFileHandle(note.filename, { create: true });
                     const writable = await fileHandle.createWritable();
                     await writable.write(note.blob); await writable.close();
                  }
-                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to selected folder.`, 'success');
+                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
-                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
+                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder. Your browser may not support directory selection.`, 'success');
             }
+            // --- END FIX 2 ---
+
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
         } finally {
+            // For security, clear the private key from memory after a sensitive operation
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
+            updatePuzzleStatus(); // Reset puzzle status visually
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.", 'warning');
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch download complete. For security, the Master Key has been cleared. Please reactivate in Step 2 for more actions.`, 'success');
+            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch download complete. For security, the Master Key has been cleared from memory. Please reactivate in Step 2 for more actions.`, 'success');
             Utils.log("Key cleared for security after batch operation.", 'warning');
         }
     };
@@ -504,7 +518,6 @@ const BanknoteLogic = (() => {
             const resultDiv = DOMElements.validationResult;
             Utils.updateStatus(resultDiv, '⏳ Validating banknote... Please wait.', 'info');
             try {
-                // --- MODIFICATION: Use jabcode.decode_message for validation ---
                 const decodedText = await jabcode.decode_message(file);
                 if (!decodedText) {
                     Utils.updateStatus(resultDiv, '❌ JAB Code not found or unreadable on the banknote.', 'error');
@@ -539,7 +552,7 @@ const BanknoteLogic = (() => {
                 Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt.`, 'error');
                 console.error(e);
             } finally {
-                event.target.value = ''; // Reset file input
+                event.target.value = '';
             }
         }
     };
@@ -585,14 +598,13 @@ const BanknoteDrawer = (() => {
                 ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
                 ctx.shadowColor = "transparent";
 
-                // --- MODIFICATION: Use JAB Code for drawing ---
                 try {
                     const jabCodeBase64 = jabcode.encode_message(jabPayload);
                     const img = new Image();
                     img.onload = () => {
                         const qrX = width - (150 * scale) - (380 * scale);
                         const qrY = height - (520 * scale);
-                        ctx.fillStyle = 'white'; // JAB codes often have color, but a white background is safe
+                        ctx.fillStyle = 'white';
                         ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), (380 * scale) + (40 * scale), (380 * scale) + (40 * scale));
                         ctx.drawImage(img, qrX, qrY, 380 * scale, 380 * scale);
                         
@@ -612,7 +624,6 @@ const BanknoteDrawer = (() => {
                      ctx.fillText("JAB DATA TOO LARGE", centerX, centerY);
                      reject(err);
                 }
-                 // --- END MODIFICATION ---
             });
         }
     };
@@ -644,7 +655,6 @@ async function main() {
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
     DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
     
-    // --- MODIFICATION: Download JAB Code from image source ---
     DOMElements.downloadQrButton.addEventListener('click', () => {
         const img = DOMElements.qrDisplay.querySelector('img');
         if (img && img.src) {
