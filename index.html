@@ -469,11 +469,11 @@ const BanknoteLogic = (() => {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const jabPayload = createBinaryPayload(noteData);
 
-            // Compress the payload before encoding
+            // Compress -> Base64 Encode
             const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
-            const compressedPayloadString = Utils.binaryToString(compressedPayload);
+            const base64Payload = Utils.arrayBufferToBase64(compressedPayload);
 
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, base64Payload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -493,15 +493,15 @@ const BanknoteLogic = (() => {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 const jabPayload = createBinaryPayload(noteData);
                 
-                // Compress the payload before encoding
+                // Compress -> Base64 Encode
                 const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
-                const compressedPayloadString = Utils.binaryToString(compressedPayload);
+                const base64Payload = Utils.arrayBufferToBase64(compressedPayload);
 
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, compressedPayloadString, 1350, 750);
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, base64Payload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
                 if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, base64Payload, 1350, 750);
                 }
             }
             
@@ -567,8 +567,8 @@ const BanknoteLogic = (() => {
                         return;
                     }
 
-                    // Decompress the data after reading from the JAB code
-                    const compressedData = Utils.stringToBinary(decodedText);
+                    // Base64 Decode -> Decompress
+                    const compressedData = Utils.base64ToUint8Array(decodedText);
                     const decompressedData = pako.inflate(compressedData);
                     const originalPayloadString = Utils.binaryToString(decompressedData);
                     
@@ -599,7 +599,8 @@ const BanknoteLogic = (() => {
                     
                     resultDiv.innerHTML = resultHTML;
                 } catch (e) {
-                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt or fail decompression.`, 'error');
+                    const errorMessage = e.message || e.toString();
+                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${errorMessage}. The banknote data may be corrupt or fail decompression.`, 'error');
                     console.error(e);
                 } finally {
                     event.target.value = '';
