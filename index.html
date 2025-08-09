@@ -133,7 +133,7 @@
 <script type="module">
 // Import cryptographic libraries as modules
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import { shake256 } from './js-sha3.js'; // <-- مسیر محلی جدید برای shake256
 import argon2 from './argon2-bundled.min.js';
 
 // --- Global State ---
@@ -172,7 +172,6 @@ const BankCrypto = (() => {
 
     function hashMessageForVisual(message) {
         return shake256(message, 256);
-  
     }
     
     async function generateNewKeyPair() {
@@ -323,7 +322,6 @@ async function handleGenerateAndExportKeys() {
         downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json');
         updateKeyStatus('<span class="valid">✅ New Falcon-1024 key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
-        // Await the creation of the new note before continuing, to ensure currentNoteData is populated.
         await handleCreateNewNote();
     } catch (e) {
         console.error("Key generation failed:", e);
