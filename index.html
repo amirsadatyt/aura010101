@@ -100,7 +100,6 @@
 // Import cryptographic libraries as modules
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-import { Argon2 } from './argon2-wrapper.js';
 
 // --- Global State ---
 const canvas = document.getElementById("noteCanvas");
@@ -129,8 +128,9 @@ const uint8ArrayToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).pad
 
 const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
+    const PBKDF2_ITERATIONS = 100000;
+    const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
-    const ARGON2_KEY_LENGTH = 32; // 256 bits
 
     function hashMessageForSigning(message) {
         const hexHash = shake256(message, 1536);
@@ -161,35 +161,18 @@ const BankCrypto = (() => {
         return await falconApi.verify(signature, dataHash, publicKey);
     }
     
-    async function argon2DeriveKey(password, salt) {
-        const passwordBytes = new TextEncoder().encode(password);
-        const saltBytes = new TextEncoder().encode(salt);
-        
-        const result = await Argon2.hash({
-            pass: passwordBytes,
-            salt: saltBytes,
-            time: 3,        // Iterations
-            mem: 2048,      // Memory in KB (2MB)
-            parallelism: 1, // Threads
-            hashLen: ARGON2_KEY_LENGTH,
-            type: Argon2.ArgonType.Argon2id // Recommended type
-        });
-        
-        return result.hash;
-    }
-    
     async function encryptPrivateKey(privateKeyBytes, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
         const salt = window.crypto.getRandomValues(new Uint8Array(16));
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        
-        const keyMaterial = await argon2DeriveKey(password, salt);
-        const derivedKey = await window.crypto.subtle.importKey("raw", keyMaterial, { name: AES_ALGO }, false, ["encrypt"]);
-        
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
+        );
         const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
         const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
-        
         const encryptedKey = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, derivedKey, encodedKey);
-        
         return {
             cipherText: arrayBufferToBase64(encryptedKey),
             salt: arrayBufferToBase64(salt),
@@ -198,16 +181,17 @@ const BankCrypto = (() => {
     }
     
     async function decryptPrivateKey(encryptedData, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
         const salt = base64ToUint8Array(encryptedData.salt);
         const iv = base64ToUint8Array(encryptedData.iv);
         const cipherText = base64ToUint8Array(encryptedData.cipherText);
-        
-        const keyMaterial = await argon2DeriveKey(password, salt);
-        const derivedKey = await window.crypto.subtle.importKey("raw", keyMaterial, { name: AES_ALGO }, false, ["decrypt"]);
-        
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
+        );
         const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, derivedKey, cipherText);
         const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
-        
         return base64ToUint8Array(keyObject.keyData);
     }
 
@@ -250,26 +234,15 @@ async function handleGenerateAndExportKeys() {
         updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>');
         return;
     }
-    
-    // Check if Argon2 module is initialized
-    if (!Argon2.isReady) {
-        updateKeyStatus('<span class="invalid">❌ Argon2 module is not ready. Please wait a moment and try again.</span>');
-        return;
-    }
-    
-    updateKeyStatus('<span class="info">⏳ Generating new Falcon-1024 key pair...</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new Falcon-1024 key pair and encrypting... Please wait.</span>');
     try {
         const keyPair = await BankCrypto.generateNewKeyPair();
         activeKeys.publicKey = keyPair.publicKey;
         activeKeys.privateKey = keyPair.privateKey;
-        
-        updateKeyStatus('<span class="info">⏳ Encrypting private key with Argon2 and AES... This may take a moment.</span>');
         const publicKeyB64 = arrayBufferToBase64(keyPair.publicKey);
         downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-public-key.json', 'application/json');
-        
         const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
         downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json');
-        
         updateKeyStatus('<span class="valid">✅ New Falcon-1024 key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
@@ -305,18 +278,11 @@ async function handleImportPrivateKey(event) {
         updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required to decrypt.</span>');
         return;
     }
-    
-    // Check if Argon2 module is initialized
-    if (!Argon2.isReady) {
-        updateKeyStatus('<span class="invalid">❌ Argon2 module is not ready. Please wait a moment and try again.</span>');
-        return;
-    }
-    
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
             const encryptedData = JSON.parse(e.target.result);
-            updateKeyStatus('<span class="info">⏳ Decrypting private key with Argon2 and AES... This may take a moment.</span>');
+            updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>');
             activeKeys.privateKey = await BankCrypto.decryptPrivateKey(encryptedData, password);
             updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>');
             updateControlsState(true);
@@ -560,24 +526,11 @@ async function main() {
     updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>');
     try {
         falconApi = await pqcSignFalcon1024();
-        
-        // Wait for Argon2 WebAssembly to be ready
-        await new Promise(resolve => {
-            if (Argon2.isReady) {
-                resolve();
-            } else {
-                Argon2.onRuntimeInitialized = () => {
-                    Argon2.isReady = true;
-                    resolve();
-                };
-            }
-        });
-        
         updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
-        console.error("Failed to load a required module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load required modules. Please check the console and ensure all files are present.</span>`);
-        alert("Error: Failed to load a required cryptographic module. See the console for details.");
+        console.error("Failed to load Falcon module:", e);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'pqc-sign-falcon-1024.min.js' is in the same directory and your browser supports modern JavaScript.</span>`);
+        alert("Error: Failed to load cryptographic module. See the console for details.");
         return;
     }
     
