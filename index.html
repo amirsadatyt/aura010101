@@ -179,16 +179,12 @@ const Utils = {
         console.log(`[Sadat System] ${icon} ${message}`);
     },
     binaryToString: (binaryPayload) => {
-        let str = '';
-        binaryPayload.forEach(b => { str += String.fromCharCode(b); });
-        return str;
+        const textDecoder = new TextDecoder('utf-8');
+        return textDecoder.decode(binaryPayload);
     },
     stringToBinary: (str) => {
-        const binaryPayload = new Uint8Array(str.length);
-        for (let i = 0; i < str.length; i++) {
-            binaryPayload[i] = str.charCodeAt(i);
-        }
-        return binaryPayload;
+        const textEncoder = new TextEncoder();
+        return textEncoder.encode(str);
     }
 };
 
@@ -420,23 +416,22 @@ const BanknoteLogic = (() => {
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
 
-        return Utils.binaryToString(new Uint8Array(buffer));
+        return new Uint8Array(buffer);
     };
 
-    const parseBinaryPayload = (binaryString) => {
-        const buffer = Utils.stringToBinary(binaryString);
-        const view = new DataView(buffer.buffer);
+    const parseBinaryPayload = (payloadBytes) => {
+        const view = new DataView(payloadBytes.buffer);
         const textDecoder = new TextDecoder();
         let offset = 0;
 
         const amount = view.getUint32(offset, false); offset += 4;
-        const verificationKey = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
+        const verificationKey = textDecoder.decode(payloadBytes.subarray(offset, offset + 8)); offset += 8;
         const timestamp = view.getUint32(offset, false); offset += 4;
-        const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
+        const serial = textDecoder.decode(payloadBytes.subarray(offset, offset + 8)); offset += 8;
+        const ephemeralPublicKey = payloadBytes.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
         const sigOneLength = view.getUint16(offset, false); offset += 2;
-        const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
-        const signatureTwo = buffer.subarray(offset);
+        const signatureOne = payloadBytes.subarray(offset, offset + sigOneLength); offset += sigOneLength;
+        const signatureTwo = payloadBytes.subarray(offset);
         
         return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
     };
@@ -446,12 +441,13 @@ const BanknoteLogic = (() => {
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const jabPayload = createBinaryPayload(noteData);
+            const payloadBytes = createBinaryPayload(noteData);
 
-            const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
-            const compressedPayloadString = Utils.binaryToString(compressedPayload);
+            // Compress binary data, then Base64 encode the result for safe transport
+            const compressedBytes = pako.deflate(payloadBytes);
+            const finalPayload = Utils.arrayBufferToBase64(compressedBytes);
 
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, finalPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -469,16 +465,16 @@ const BanknoteLogic = (() => {
             const notesToDownload = [];
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                const jabPayload = createBinaryPayload(noteData);
+                const payloadBytes = createBinaryPayload(noteData);
                 
-                const compressedPayload = pako.deflate(Utils.stringToBinary(jabPayload));
-                const compressedPayloadString = Utils.binaryToString(compressedPayload);
+                const compressedBytes = pako.deflate(payloadBytes);
+                const finalPayload = Utils.arrayBufferToBase64(compressedBytes);
 
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, compressedPayloadString, 1350, 750);
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, finalPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
                 if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, compressedPayloadString, 1350, 750);
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, finalPayload, 1350, 750);
                 }
             }
             
@@ -544,14 +540,14 @@ const BanknoteLogic = (() => {
                         return;
                     }
 
-                    const compressedData = Utils.stringToBinary(decodedText);
-                    const decompressedData = pako.inflate(compressedData);
-                    const originalPayloadString = Utils.binaryToString(decompressedData);
+                    // Base64 decode the text from JAB code, then decompress
+                    const compressedBytes = Utils.base64ToUint8Array(decodedText);
+                    const originalPayloadBytes = pako.inflate(compressedBytes);
                     
                     let resultHTML = '<span class="valid">✅ JAB Code Found & Decompressed. Verifying signatures...</span>\n';
                     resultDiv.innerHTML = resultHTML;
 
-                    const parsedData = parseBinaryPayload(originalPayloadString);
+                    const parsedData = parseBinaryPayload(originalPayloadBytes);
                     
                     const dataForSigOne = getStandardizedDataForSigning(parsedData);
                     const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
