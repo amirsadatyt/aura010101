@@ -203,18 +203,30 @@ function getStandardizedDataForSigning(noteData) {
     return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
 }
 
+
 /**
- * Creates a compact, pipe-delimited string payload to reduce barcode size.
+ * Creates the payload for the main JAB Code (right side).
  * @param {object} noteData - The banknote data object.
  * @returns {string} The compressed payload string.
  */
-function createJabPayload(noteData) {
+function createMainJabPayload(noteData) {
+    const parts = [
+        noteData.timestamp,
+        noteData.signature
+    ];
+    return parts.join('|');
+}
+
+/**
+ * Creates the payload for the secondary JAB Code (left side).
+ * @param {object} noteData - The banknote data object.
+ * @returns {string} The compressed payload string.
+ */
+function createSecondaryJabPayload(noteData) {
     const parts = [
         noteData.amount,
         noteData.serial,
-        noteData.timestamp,
-        noteData.verificationKey,
-        noteData.signature
+        noteData.verificationKey
     ];
     return parts.join('|');
 }
@@ -320,13 +332,13 @@ async function handleFileSelect(event) {
     reader.onload = async (e) => {
         const base64Image = e.target.result;
         
-        resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Code...</span>`;
+        resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Codes...</span>`;
         
         try {
-            const jabData = await readJabCodeFromImage(base64Image);
+            const jabData = await readJabCodesFromImage(base64Image);
             
             if (!jabData) {
-                resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable.</span>`;
+                resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: One or both JAB Codes not found or unreadable.</span>`;
                 return;
             }
 
@@ -368,19 +380,26 @@ async function validateDigitalSignature(jabData) {
     }
 }
 
-async function readJabCodeFromImage(base64Image) {
+async function readJabCodesFromImage(base64Image) {
     try {
+        // Attempt to decode both JAB codes from the image
         const decodedString = await jabcode.decode_message(base64Image);
+        
         if (decodedString) {
-            const parts = decodedString.split('|');
-            if (parts.length !== 5) return null; // Verify correct format
+            const parts = decodedString.split('||'); // Use a double pipe to separate the two payloads
+            if (parts.length !== 2) return null;
+
+            const secondaryParts = parts[0].split('|');
+            const mainParts = parts[1].split('|');
+
+            if (secondaryParts.length !== 3 || mainParts.length !== 2) return null;
 
             return {
-                amount: parseInt(parts[0], 10),
-                serial: parts[1],
-                timestamp: parseInt(parts[2], 10),
-                verificationKey: parts[3],
-                signature: parts[4]
+                amount: parseInt(secondaryParts[0], 10),
+                serial: secondaryParts[1],
+                verificationKey: secondaryParts[2],
+                timestamp: parseInt(mainParts[0], 10),
+                signature: mainParts[1]
             };
         }
     } catch (error) {
@@ -388,6 +407,7 @@ async function readJabCodeFromImage(base64Image) {
     }
     return null;
 }
+
 
 // ===================================================================================
 // Banknote Creation Logic
@@ -488,26 +508,38 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
 
     ctx.shadowColor="rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; ctx.shadowOffsetX=2*scale; ctx.shadowOffsetY=2*scale;
     ctx.fillStyle="#EAEAEA"; ctx.font=`bold ${80*scale}px 'Roboto Mono'`; ctx.textAlign='left';
-    ctx.fillText(serial,150*scale,160*scale); 
-    ctx.fillText(verificationKey,150*scale,280*scale);
+    ctx.fillText(serial, 350*scale, 160*scale); 
     ctx.font=`bold ${150*scale}px 'Roboto Mono'`; ctx.textAlign="right";
     ctx.shadowBlur=12*scale; ctx.shadowOffsetX=4*scale; ctx.shadowOffsetY=4*scale;
-    ctx.fillText(amount.toString(),w-(120*scale),190*scale); ctx.shadowColor="transparent";
+    ctx.fillText(amount.toString(), w-(120*scale), 190*scale); ctx.shadowColor="transparent";
 
-    const jabPayload = createJabPayload(noteData);
-    const base64Image = jabcode.encode_message(jabPayload);
+    // Combine payloads for decoding
+    const mainPayload = createMainJabPayload(noteData);
+    const secondaryPayload = createSecondaryJabPayload(noteData);
+    const combinedPayload = `${secondaryPayload}||${mainPayload}`; // Use a unique separator
+
+    const base64Image = jabcode.encode_message(combinedPayload);
 
     const jabImage = new Image();
     jabImage.onload = () => {
         const jabSize = 380 * scale;
-        const jabX = w - (150 * scale) - jabSize;
-        const jabY = h - (520 * scale);
-        
+
+        // Draw the main JAB Code on the right
+        const mainJabX = w - (150 * scale) - jabSize;
+        const mainJabY = h - (520 * scale);
         ctx.fillStyle = 'white';
-        ctx.fillRect(jabX - (20 * scale), jabY - (20 * scale), jabSize + (40 * scale), jabSize + (40 * scale));
-        ctx.drawImage(jabImage, jabX, jabY, jabSize, jabSize);
+        ctx.fillRect(mainJabX - (20 * scale), mainJabY - (20 * scale), jabSize + (40 * scale), jabSize + (40 * scale));
+        ctx.drawImage(jabImage, mainJabX, mainJabY, jabSize, jabSize);
+
+        // Draw the secondary JAB Code on the left
+        const secondaryJabX = 150 * scale;
+        const secondaryJabY = h - (520 * scale);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(secondaryJabX - (20 * scale), secondaryJabY - (20 * scale), jabSize + (40 * scale), jabSize + (40 * scale));
+        ctx.drawImage(jabImage, secondaryJabX, secondaryJabY, jabSize, jabSize);
         
         ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
+        ctx.fillText(verificationKey, w/2, h-120*scale);
         ctx.fillText("Digitally Signed by Sadat Bank Authority (Falcon-1024)", w/2, h-60*scale);
     };
     jabImage.src = base64Image;
