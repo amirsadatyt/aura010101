@@ -8,6 +8,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    
+    <script src="./pqc-sphincs-plus.min.js"></script>
+    
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -99,7 +102,8 @@
 <script type="module">
 // Import cryptographic libraries as modules
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import pqcSignSphincs from './pqc-sphincs-plus.min.js';
+// UPDATED: The SPHINCS+ import is removed because it's now a global script.
+// import pqcSignSphincs from './pqc-sphincs-plus.min.js'; 
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
@@ -144,8 +148,8 @@ const BankCrypto = (() => {
     async function generateNewKeyPair() {
         if (!falconApi || !sphincsApi) throw new Error("Crypto APIs not initialized.");
         const falconKeys = await falconApi.keypair();
-        // Using a SPHINCS+ variant with smaller signatures to be more manageable
-        const sphincsKeys = await sphincsApi.keypair('SPHINCS+-SHA2-128s-robust');
+        // UPDATED: Call keyPair() without arguments, as per the provided script's API.
+        const sphincsKeys = await sphincsApi.keyPair(); 
         return {
             publicKey: { falcon: falconKeys.publicKey, sphincs: sphincsKeys.publicKey },
             privateKey: { falcon: falconKeys.privateKey, sphincs: sphincsKeys.privateKey }
@@ -159,7 +163,8 @@ const BankCrypto = (() => {
         const dataHash = hashMessageForSigning(data);
         
         const { signature: falcon_sig } = await falconApi.sign(dataHash, privateKey.falcon);
-        const { signature: sphincs_sig } = await sphincsApi.sign(dataHash, privateKey.sphincs);
+        // UPDATED: Use signDetached and handle the raw signature Uint8Array result.
+        const sphincs_sig = await sphincsApi.signDetached(dataHash, privateKey.sphincs);
         
         return { falcon: falcon_sig, sphincs: sphincs_sig };
     }
@@ -585,11 +590,14 @@ async function main() {
     updateControlsState(false);
     updateKeyStatus('<span class="info">⏳ Loading Crypto Modules (Falcon + SPHINCS+)...</span>');
     try {
-        // Initialize both cryptographic modules
-        [falconApi, sphincsApi] = await Promise.all([
-            pqcSignFalcon1024(),
-            pqcSignSphincs()
-        ]);
+        // UPDATED: Initialize Falcon and assign the global sphincs object.
+        falconApi = await pqcSignFalcon1024();
+        sphincsApi = window.sphincs; // The script creates a global 'sphincs' object
+
+        if (!sphincsApi) {
+             throw new Error("SPHINCS+ API object (window.sphincs) not found. Check if the script loaded correctly.");
+        }
+        
         updateKeyStatus('<span class="info">Ready. Please generate a new hybrid key pair or import existing keys to begin.</span>');
     } catch (e) {
         console.error("Failed to load a crypto module:", e);
