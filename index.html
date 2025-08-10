@@ -6,6 +6,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <script src="js-sha3.min.js"></script>
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -97,7 +98,6 @@
 <script type="module">
 // Import cryptographic libraries as modules
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import { shake256 } from './js-sha3.min.js';
 import JabcodeJSInterface from './jabcodeJSLib.min.js';
 
 // --- Global State ---
@@ -131,12 +131,14 @@ const BankCrypto = (() => {
     const AES_KEY_LENGTH = 256;
 
     function hashMessageForSigning(message) {
-        const hexHash = shake256(message, 1536);
+        // FIX: Use the global sha3 object provided by js-sha3.min.js
+        const hexHash = sha3.shake256(message, 1536);
         return hexToUint8Array(hexHash);
     }
 
     function hashMessageForVisual(message) {
-        return shake256(message, 256);
+        // FIX: Use the global sha3 object provided by js-sha3.min.js
+        return sha3.shake256(message, 256);
     }
     
     async function generateNewKeyPair() {
@@ -491,7 +493,6 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
     
     // --- Draw Decorative Patterns ---
     drawWatermark(ctx, visualHash, w, h);
-    // Removed: drawKochGuilloche and drawNoisePattern
 
     // --- Draw Text Information ---
     ctx.shadowColor="rgba(0,0,0,0.7)"; ctx.shadowBlur=8*scale; 
@@ -547,24 +548,27 @@ function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2
 // Application Initialization
 // ===================================================================================
 async function main() {
-    updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>');
-    try {
-        falconApi = await pqcSignFalcon1024();
-        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
-    } catch (e) {
-        console.error("Failed to load Falcon module:", e);
-        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'pqc-sign-falcon-1024.min.js' is in the same directory and your browser supports modern JavaScript.</span>`);
-        alert("Error: Failed to load cryptographic module. See the console for details.");
-        return;
-    }
-    
+    // FIX: Attach event listeners immediately, so they work even if the module fails to load.
     document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
     document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote);
     document.getElementById('download-batch-button').addEventListener('click', handleDownloadBatch);
     document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey);
     document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey);
     document.getElementById('validator-input').addEventListener('change', handleFileSelect);
+
+    updateControlsState(false);
+    updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>');
+    
+    try {
+        falconApi = await pqcSignFalcon1024();
+        // FIX: This message will now display correctly upon successful load.
+        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
+    } catch (e) {
+        console.error("Failed to load Falcon module:", e);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'pqc-sign-falcon-1024.min.js' is in the same directory and your browser supports modern JavaScript.</span>`);
+        alert("Error: Failed to load cryptographic module. See the console for details.");
+        return; // Stop execution if module fails
+    }
 }
 
 // Start the application
