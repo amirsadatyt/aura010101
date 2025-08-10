@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [Dual Code]</title>
+    <title>Sadat Digital Banknote [Dual Code - Inefficient]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -36,7 +36,7 @@
         button:not([disabled]), label.button:not([disabled]) { font-weight: 600; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         button.sub-button, label.button.sub-button { background: var(--light-bg); border: 1px solid var(--border-color); }
         button[disabled], label.button[disabled] { cursor: not-allowed; opacity: 0.5; background: var(--light-bg); border: 1px solid var(--border-color); }
-        button:hover:not([disabled]), label.button:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); }
+        button:hover:not([disabled]), label.button:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 6px 20px rgba(124, 77, 255, 0.4); }
         .section { background: rgba(16, 16, 26, 0.5); padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); }
         h2 { font-size: 1.5rem; color: var(--text-color); margin-top: 0; margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
         .controls-grid { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px; }
@@ -458,33 +458,29 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // FIX: JAB payload now only contains the ephemeral public key. This is a very small payload.
+    // FIX: JAB payload now contains the ephemeral public key and signatures
     const createJabPayload = (noteData) => {
-        const bufferSize = Constants.FALCON_PUBKEY_SIZE;
-        const buffer = new ArrayBuffer(bufferSize);
-        new Uint8Array(buffer).set(noteData.ephemeralPublicKey);
-        return Utils.binaryToString(new Uint8Array(buffer));
+        const payload = {
+            ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
+            amount: noteData.amount,
+            timestamp: noteData.timestamp,
+            serial: noteData.serial
+        };
+        return JSON.stringify(payload);
     };
 
-    // FIX: QR payload now contains all other data, including both signatures.
-    const createQrPayload = async (noteData) => {
+    // FIX: QR payload now contains only the signatures
+    const createQrPayload = (noteData) => {
         const payload = {
-            timestamp: noteData.timestamp,
-            amount: noteData.amount,
-            serial: noteData.serial,
             signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne),
             signatureTwo: Utils.arrayBufferToBase64(noteData.signatureTwo)
         };
         return JSON.stringify(payload);
     };
 
-    // FIX: JAB parser now only reads the ephemeral public key.
-    const parseJabPayload = (binaryString) => {
-        const buffer = Utils.stringToBinary(binaryString);
-        if (buffer.length !== Constants.FALCON_PUBKEY_SIZE) {
-            throw new Error(`JAB code has invalid size. Expected ${Constants.FALCON_PUBKEY_SIZE}, got ${buffer.length}`);
-        }
-        return { ephemeralPublicKey: buffer };
+    // FIX: JAB parser now reads a JSON object
+    const parseJabPayload = (decodedText) => {
+        return JSON.parse(decodedText);
     };
 
     const handleCreateAndSignNotes = async () => {
@@ -493,7 +489,7 @@ const BanknoteLogic = (() => {
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const jabPayload = createJabPayload(noteData);
-            const qrPayload = await createQrPayload(noteData);
+            const qrPayload = createQrPayload(noteData);
 
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, qrPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed with dual codes and ready for download.`, 'success');
@@ -514,7 +510,7 @@ const BanknoteLogic = (() => {
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 const jabPayload = createJabPayload(noteData);
-                const qrPayload = await createQrPayload(noteData);
+                const qrPayload = createQrPayload(noteData);
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, qrPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
@@ -593,16 +589,15 @@ const BanknoteLogic = (() => {
             let resultHTML = '<span class="valid">✅ Both codes scanned. Verifying signatures...</span>\n';
             DOMElements.validationResult.innerHTML = resultHTML;
             
-            // FIX: Refactored validation to work with new payloads
+            // Reconstruct note data from both codes
             const noteDataForVerification = {
-                ...qrData,
-                ephemeralPublicKey: jabData.ephemeralPublicKey,
+                ...jabData,
                 signatureOne: Utils.base64ToUint8Array(qrData.signatureOne),
-                signatureTwo: Utils.base64ToUint8Array(qrData.signatureTwo),
+                signatureTwo: Utils.base64ToUint8Array(qrData.signatureTwo)
             };
 
             const dataForSigOne = getStandardizedDataForSigning(noteDataForVerification);
-            const isSigOneValid = await BankCrypto.verifySignature(noteDataForVerification.signatureOne, dataForSigOne, noteDataForVerification.ephemeralPublicKey);
+            const isSigOneValid = await BankCrypto.verifySignature(noteDataForVerification.signatureOne, dataForSigOne, Utils.base64ToUint8Array(noteDataForVerification.ephemeralPublicKey));
             if (!isSigOneValid) {
                 resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
                 DOMElements.validationResult.innerHTML = resultHTML;
@@ -618,7 +613,7 @@ const BanknoteLogic = (() => {
                 return;
             }
             resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
-            resultHTML += `\n<span style="font-size:14px;font-weight:600;">Amount: ${qrData.amount} SAD</span>`;
+            resultHTML += `\n<span style="font-size:14px;font-weight:600;">Amount: ${noteDataForVerification.amount} SAD</span>`;
             
             DOMElements.validationResult.innerHTML = resultHTML;
 
