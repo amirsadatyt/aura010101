@@ -139,10 +139,6 @@ const state = {
         fileKey: null,
         passwordKey: null,
         visualKey: null
-    },
-    validationData: {
-        jabPayload: null,
-        qrPayload: null,
     }
 };
 
@@ -462,36 +458,36 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
+    // FIX: Refactored JAB payload to contain only signatures for smaller size
     const createJabPayload = (noteData) => {
-        const bufferSize = Constants.FALCON_PUBKEY_SIZE + noteData.signatureOne.length + noteData.signatureTwo.length;
+        const bufferSize = noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         let offset = 0;
-        const view = new DataView(buffer);
 
-        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
 
         return Utils.binaryToString(new Uint8Array(buffer));
     };
 
+    // FIX: Refactored QR payload to contain ephemeralPublicKey and other details
     const createQrPayload = async (noteData) => {
         const payload = {
             timestamp: noteData.timestamp,
             amount: noteData.amount,
-            serial: noteData.serial
+            serial: noteData.serial,
+            ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey)
         };
-        const encryptedPayload = await BankCrypto.encryptPayload(payload, noteData.ephemeralPublicKey);
-        return JSON.stringify(encryptedPayload);
+        return JSON.stringify(payload);
     };
 
+    // FIX: Refactored JAB parser to read only signatures
     const parseJabPayload = (binaryString) => {
         const buffer = Utils.stringToBinary(binaryString);
         let offset = 0;
-        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
-        const signatureOne = buffer.subarray(offset, offset + 128); offset += 128;
+        const signatureOne = buffer.subarray(offset, 128); offset += 128; // Assuming 128 bytes for Falcon-1024 signature
         const signatureTwo = buffer.subarray(offset);
-        return { ephemeralPublicKey, signatureOne, signatureTwo };
+        return { signatureOne, signatureTwo };
     };
 
     const handleCreateAndSignNotes = async () => {
@@ -573,7 +569,7 @@ const BanknoteLogic = (() => {
             // Scan JAB code
             try {
                 const decodedText = await jabcode.decode_message(dataUrl);
-                if (!decodedText) throw new Error('JAB Code not found.');
+                if (!decodedText) throw new Error('JAB Code not found or unreadable.');
                 jabData = parseJabPayload(decodedText);
             } catch (e) {
                 throw new Error(`JAB Code scan failed: ${e.message}`);
@@ -590,7 +586,7 @@ const BanknoteLogic = (() => {
                 ctx.drawImage(img, 0, 0, img.width, img.height);
                 const imageData = ctx.getImageData(0, 0, img.width, img.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
-                if (!code) throw new Error('QR Code not found.');
+                if (!code) throw new Error('QR Code not found or unreadable.');
                 qrData = JSON.parse(code.data);
             } catch (e) {
                 throw new Error(`QR Code scan failed: ${e.message}`);
@@ -599,12 +595,11 @@ const BanknoteLogic = (() => {
             // Both codes found, proceed to validation
             let resultHTML = '<span class="valid">✅ Both codes scanned. Verifying signatures...</span>\n';
             DOMElements.validationResult.innerHTML = resultHTML;
-
-            const decryptedData = await BankCrypto.decryptPayload(qrData, jabData.ephemeralPublicKey);
             
+            // FIX: Refactored validation to work with new payloads
             const noteDataForVerification = {
-                ...decryptedData,
-                ephemeralPublicKey: jabData.ephemeralPublicKey,
+                ...qrData,
+                ephemeralPublicKey: Utils.base64ToUint8Array(qrData.ephemeralPublicKey),
                 signatureOne: jabData.signatureOne,
                 signatureTwo: jabData.signatureTwo
             };
@@ -626,7 +621,7 @@ const BanknoteLogic = (() => {
                 return;
             }
             resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
-            resultHTML += `\n<span style="font-size:14px;font-weight:600;">Amount: ${decryptedData.amount} SAD</span>`;
+            resultHTML += `\n<span style="font-size:14px;font-weight:600;">Amount: ${qrData.amount} SAD</span>`;
             
             DOMElements.validationResult.innerHTML = resultHTML;
 
@@ -771,7 +766,6 @@ async function main() {
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
-
 }
 
 main();
