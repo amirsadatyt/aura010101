@@ -458,36 +458,33 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // FIX: Refactored JAB payload to contain only signatures for smaller size
+    // FIX: JAB payload now only contains the ephemeral public key. This is a very small payload.
     const createJabPayload = (noteData) => {
-        const bufferSize = noteData.signatureOne.length + noteData.signatureTwo.length;
+        const bufferSize = Constants.FALCON_PUBKEY_SIZE;
         const buffer = new ArrayBuffer(bufferSize);
-        let offset = 0;
-
-        new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
-        new Uint8Array(buffer, offset).set(noteData.signatureTwo);
-
+        new Uint8Array(buffer).set(noteData.ephemeralPublicKey);
         return Utils.binaryToString(new Uint8Array(buffer));
     };
 
-    // FIX: Refactored QR payload to contain ephemeralPublicKey and other details
+    // FIX: QR payload now contains all other data, including both signatures.
     const createQrPayload = async (noteData) => {
         const payload = {
             timestamp: noteData.timestamp,
             amount: noteData.amount,
             serial: noteData.serial,
-            ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey)
+            signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne),
+            signatureTwo: Utils.arrayBufferToBase64(noteData.signatureTwo)
         };
         return JSON.stringify(payload);
     };
 
-    // FIX: Refactored JAB parser to read only signatures
+    // FIX: JAB parser now only reads the ephemeral public key.
     const parseJabPayload = (binaryString) => {
         const buffer = Utils.stringToBinary(binaryString);
-        let offset = 0;
-        const signatureOne = buffer.subarray(offset, 128); offset += 128; // Assuming 128 bytes for Falcon-1024 signature
-        const signatureTwo = buffer.subarray(offset);
-        return { signatureOne, signatureTwo };
+        if (buffer.length !== Constants.FALCON_PUBKEY_SIZE) {
+            throw new Error(`JAB code has invalid size. Expected ${Constants.FALCON_PUBKEY_SIZE}, got ${buffer.length}`);
+        }
+        return { ephemeralPublicKey: buffer };
     };
 
     const handleCreateAndSignNotes = async () => {
@@ -599,9 +596,9 @@ const BanknoteLogic = (() => {
             // FIX: Refactored validation to work with new payloads
             const noteDataForVerification = {
                 ...qrData,
-                ephemeralPublicKey: Utils.base64ToUint8Array(qrData.ephemeralPublicKey),
-                signatureOne: jabData.signatureOne,
-                signatureTwo: jabData.signatureTwo
+                ephemeralPublicKey: jabData.ephemeralPublicKey,
+                signatureOne: Utils.base64ToUint8Array(qrData.signatureOne),
+                signatureTwo: Utils.base64ToUint8Array(qrData.signatureTwo),
             };
 
             const dataForSigOne = getStandardizedDataForSigning(noteDataForVerification);
