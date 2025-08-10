@@ -102,16 +102,11 @@
     <div class="section" id="validator-section">
         <h2><span class="pill">Step 4</span> Verify Authenticity</h2>
         <div class="controls-grid">
-            <label for="validator-jab-input" class="button">
+            <label for="validator-input" class="button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                Scan JAB Code
+                Select Banknote Image for Validation
             </label>
-            <input type="file" id="validator-jab-input" accept="image/png" style="display: none;">
-            <label for="validator-qr-input" class="button sub-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="3" x2="12" y2="21"></line><line x1="3" y1="12" x2="21" y2="12"></line></svg>
-                Scan QR Code
-            </label>
-            <input type="file" id="validator-qr-input" accept="image/png" style="display: none;">
+            <input type="file" id="validator-input" accept="image/png" style="display: none;">
         </div>
         <div id="validation-result" class="status-box">Awaiting banknote for validation...</div>
     </div>
@@ -132,7 +127,7 @@ import JabcodeJSInterface from './jabcodeJSLib.min.js';
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 import QRCode from 'https://cdn.skypack.dev/qrcode';
-
+import jsQR from 'https://cdn.skypack.dev/jsqr';
 
 const jabcode = new JabcodeJSInterface();
 
@@ -171,8 +166,7 @@ const DOMElements = {
     downloadBatchButton: document.getElementById('download-batch-button'),
     noteCanvas: document.getElementById('noteCanvas'),
     banknoteStatus: document.getElementById('banknote-status'),
-    validatorJabInput: document.getElementById('validator-jab-input'),
-    validatorQrInput: document.getElementById('validator-qr-input'),
+    validatorInput: document.getElementById('validator-input'),
     validationResult: document.getElementById('validation-result'),
     qrModal: document.getElementById('qr-modal'),
     qrDisplay: document.getElementById('qr-display'),
@@ -562,70 +556,57 @@ const BanknoteLogic = (() => {
         }
     };
 
-    const handleJabFileSelect = async (event) => {
+    const handleValidation = async (event) => {
         const file = event.target.files[0];
         if (!file || !state.masterPublicKey) return;
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning JAB Code...', 'info');
-        try {
-            const decodedText = await jabcode.decode_message(file);
-            if (!decodedText) throw new Error('JAB Code not found or unreadable.');
-            const parsedData = parseJabPayload(decodedText);
-            state.validationData.jabPayload = parsedData;
-            Utils.updateStatus(DOMElements.validationResult, '✅ JAB Code scanned. Awaiting QR code scan.', 'info');
-            DOMElements.validatorJabInput.value = '';
-            await validateNote();
-        } catch (e) {
-            Utils.updateStatus(DOMElements.validationResult, `❌ JAB Code scan failed: ${e.message}`, 'error');
-            state.validationData.jabPayload = null;
-            state.validationData.qrPayload = null;
-            DOMElements.validatorJabInput.value = '';
-        }
-    };
-
-    const handleQrFileSelect = async (event) => {
-        const file = event.target.files[0];
-        if (!file || !state.masterPublicKey) return;
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning QR Code...', 'info');
-        try {
-            const img = new Image();
-            img.src = URL.createObjectURL(file);
-            await new Promise((resolve) => { img.onload = resolve; });
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width; canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, img.width, img.height);
-            const imageData = ctx.getImageData(0, 0, img.width, img.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (!code) throw new Error('QR Code not found or unreadable.');
-            state.validationData.qrPayload = JSON.parse(code.data);
-            Utils.updateStatus(DOMElements.validationResult, '✅ QR Code scanned. Awaiting JAB code scan.', 'info');
-            DOMElements.validatorQrInput.value = '';
-            await validateNote();
-        } catch (e) {
-            Utils.updateStatus(DOMElements.validationResult, `❌ QR Code scan failed: ${e.message}`, 'error');
-            state.validationData.jabPayload = null;
-            state.validationData.qrPayload = null;
-            DOMElements.validatorQrInput.value = '';
-        }
-    };
-
-    const validateNote = async () => {
-        const { jabPayload, qrPayload } = state.validationData;
-        if (!jabPayload || !qrPayload) {
-            return;
-        }
-
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Both codes scanned. Starting verification...', 'info');
-        let resultHTML = '<span class="valid">✅ Both codes scanned. Verifying signatures...</span>\n';
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning banknote image for both codes...', 'info');
 
         try {
-            const decryptedData = await BankCrypto.decryptPayload(qrPayload, jabPayload.ephemeralPublicKey);
+            const dataUrl = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+            
+            let jabData, qrData;
+
+            // Scan JAB code
+            try {
+                const decodedText = await jabcode.decode_message(dataUrl);
+                if (!decodedText) throw new Error('JAB Code not found.');
+                jabData = parseJabPayload(decodedText);
+            } catch (e) {
+                throw new Error(`JAB Code scan failed: ${e.message}`);
+            }
+
+            // Scan QR code
+            try {
+                const img = new Image();
+                img.src = dataUrl;
+                await new Promise(resolve => { img.onload = resolve; });
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+                const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                if (!code) throw new Error('QR Code not found.');
+                qrData = JSON.parse(code.data);
+            } catch (e) {
+                throw new Error(`QR Code scan failed: ${e.message}`);
+            }
+            
+            // Both codes found, proceed to validation
+            let resultHTML = '<span class="valid">✅ Both codes scanned. Verifying signatures...</span>\n';
+            DOMElements.validationResult.innerHTML = resultHTML;
+
+            const decryptedData = await BankCrypto.decryptPayload(qrData, jabData.ephemeralPublicKey);
             
             const noteDataForVerification = {
                 ...decryptedData,
-                ephemeralPublicKey: jabPayload.ephemeralPublicKey,
-                signatureOne: jabPayload.signatureOne,
-                signatureTwo: jabPayload.signatureTwo
+                ephemeralPublicKey: jabData.ephemeralPublicKey,
+                signatureOne: jabData.signatureOne,
+                signatureTwo: jabData.signatureTwo
             };
 
             const dataForSigOne = getStandardizedDataForSigning(noteDataForVerification);
@@ -650,11 +631,10 @@ const BanknoteLogic = (() => {
             DOMElements.validationResult.innerHTML = resultHTML;
 
         } catch (e) {
-            resultHTML += `❌ Verification Failed: ${e.message}`;
-            DOMElements.validationResult.innerHTML = resultHTML;
+            Utils.updateStatus(DOMElements.validationResult, `❌ Validation Error: ${e.message}`, 'error');
+            console.error(e);
         } finally {
-            state.validationData.jabPayload = null;
-            state.validationData.qrPayload = null;
+            event.target.value = '';
         }
     };
 
@@ -662,8 +642,7 @@ const BanknoteLogic = (() => {
     return {
         handleCreateAndSignNotes,
         handleDownloadBatch,
-        handleJabFileSelect,
-        handleQrFileSelect
+        handleValidation,
     };
 })();
 
@@ -782,8 +761,7 @@ async function main() {
     DOMElements.reconstructKeyButton.addEventListener('click', UIHandlers.handleReconstructKey);
     DOMElements.createNoteButton.addEventListener('click', BanknoteLogic.handleCreateAndSignNotes);
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
-    DOMElements.validatorJabInput.addEventListener('change', BanknoteLogic.handleJabFileSelect);
-    DOMElements.validatorQrInput.addEventListener('change', BanknoteLogic.handleQrFileSelect);
+    DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleValidation);
     
     DOMElements.downloadQrButton.addEventListener('click', () => {
         const img = DOMElements.qrDisplay.querySelector('img');
@@ -794,10 +772,6 @@ async function main() {
         }
     });
 
-    // Load jsQR library dynamically
-    const script = document.createElement('script');
-    script.src = 'https://cdn.skypack.dev/jsqr';
-    document.head.appendChild(script);
 }
 
 main();
