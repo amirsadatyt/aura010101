@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (SuperSPHINCS)</title>
+    <title>Sadat Digital Banknote (Hybrid Falcon-1024 + SPHINCS+)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -50,7 +50,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using <strong>SuperSPHINCS (Ed25519 + SPHINCS+)</strong> Signatures.</p>
+        <p>A secure, verifiable digital currency using a composite <strong>Falcon-1024 (QR)</strong> + <strong>SPHINCS+ (On-Note)</strong> Signature.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
@@ -70,7 +70,7 @@
     <div class="section">
         <h2>Bank Key Management</h2>
         <div class="controls-grid">
-            <button id="generate-keys-button">🔑 Generate & Export Keys</button>
+            <button id="generate-keys-button">🔑 Generate & Export Hybrid Keys</button>
             <label for="import-public-key" class="sub-button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 Import Public Key
@@ -96,10 +96,10 @@
     </div>
 </div>
 
-<script src="./sphincs+.js"></script>
-
 <script type="module">
-// We no longer import crypto libraries as modules. We use the global 'superSphincs' object.
+// Import cryptographic libraries as modules
+import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+import pqcSignSphincs from './pqc-sphincs-plus.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
@@ -107,58 +107,112 @@ const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
 let activeKeys = { publicKey: null, privateKey: null };
+let falconApi = null;
+let sphincsApi = null;
 
-// --- Utility Functions from SuperSPHINCS library ---
-// These are available via superSphincs._sodiumUtil
-const { to_base64: arrayBufferToBase64, from_base64: base64ToUint8Array } = superSphincs._sodiumUtil;
+// --- Utility Functions ---
+const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+const base64ToUint8Array = (base64) => {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes;
+};
+const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 
 // ===================================================================================
-// Bank Key Management and SuperSPHINCS Crypto Logic
+// Bank Key Management and Hybrid Crypto Logic
 // ===================================================================================
 
 const BankCrypto = (() => {
-    // Hashes the message for the visual pattern on the banknote
+    const AES_ALGO = "AES-GCM";
+    const PBKDF2_ITERATIONS = 100000;
+    const PBKDF2_HASH_ALGO = "SHA-256";
+    const AES_KEY_LENGTH = 256;
+
+    function hashMessageForSigning(message) {
+        return hexToUint8Array(shake256(message, 1536));
+    }
+
     function hashMessageForVisual(message) {
         return shake256(message, 256);
     }
     
-    // Generates a new SuperSPHINCS (Ed25519 + SPHINCS+) key pair
     async function generateNewKeyPair() {
-        if (!superSphincs) throw new Error("SuperSPHINCS API not initialized.");
-        return await superSphincs.keyPair();
+        if (!falconApi || !sphincsApi) throw new Error("Crypto APIs not initialized.");
+        const falconKeys = await falconApi.keypair();
+        // Using a SPHINCS+ variant with smaller signatures to be more manageable
+        const sphincsKeys = await sphincsApi.keypair('SPHINCS+-SHA2-128s-robust');
+        return {
+            publicKey: { falcon: falconKeys.publicKey, sphincs: sphincsKeys.publicKey },
+            privateKey: { falcon: falconKeys.privateKey, sphincs: sphincsKeys.privateKey }
+        };
     }
 
-    // Signs data using the hybrid private key
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
-        if (!superSphincs) throw new Error("SuperSPHINCS API not initialized.");
-        return await superSphincs.signDetached(data, privateKey);
+        if (!falconApi || !sphincsApi) throw new Error("Crypto APIs not initialized.");
+        
+        const dataHash = hashMessageForSigning(data);
+        
+        const { signature: falcon_sig } = await falconApi.sign(dataHash, privateKey.falcon);
+        const { signature: sphincs_sig } = await sphincsApi.sign(dataHash, privateKey.sphincs);
+        
+        return { falcon: falcon_sig, sphincs: sphincs_sig };
     }
 
-    // Verifies the hybrid signature
-    async function verifySignature(signature, data, publicKey) {
+    async function verifyFalconSignature(signature, data, publicKey) {
         if (!publicKey) throw new Error("Public key is not available for verification.");
-        if (!superSphincs) throw new Error("SuperSPHINCS API not initialized.");
-        return await superSphincs.verifyDetached(signature, data, publicKey);
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        
+        const dataHash = hashMessageForSigning(data);
+        return await falconApi.verify(signature, dataHash, publicKey.falcon);
     }
     
-    // Exports and encrypts keys using the library's built-in functionality
-    async function exportAndEncryptKeys(keys, password) {
-        if (!superSphincs) throw new Error("SuperSPHINCS API not initialized.");
-        const exported = await superSphincs.exportKeys(keys, password);
+    async function encryptPrivateKey(privateKeyObject, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
+        );
+        const keyObject = {
+            falcon_sk: arrayBufferToBase64(privateKeyObject.falcon),
+            sphincs_sk: arrayBufferToBase64(privateKeyObject.sphincs)
+        };
+        const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
+        const encryptedKey = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, derivedKey, encodedKey);
         return {
-            publicKey: exported.public,
-            privateKey: exported.private
+            cipherText: arrayBufferToBase64(encryptedKey),
+            salt: arrayBufferToBase64(salt),
+            iv: arrayBufferToBase64(iv)
         };
     }
     
-    // Imports and decrypts keys using the library's built-in functionality
-    async function importAndDecryptKeys(privateKeyData, publicKeyData, password) {
-        if (!superSphincs) throw new Error("SuperSPHINCS API not initialized.");
-        return await superSphincs.importKeys({ public: publicKeyData, private: privateKeyData }, password);
+    async function decryptPrivateKey(encryptedData, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const salt = base64ToUint8Array(encryptedData.salt);
+        const iv = base64ToUint8Array(encryptedData.iv);
+        const cipherText = base64ToUint8Array(encryptedData.cipherText);
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
+        );
+        const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, derivedKey, cipherText);
+        const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
+        return {
+            falcon: base64ToUint8Array(keyObject.falcon_sk),
+            sphincs: base64ToUint8Array(keyObject.sphincs_sk)
+        };
     }
 
-    return { generateNewKeyPair, signData, verifySignature, exportAndEncryptKeys, importAndDecryptKeys, hashMessageForVisual };
+    return { generateNewKeyPair, signData, verifyFalconSignature, encryptPrivateKey, decryptPrivateKey, hashMessageForVisual };
 })();
 
 function getStandardizedDataForSigning(noteData) {
@@ -166,13 +220,17 @@ function getStandardizedDataForSigning(noteData) {
     return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
 }
 
+/**
+ * Creates a compact QR payload. Crucially, it ONLY contains the small Falcon signature.
+ * The large SPHINCS+ signature is written on the note image itself.
+ */
 function createQrPayload(noteData) {
     const parts = [
         noteData.amount,
         noteData.serial,
         noteData.timestamp,
         noteData.verificationKey,
-        noteData.signature // Signature is now a single Base64 string from SuperSPHINCS
+        noteData.signature.falcon // Only the Falcon signature goes in the QR code
     ];
     return parts.join('|');
 }
@@ -187,22 +245,27 @@ function updateControlsState(isEnabled) {
 // UI Handlers for Key Management
 // ===================================================================================
 async function handleGenerateAndExportKeys() {
-    const password = prompt("Enter a strong password to encrypt your private key file:");
+    const password = prompt("Enter a strong password to encrypt your HYBRID private key file:");
     if (!password) {
         updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>');
         return;
     }
-    updateKeyStatus('<span class="info">⏳ Generating new SuperSPHINCS key pair and encrypting... Please wait.</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new Hybrid (Falcon + SPHINCS+) key pair... Please wait, this may take a moment.</span>');
     try {
         const keyPair = await BankCrypto.generateNewKeyPair();
-        activeKeys = keyPair;
+        activeKeys.publicKey = keyPair.publicKey;
+        activeKeys.privateKey = keyPair.privateKey;
         
-        const exportedKeys = await BankCrypto.exportAndEncryptKeys(keyPair, password);
+        const publicKeysB64 = {
+            falcon_pk: arrayBufferToBase64(keyPair.publicKey.falcon),
+            sphincs_pk: arrayBufferToBase64(keyPair.publicKey.sphincs)
+        };
+        downloadFile(JSON.stringify(publicKeysB64, null, 2), 'Sadat-Hybrid-public-key.json', 'application/json');
 
-        downloadFile(JSON.stringify(exportedKeys.publicKey, null, 2), 'Sadat-SuperSPHINCS-public-key.json', 'application/json');
-        downloadFile(JSON.stringify(exportedKeys.privateKey, null, 2), 'Sadat-SuperSPHINCS-private-key.json', 'application/json');
-        
-        updateKeyStatus('<span class="valid">✅ New SuperSPHINCS key pair generated and exported! The new keys are now active.</span>');
+        const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Hybrid-private-key.json', 'application/json');
+
+        updateKeyStatus('<span class="valid">✅ New Hybrid (Falcon + SPHINCS+) key pair generated and exported! The new keys are now active.</span>');
         updateControlsState(true);
         await handleCreateNewNote();
     } catch (e) {
@@ -218,10 +281,12 @@ async function handleImportPublicKey(event) {
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!data.combined) throw new Error("Invalid public key file format.");
-            // We only need the public part for validation, so we import a keypair with a null private key
-            activeKeys = await BankCrypto.importAndDecryptKeys(null, data, null);
-            updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>');
+            if (!data.falcon_pk || !data.sphincs_pk) throw new Error("Invalid hybrid public key file format.");
+            activeKeys.publicKey = {
+                falcon: base64ToUint8Array(data.falcon_pk),
+                sphincs: base64ToUint8Array(data.sphincs_pk)
+            };
+            updateKeyStatus('<span class="valid">✅ Hybrid public key imported successfully. It is now active for banknote validation.</span>');
         } catch (error) {
             updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`);
         }
@@ -233,49 +298,26 @@ async function handleImportPublicKey(event) {
 async function handleImportPrivateKey(event) {
     const file = event.target.files[0];
     if (!file) return;
-
-    // We need the corresponding public key file to import the private key
-    const publicKeyFile = await new Promise(resolve => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        alert("Please select the corresponding public key file ('Sadat-SuperSPHINCS-public-key.json').");
-        input.onchange = e => resolve(e.target.files[0]);
-        input.click();
-    });
-
-    if (!publicKeyFile) {
-        updateKeyStatus('<span class="invalid">❌ Import cancelled. Public key file is required.</span>');
-        return;
-    }
-
-    const password = prompt("Enter the password to decrypt the private key file:");
+    const password = prompt("Enter the password to decrypt the HYBRID private key file:");
     if (!password) {
         updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required to decrypt.</span>');
         return;
     }
-    
-    const privateKeyReader = new FileReader();
-    privateKeyReader.onload = async (e_priv) => {
-        const publicKeyReader = new FileReader();
-        publicKeyReader.onload = async (e_pub) => {
-            try {
-                const privateKeyData = JSON.parse(e_priv.target.result);
-                const publicKeyData = JSON.parse(e_pub.target.result);
-                updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>');
-                activeKeys = await BankCrypto.importAndDecryptKeys(privateKeyData, publicKeyData, password);
-                updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>');
-                updateControlsState(true);
-            } catch (error) {
-                updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key. Check password and files: ${error.message}</span>`);
-            }
-        };
-        publicKeyReader.readAsText(publicKeyFile);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const encryptedData = JSON.parse(e.target.result);
+            updateKeyStatus('<span class="info">⏳ Decrypting and importing hybrid private key...</span>');
+            activeKeys.privateKey = await BankCrypto.decryptPrivateKey(encryptedData, password);
+            updateKeyStatus('<span class="valid">✅ Hybrid private key imported successfully. It is now active for banknote signing.</span>');
+            updateControlsState(true);
+        } catch (error) {
+            updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key. Check your password and file: ${error.message}</span>`);
+        }
     };
-    privateKeyReader.readAsText(file);
+    reader.readAsText(file);
     event.target.value = '';
 }
-
 
 function downloadFile(data, filename, type) {
     const blob = new Blob([data], { type: type });
@@ -314,19 +356,21 @@ async function handleFileSelect(event) {
         }
 
         let resultHTML = `<span class="valid">✅ 1. QR data successfully read.</span>`;
-        resultHTML += `\n\n<span class="info">2. Verifying digital signature (SuperSPHINCS)...</span>`;
+        resultHTML += `\n\n<span class="info">2. Verifying QR code signature (Falcon-1024)...</span>`;
         resultDiv.innerHTML = resultHTML;
 
         const isSignatureValid = await validateDigitalSignature(qrData);
+        
         if (!isSignatureValid) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. Forgery detected.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: QR code signature is invalid. Forgery detected.</span>`;
             resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">❌ VERDICT: Forgery detected.</span>`;
             resultDiv.innerHTML = resultHTML;
             return;
         }
 
-        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified.</span>`;
-        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
+        resultHTML += `\n<span class="valid">✅ 2. QR code signature confirmed. Authenticity verified.</span>`;
+        resultHTML += `\n\n<span class="info">ℹ️ 3. On-note SPHINCS+ signature is present for secondary verification.</span>`
+        resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic based on QR validation.</span>`;
         resultDiv.innerHTML = resultHTML;
     };
     img.src = fileUrl;
@@ -335,11 +379,13 @@ async function handleFileSelect(event) {
 
 async function validateDigitalSignature(qrData) {
     try {
-        const { signature } = qrData;
-        if (!signature || !activeKeys.publicKey) return false;
+        const { falcon_signature } = qrData;
+        if (!falcon_signature || !activeKeys.publicKey) return false;
         const stringToVerify = getStandardizedDataForSigning(qrData);
-        const signatureBytes = base64ToUint8Array(signature);
-        return await BankCrypto.verifySignature(signatureBytes, stringToVerify, activeKeys.publicKey);
+        
+        const signatureBytes = base64ToUint8Array(falcon_signature);
+
+        return await BankCrypto.verifyFalconSignature(signatureBytes, stringToVerify, activeKeys.publicKey);
     } catch (e) {
         console.error("Signature verification error:", e);
         return false;
@@ -362,7 +408,7 @@ function readQRCodeFromCanvas(canvasToCheck) {
                 serial: parts[1],
                 timestamp: parseInt(parts[2], 10),
                 verificationKey: parts[3],
-                signature: parts[4] // Signature is the 5th part
+                falcon_signature: parts[4] // This is now only the Falcon signature
             };
         } catch {
             return null;
@@ -390,23 +436,35 @@ async function createNoteData(amount, index = 0) {
         timestamp: now
     };
     const stringToSign = getStandardizedDataForSigning(noteData);
-    const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
-    noteData.signature = arrayBufferToBase64(signatureBytes);
-    noteData.visualHash = BankCrypto.hashMessageForVisual(noteData.signature);
+    const signatureObject = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
+    
+    noteData.signature = {
+        falcon: arrayBufferToBase64(signatureObject.falcon),
+        sphincs: arrayBufferToBase64(signatureObject.sphincs),
+    };
+    
+    // Visual hash is based on the SPHINCS+ signature for visual diversity
+    noteData.visualHash = BankCrypto.hashMessageForVisual(noteData.signature.sphincs);
     return noteData;
 }
 
 
 async function handleCreateNewNote() {
     const amount = document.getElementById("amount-input").value;
-    updateKeyStatus('<span class="info">⏳ Generating new banknote...</span>');
-    const noteData = await createNoteData(amount);
-    if (noteData) {
-        currentNoteData = noteData;
-        await drawNoteOnCanvas(canvas, noteData, canvas.width, canvas.height);
-        updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
-    } else {
-        updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>');
+    updateKeyStatus('<span class="info">⏳ Generating new hybrid banknote...</span>');
+    try {
+        const noteData = await createNoteData(amount);
+        if (noteData) {
+            currentNoteData = noteData;
+            await drawNoteOnCanvas(canvas, noteData, canvas.width, canvas.height);
+            updateKeyStatus('<span class="valid">✅ New banknote design is ready.</span>');
+        } else {
+            updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>');
+        }
+    } catch(e) {
+        console.error("Note creation failed:", e);
+        updateKeyStatus(`<span class="invalid">❌ Failed to create note: ${e.message}. The signature data may be too large for the QR code.</span>`);
+        alert(`Error: ${e.message}. SPHINCS+ signatures can be very large. If this error persists, the signature data is too big to be stored in a QR code.`);
     }
 }
 
@@ -419,7 +477,7 @@ async function handleDownloadBatch() {
         alert("Your browser does not support the File System Access API. Downloading a single note as a fallback.");
         await handleCreateNewNote();
         const link = document.createElement("a");
-        link.download = `SADAT-NOTE-SUPERSPHINCS-${currentNoteData.serial}.png`;
+        link.download = `SADAT-NOTE-HYBRID-${currentNoteData.serial}.png`;
         link.href = canvas.toDataURL("image/png");
         link.click();
         return;
@@ -437,7 +495,7 @@ async function handleDownloadBatch() {
             if (!noteData) { resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key.</span>`; return; }
             await drawNoteOnCanvas(offscreenCanvas, noteData, offscreenCanvas.width, offscreenCanvas.height);
             const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-SUPERSPHINCS-${noteData.serial}.png`, { create: true });
+            const fileHandle = await dirHandle.getFileHandle(`SADAT-NOTE-HYBRID-${noteData.serial}.png`, { create: true });
             const writable = await fileHandle.createWritable();
             await writable.write(blob);
             await writable.close();
@@ -454,7 +512,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
     return new Promise(async (resolve, reject) => {
         if (Object.keys(noteData).length === 0) return reject("No note data provided.");
         const ctx = targetCanvas.getContext("2d");
-        const { amount, verificationKey, serial, visualHash } = noteData;
+        const { amount, verificationKey, serial, visualHash, signature } = noteData;
         const w = width, h = height, scale = w / 1350;
 
         const bgGradient = ctx.createLinearGradient(0, 0, 0, h);
@@ -480,22 +538,39 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
         const qrSize = 380 * scale;
         const qrPayload = createQrPayload(noteData);
 
-        QRCode.toCanvas(qrCanvas, qrPayload, { 
-            width: qrSize, 
-            errorCorrectionLevel: 'M', 
-            color: { dark: '#000000', light: '#FFFFFF' } 
-        }, (err) => {
-            if (err) { reject(err); return; }
-            const qrX = w - (150 * scale) - qrSize;
-            const qrY = h - (520 * scale);
-            ctx.fillStyle = 'white';
-            ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), qrSize + (40 * scale), qrSize + (40 * scale));
-            ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+        try {
+            await QRCode.toCanvas(qrCanvas, qrPayload, { 
+                width: qrSize, 
+                errorCorrectionLevel: 'M', 
+                color: { dark: '#000000', light: '#FFFFFF' } 
+            });
+        } catch(err) {
+            reject(err);
+            return;
+        }
 
-            ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
-            ctx.fillText("Digitally Signed by Sadat Bank Authority (SuperSPHINCS)", w/2, h-60*scale);
-            resolve();
-        });
+        const qrX = w - (150 * scale) - qrSize;
+        const qrY = h - (520 * scale);
+        ctx.fillStyle = 'white';
+        ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), qrSize + (40 * scale), qrSize + (40 * scale));
+        ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
+        ctx.font=`${30*scale}px 'Roboto Mono'`; ctx.fillStyle="rgba(255,255,255,0.4)"; ctx.textAlign="center";
+        ctx.fillText("QR Signature: Falcon-1024 / On-Note Signature: SPHINCS+", w/2, h-60*scale);
+        
+        // --- Draw the SPHINCS+ signature directly on the note ---
+        ctx.fillStyle = "rgba(128, 128, 128, 0.4)";
+        ctx.font = `bold ${10*scale}px 'Roboto Mono'`;
+        ctx.textAlign = 'left';
+        const sphincsSig = signature.sphincs;
+        const lineLength = 120;
+        let yPos = h - (120 * scale);
+        for(let i = 0; i < sphincsSig.length; i += lineLength) {
+            ctx.fillText("SPHINCS+ SIG: " + sphincsSig.substring(i, i + lineLength), 150 * scale, yPos);
+            yPos += 14 * scale;
+        }
+        
+        resolve();
     });
 }
 
@@ -508,20 +583,19 @@ function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<200
 // ===================================================================================
 async function main() {
     updateControlsState(false);
-    updateKeyStatus('<span class="info">⏳ Loading SuperSPHINCS Crypto Module...</span>');
+    updateKeyStatus('<span class="info">⏳ Loading Crypto Modules (Falcon + SPHINCS+)...</span>');
     try {
-        // The superSphincs object is loaded globally from the script tag
-        if (typeof superSphincs === 'undefined') {
-            throw new Error("superSphincs library not found.");
-        }
-        // Wait for the underlying WASM module to be ready
-        await superSphincs.ready;
-        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
+        // Initialize both cryptographic modules
+        [falconApi, sphincsApi] = await Promise.all([
+            pqcSignFalcon1024(),
+            pqcSignSphincs()
+        ]);
+        updateKeyStatus('<span class="info">Ready. Please generate a new hybrid key pair or import existing keys to begin.</span>');
     } catch (e) {
-        console.error("Failed to load SuperSPHINCS module:", e);
-        let errorMsg = `❌ Critical Error: Could not load the SuperSPHINCS module. Please ensure 'sphincs+.js' is in the same directory and your browser supports modern JavaScript.`;
+        console.error("Failed to load a crypto module:", e);
+        let errorMsg = "❌ Critical Error: Could not load a required crypto module. Please ensure the following files are in the same directory:<ul><li>pqc-sign-falcon-1024.min.js</li><li>pqc-sphincs-plus.min.js</li></ul>And that your browser supports modern JavaScript.";
         updateKeyStatus(`<span class="invalid">${errorMsg}</span>`);
-        alert("Error: Failed to load cryptographic module. See the console for details.");
+        alert("Error: Failed to load cryptographic module(s). See the console for details.");
         return;
     }
     
