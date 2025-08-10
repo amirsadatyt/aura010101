@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تولیدکننده اسکناس دیجیتال</title>
+    <title>Digital Banknote Creator</title>
     <style>
         @font-face {
             font-family: 'Vazir';
@@ -20,6 +20,7 @@
             background-color: #f0f2f5;
             margin: 0;
             padding: 20px;
+            color: #2c3e50;
         }
 
         .container {
@@ -29,6 +30,17 @@
             flex-direction: column;
             align-items: center;
             gap: 20px;
+        }
+
+        h1 {
+            color: #34495e;
+            font-size: 2.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
         }
 
         .banknote-container {
@@ -218,13 +230,13 @@
         }
         
         .canvas-container {
-            display: none; /* Hide the canvas element from the page */
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>تولیدکننده اسکناس دیجیتال</h1>
+        <h1>Digital Banknote Creator</h1>
 
         <div class="banknote-container" id="banknote-container">
             <div class="banknote-details">
@@ -245,32 +257,31 @@
 
         <div class="controls">
             <div class="input-group">
-                <label for="inputAmount">مبلغ (حداکثر 100):
+                <label for="inputAmount">Amount (Max 100):
                     <input type="number" id="inputAmount" value="100" min="1" max="100">
                 </label>
-                <label for="inputCount">تعداد اسکناس برای تولید:
+                <label for="inputCount">Number of Banknotes:
                     <input type="number" id="inputCount" value="1" min="1">
                 </label>
             </div>
             
             <div class="buttons">
-                <button id="redesignBtn">تغییر ظاهر</button>
-                <button id="downloadBtn">دانلود اسکناس</button>
-                <button id="generateAllBtn">تولید دسته‌ای</button>
+                <button id="redesignBtn">Redesign</button>
+                <button id="downloadBtn">Download</button>
+                <button id="generateAllBtn">Generate All</button>
             </div>
         </div>
 
         <div class="validation-section">
-            <h3>اعتبارسنجی اسکناس</h3>
+            <h3>Banknote Validation</h3>
             <div class="input-group">
-                <label for="validationKey">کلید تأیید را وارد کنید:
-                    <input type="text" id="validationKey" placeholder="کلید ۸ رقمی را وارد کنید">
+                <label for="validationKey">Enter Validation Key:
+                    <input type="text" id="validationKey" placeholder="Enter 8-digit key">
                 </label>
-                <button id="validateBtn">تأیید</button>
+                <button id="validateBtn">Validate</button>
             </div>
             <div class="validation-result" id="validationResult"></div>
         </div>
-
     </div>
     
     <div class="canvas-container">
@@ -339,7 +350,6 @@
             jan2.innerText = newJan2;
             jan3.innerText = newJan3;
             
-            // Store the valid key for validation
             validKeys[newKey] = true;
         }
 
@@ -348,11 +358,9 @@
             const ctx = canvas.getContext('2d');
             const banknoteRect = banknoteContainer.getBoundingClientRect();
 
-            // Draw the background color
             ctx.fillStyle = window.getComputedStyle(banknoteContainer).backgroundColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw the banknote elements
             ctx.font = "bold 40px Vazir";
             ctx.textAlign = "right";
             ctx.fillStyle = window.getComputedStyle(amountDisplay).color;
@@ -366,14 +374,12 @@
             ctx.fillStyle = window.getComputedStyle(keyDisplay).color;
             ctx.fillText(keyDisplay.innerText, 300, 380);
 
-            // Draw Jan Codes
             ctx.font = "bold 24px Vazir";
             ctx.fillStyle = window.getComputedStyle(jan1).color;
             ctx.fillText(jan1.innerText, 300, 180);
             ctx.fillText(jan2.innerText, 300, 220);
             ctx.fillText(jan3.innerText, 300, 260);
 
-            // Download the canvas as an image
             const link = document.createElement('a');
             link.download = `banknote-${serialDisplay.innerText}.png`;
             link.href = canvas.toDataURL('image/png');
@@ -395,10 +401,10 @@
             validationResult.style.display = 'block';
             if (validKeys[inputKey]) {
                 validationResult.className = 'validation-result valid';
-                validationResult.innerText = '✅ این اسکناس معتبر است.';
+                validationResult.innerText = '✅ This banknote is valid.';
             } else {
                 validationResult.className = 'validation-result invalid';
-                validationResult.innerText = '❌ این اسکناس نامعتبر است.';
+                validationResult.innerText = '❌ This banknote is invalid.';
             }
         }
         
@@ -420,7 +426,6 @@
             amountDisplay.innerText = value;
         });
 
-        // Initial setup
         updateBanknote();
     </script>
 </body>
