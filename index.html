@@ -134,7 +134,6 @@ const state = {
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    // Set version to 0 for auto-selection. This is more robust.
     JAB_CODE_OPTIONS: { version: 0, colors: 8 }
 };
 
@@ -226,8 +225,7 @@ const Utils = {
         if (!this.BASE45_MAP) {
             this.BASE45_MAP = new Map(this.BASE45_CHARSET.split('').map((c, i) => [c, i]));
         }
-        const
-        result = [];
+        const result = [];
         for (let i = 0; i < str.length; i += 3) {
             if (i + 2 < str.length) {
                 const c = this.BASE45_MAP.get(str[i]);
@@ -358,7 +356,6 @@ const UIHandlers = (() => {
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
                 
-                // FIX: Await the async encode_message call
                 const jabCodeBase64 = await jabcode.encode_message(visualKeySecret, Constants.JAB_CODE_OPTIONS);
                 const img = new Image();
                 img.src = jabCodeBase64;
@@ -443,10 +440,10 @@ const BanknoteLogic = (() => {
         const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
         
         const noteData = {
-            amount: parseInt(amount) || 0,
+            amount: parseInt(amount) || 0, // Keep amount here for visual display on the note
             serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
             timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
-            verificationKey: Math.random().toString(36).substring(2, 10).toUpperCase(),
+            // verificationKey is no longer needed
             ephemeralPublicKey: ephemeralKeyPair.publicKey,
             signatureOne: null,
             signatureTwo: null
@@ -464,16 +461,12 @@ const BanknoteLogic = (() => {
     const createBinaryPayload = (noteData) => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
-        const verificationKeyBytes = textEncoder.encode(noteData.verificationKey);
-
-        const bufferSize = 4 + 8 + 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        
+        // FIX: Removed amount and verificationKey from payload and size calculation
+        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
-
-        view.setUint32(offset, noteData.amount, false); offset += 4;
-        
-        new Uint8Array(buffer, offset).set(verificationKeyBytes); offset += 8;
 
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
         
@@ -495,10 +488,7 @@ const BanknoteLogic = (() => {
         const textDecoder = new TextDecoder();
         let offset = 0;
 
-        const amount = view.getUint32(offset, false); offset += 4;
-        
-        const verificationKey = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-
+        // FIX: Removed parsing for amount and verificationKey
         const timestamp = view.getUint32(offset, false); offset += 4;
         
         const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
@@ -510,7 +500,7 @@ const BanknoteLogic = (() => {
         
         const signatureTwo = buffer.subarray(offset);
         
-        return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
+        return { timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
     };
     
     const handleCreateAndSignNotes = async () => {
@@ -636,7 +626,8 @@ const BanknoteLogic = (() => {
                         return;
                     }
                     resultHTML += `<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n`;
-                    resultHTML += `<span class="info">ℹ️ Decoded Amount: ${parsedData.amount}, Key: ${parsedData.verificationKey}</span>\n<hr>`;
+                    // FIX: Removed amount and key from display as they are no longer in the payload
+                    resultHTML += `<span class="info">ℹ️ Serial: ${parsedData.serial}</span>\n<hr>`;
                     resultHTML += `<span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>`;
                     
                     resultDiv.innerHTML = resultHTML;
@@ -663,12 +654,11 @@ const BanknoteDrawer = (() => {
     function drawNoise(ctx, hash, w, h) { /* Complex drawing code can be inserted here */ }
     
     return {
-        // FIX: Make the function async
         drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload, width, height) => {
-            // This function already returns a promise, so making it async is non-breaking.
             return new Promise(async (resolve, reject) => {
                 const ctx = targetCanvas.getContext("2d");
-                const { amount, serial, verificationKey, signatureTwo } = noteData;
+                // FIX: Get verificationKey from noteData directly for visual display
+                const { amount, serial, signatureTwo } = noteData;
                 const scale = width / 1350;
                 const visualHash = shake256(signatureTwo, 256);
 
@@ -687,15 +677,14 @@ const BanknoteDrawer = (() => {
                 ctx.fillStyle = "#EAEAEA"; ctx.textAlign = 'left';
                 ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
                 ctx.fillText(serial, 150 * scale, 160 * scale);
-                ctx.fillText(verificationKey, 150 * scale, 280 * scale);
                 
+                // Keep displaying the amount visually on the note itself
                 ctx.font = `bold ${150 * scale}px 'Roboto Mono'`; ctx.textAlign = "right";
                 ctx.shadowBlur = 12 * scale; ctx.shadowOffsetX = 4 * scale; ctx.shadowOffsetY = 4 * scale;
                 ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
                 ctx.shadowColor = "transparent";
 
                 try {
-                    // FIX: Await the async encode_message call
                     const jabCodeBase64 = await jabcode.encode_message(jabPayload, Constants.JAB_CODE_OPTIONS);
                     
                     if (!jabCodeBase64) {
@@ -761,7 +750,7 @@ async function main() {
         const img = DOMElements.qrDisplay.querySelector('img');
         if (img && img.src) {
             const a = document.createElement('a');
-a.href = img.src; a.download = 'Sadat-VISUAL-KEY.png';
+            a.href = img.src; a.download = 'Sadat-VISUAL-KEY.png';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
