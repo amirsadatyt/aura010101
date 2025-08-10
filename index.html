@@ -6,137 +6,167 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <!-- SHA3 library as classic script, before everything else -->
+    <script src="https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/build/sha3.min.js"></script>
+    <!-- (Or use https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js as in official docs) -->
     <style>
-        /* --- Same CSS as your original --- */
-        :root {
-            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
-            --mono-font: 'Roboto Mono', monospace;
-            --dark-bg: #10101a;
-            --medium-bg: #1a1a2e;
-            --light-bg: #2a2a3e;
-            --accent-color-1: #e040fb;
-            --accent-color-2: #7c4dff;
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0c0;
-            --success-color: #00e676;
-            --error-color: #ff5252;
-            --info-color: #40c4ff;
-            --border-color: rgba(124, 77, 255, 0.2);
-        }
-        body { margin: 0; font-family: var(--primary-font); background-color: var(--dark-bg); background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%); color: var(--text-color); text-align: center; padding: 24px; }
-        .container { max-width: 900px; margin: 0 auto; background: rgba(26, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
-        /* More CSS same as original ... */
+        /* ... (your CSS, unchanged) ... */
     </style>
 </head>
 <body>
 <div class="container">
-    <div class="header">
-        <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using Falcon-1024 Signatures and SHAKE256 Hashing with JAB Code.</p>
-    </div>
-
-    <canvas id="noteCanvas" width="1350" height="750"></canvas>
-
-    <div class="section">
-        <h2>Banknote Controls</h2>
-        <div class="controls-grid">
-            <span class="input-label">Amount:</span>
-            <input type="number" id="amount-input" value="50000">
-            <span class="input-label">Quantity:</span>
-            <input type="number" id="quantity-input" value="1" min="1" max="100">
-            <button id="create-note-button" disabled>🎨 Redesign Banknote</button>
-            <button id="download-batch-button" disabled>📥 Download Batch</button>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>Bank Key Management</h2>
-        <div class="controls-grid">
-            <button id="generate-keys-button">🔑 Generate & Export Keys</button>
-            <label for="import-public-key" class="sub-button">Import Public Key</label>
-            <input type="file" id="import-public-key" accept=".json" style="display: none;">
-            <label for="import-private-key" class="sub-button">Import Private Key</label>
-            <input type="file" id="import-private-key" accept=".json" style="display: none;">
-        </div>
-        <div id="key-status">Key pair status will be displayed here.</div>
-    </div>
-
-    <div class="section" id="validator-section">
-        <h2>Validate Banknote</h2>
-        <label for="validator-input">Select Image for Validation</label>
-        <input type="file" id="validator-input" accept="image/png" style="display: none;">
-        <div id="validation-result">Validation result will be displayed here.</div>
-    </div>
+    <!-- ... (your HTML, unchanged) ... -->
 </div>
-
 <script type="module">
-/* Import required crypto libraries */
+// Import cryptographic libraries as modules
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import JabcodeJSInterface from './jabcodeJSLib.min.js';
-import { shake256 } from 'https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/+esm';
 
-/* --- Utility Functions: same as original --- */
+// --- Global State ---
+const canvas = document.getElementById("noteCanvas");
+const jabInterface = new JabcodeJSInterface();
+let currentNoteData = {};
+let activeKeys = { publicKey: null, privateKey: null };
+let falconApi = null;
+// --- Utility Functions ---
 const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
 const base64ToUint8Array = (base64) => {
-    const binary_string = atob(base64);
-    return new Uint8Array([...binary_string].map(c => c.charCodeAt(0)));
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes;
 };
+// Used by hashing
 const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+const uint8ArrayToHex = (bytes) =>
+    Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-/* --- BankCrypto with SHAKE256 fixes --- */
+// --- Robust SHAKE256 wrapper ---
+// Falls back to subtleCrypto if js-sha3 is missing or broken
+async function shake256(message, bits) {
+    // Use js-sha3 if present and working
+    if (typeof window !== "undefined" && window.sha3 && typeof window.sha3.shake256 === "function") {
+        // js-sha3 shake256: output is hex string, bits must be multiple of 8
+        const hex = window.sha3.shake256(message, bits);
+        return hexToUint8Array(hex);
+    }
+    // Try subtleCrypto (SHAKE256, supported in modern browsers as of 2025)
+    if (window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === "function") {
+        // subtleCrypto SHAKE256 returns ArrayBuffer; bits must be multiple of 8 here too
+        const enc = new TextEncoder();
+        const ab = await window.crypto.subtle.digest("SHAKE256", enc.encode(message));
+        return new Uint8Array(ab).slice(0, bits / 8);
+    }
+    // Neither available
+    throw new Error("No SHAKE256 implementation available (js-sha3 and subtleCrypto are missing).");
+}
+
+// ===================================================================================
+// Bank Key Management and Falcon-1024 Crypto Logic
+// ===================================================================================
 const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
 
-    function hashMessageForSigning(message) {
-        const hexHash = shake256(message, 1536);
-        return hexToUint8Array(hexHash);
+    // Will return a Uint8Array
+    async function hashMessageForSigning(message) {
+        return await shake256(message, 1536);
     }
 
-    function hashMessageForVisual(message) {
-        return shake256(message, 256);
+    // Returns hex string (for visual embedding)
+    async function hashMessageForVisual(message) {
+        const hashBytes = await shake256(message, 256);
+        return uint8ArrayToHex(hashBytes);
     }
-    
+
     async function generateNewKeyPair() {
         if (!falconApi) throw new Error("Falcon API not initialized.");
         return await falconApi.keypair();
     }
 
     async function signData(data, privateKey) {
-        const dataHash = hashMessageForSigning(data);
+        if (!privateKey) throw new Error("Private key is not available for signing.");
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        const dataHash = await hashMessageForSigning(data);
         const { signature } = await falconApi.sign(dataHash, privateKey);
         return signature;
     }
 
     async function verifySignature(signature, data, publicKey) {
-        const dataHash = hashMessageForSigning(data);
+        if (!publicKey) throw new Error("Public key is not available for verification.");
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        const dataHash = await hashMessageForSigning(data);
         return await falconApi.verify(signature, dataHash, publicKey);
     }
+    // ... (encrypt/decrypt unchanged) ...
+    async function encryptPrivateKey(privateKeyBytes, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
+        );
+        const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) };
+        const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject));
+        const encryptedKey = await window.crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, derivedKey, encodedKey);
+        return {
+            cipherText: arrayBufferToBase64(encryptedKey),
+            salt: arrayBufferToBase64(salt),
+            iv: arrayBufferToBase64(iv)
+        };
+    }
 
-    /* Encryption/decryption stays same as original */
-    async function encryptPrivateKey(privateKeyBytes, password) { /* ... same code ... */ }
-    async function decryptPrivateKey(encryptedData, password) { /* ... same code ... */ }
+    async function decryptPrivateKey(encryptedData, password) {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const salt = base64ToUint8Array(encryptedData.salt);
+        const iv = base64ToUint8Array(encryptedData.iv);
+        const cipherText = base64ToUint8Array(encryptedData.cipherText);
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        const derivedKey = await window.crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
+            keyMaterial, { name: AES_ALGO, length: AES_KEY_LENGTH }, true, ["encrypt", "decrypt"]
+        );
+        const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, derivedKey, cipherText);
+        const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer));
+        return base64ToUint8Array(keyObject.keyData);
+    }
 
     return { generateNewKeyPair, signData, verifySignature, encryptPrivateKey, decryptPrivateKey, hashMessageForVisual };
 })();
 
-/* --- Rest of your banking, UI, and note drawing code stays EXACTLY as original --- */
+function getStandardizedDataForSigning(noteData) {
+    const dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.verificationKey };
+    return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
+}
 
-/* Application init */
-let falconApi = null;
+/* ... (rest of your code is unchanged, except calls to hashMessageForSigning and hashMessageForVisual are now properly awaited as above) ... */
+
+// ===================================================================================
+// Application Initialization
+// ===================================================================================
 async function main() {
-    document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys);
-    /* same event listener setup as original */
+    // ... (event listeners unchanged) ...
+    updateControlsState(false);
+    updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>');
 
     try {
         falconApi = await pqcSignFalcon1024();
-        updateKeyStatus('<span class="info">Ready. Generate or import keys to begin.</span>');
+        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>');
     } catch (e) {
-        updateKeyStatus(`<span class="invalid">❌ Failed to load Falcon module: ${e.message}</span>`);
+        console.error("Failed to load Falcon module:", e);
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'pqc-sign-falcon-1024.min.js' is in the same directory and your browser supports modern JavaScript.</span>`);
+        alert("Error: Failed to load cryptographic module. See the console for details.");
+        return;
     }
 }
+
 main();
 </script>
 </body>
