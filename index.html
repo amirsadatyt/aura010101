@@ -82,37 +82,6 @@
             justify-content: space-between;
         }
 
-        .details-bottom {
-            width: 100%;
-            display: flex;
-            justify-content: center;
-        }
-        
-        .jan-codes {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .jan-code {
-            font-size: 1.5rem;
-            letter-spacing: 2px;
-            font-weight: bold;
-            color: rgba(0,0,0,0.1);
-            transition: color 0.5s ease;
-        }
-
-        .amount {
-            font-size: 2.5rem;
-            font-weight: bold;
-            transition: color 0.5s ease;
-            color: #3498db;
-        }
-
         .serial-key-group {
             display: flex;
             flex-direction: column;
@@ -124,7 +93,29 @@
         
         .serial { color: #e74c3c; }
         .key { color: #f39c12; }
+        .amount {
+            font-size: 2.5rem;
+            font-weight: bold;
+            transition: color 0.5s ease;
+            color: #3498db;
+        }
         
+        .barcode-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .barcode {
+            width: 100px;
+            height: 50px;
+        }
+
         .controls {
             width: 100%;
             max-width: 600px;
@@ -256,8 +247,11 @@
                     </div>
                     <span class="amount" id="amount-display">100</span>
                 </div>
-                <div class="jan-codes">
-                    <span class="jan-code" id="jan1">1234567890128</span>
+                <div class="barcode-container">
+                    <img id="barcode-1" class="barcode">
+                    <img id="barcode-2" class="barcode">
+                    <img id="barcode-3" class="barcode">
+                    <img id="barcode-4" class="barcode">
                 </div>
             </div>
         </div>
@@ -295,14 +289,18 @@
         <canvas id="banknoteCanvas" width="600" height="400"></canvas>
     </div>
 
-    <script src="jan-generator.js"></script>
-    <script src="jan-validator.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script>
         const banknoteContainer = document.getElementById('banknote-container');
         const amountDisplay = document.getElementById('amount-display');
         const serialDisplay = document.getElementById('serial');
         const keyDisplay = document.getElementById('key');
-        const jan1 = document.getElementById('jan1');
+        const barcodes = [
+            document.getElementById('barcode-1'),
+            document.getElementById('barcode-2'),
+            document.getElementById('barcode-3'),
+            document.getElementById('barcode-4')
+        ];
         const redesignBtn = document.getElementById('redesignBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const generateAllBtn = document.getElementById('generateAllBtn');
@@ -314,7 +312,6 @@
         
         let validKeys = {};
 
-        // A simple TOTP-like implementation for demonstration
         function generateTimeBasedCode(length) {
             const time = Math.floor(Date.now() / 30000); // 30-second window
             let code = (time * 123456789).toString().substring(0, length);
@@ -337,22 +334,27 @@
             const newBgColor = getRandomColor();
             const newSerialColor = getRandomColor();
             const newKeyColor = getRandomColor();
-            const newJanColor = getRandomColor();
+            const newBarcodeColor = getRandomColor();
 
             banknoteContainer.style.backgroundColor = newBgColor;
             serialDisplay.style.color = newSerialColor;
             keyDisplay.style.color = newKeyColor;
-            jan1.style.color = newJanColor;
-
+            
             const newSerial = generateTimeBasedCode(8);
             const newKey = generateTimeBasedCode(8);
             
-            // Assuming the Jan Code library provides this function
-            const newJan = typeof generateJanCode === 'function' ? generateJanCode() : '1234567890128';
-
             serialDisplay.innerText = newSerial;
             keyDisplay.innerText = newKey;
-            jan1.innerText = newJan;
+            
+            barcodes.forEach((barcode) => {
+                JsBarcode(barcode, newSerial, {
+                    format: "CODE128",
+                    width: 1,
+                    height: 50,
+                    displayValue: false,
+                    lineColor: newBarcodeColor
+                });
+            });
             
             validKeys[newKey] = true;
         }
@@ -360,16 +362,24 @@
         function createAndDownloadBanknote() {
             const canvas = document.getElementById('banknoteCanvas');
             const ctx = canvas.getContext('2d');
-            const banknoteRect = banknoteContainer.getBoundingClientRect();
+            const barcodeElements = [
+                document.getElementById('barcode-1'),
+                document.getElementById('barcode-2'),
+                document.getElementById('barcode-3'),
+                document.getElementById('barcode-4')
+            ];
 
+            // Draw banknote background
             ctx.fillStyle = window.getComputedStyle(banknoteContainer).backgroundColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Draw amount
             ctx.font = "bold 40px Vazir";
             ctx.textAlign = "right";
             ctx.fillStyle = window.getComputedStyle(amountDisplay).color;
             ctx.fillText(amountDisplay.innerText, 580, 60);
 
+            // Draw serial and key
             ctx.font = "bold 30px Vazir";
             ctx.textAlign = "left";
             ctx.fillStyle = window.getComputedStyle(serialDisplay).color;
@@ -377,15 +387,29 @@
             ctx.fillStyle = window.getComputedStyle(keyDisplay).color;
             ctx.fillText(keyDisplay.innerText, 20, 100);
 
-            ctx.font = "bold 24px Vazir";
-            ctx.textAlign = "center";
-            ctx.fillStyle = window.getComputedStyle(jan1).color;
-            ctx.fillText(jan1.innerText, 300, 200);
+            // Draw all four barcodes to canvas
+            const barcodePositions = [
+                { x: 100, y: 140 }, { x: 400, y: 140 },
+                { x: 100, y: 220 }, { x: 400, y: 220 }
+            ];
 
-            const link = document.createElement('a');
-            link.download = `banknote-${serialDisplay.innerText}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
+            barcodeElements.forEach((barcode, index) => {
+                if (barcode && barcode.src) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, barcodePositions[index].x, barcodePositions[index].y, 100, 50);
+                    };
+                    img.src = barcode.src;
+                }
+            });
+
+            // Delay download to ensure images are loaded
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.download = `banknote-${serialDisplay.innerText}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }, 500); 
         }
 
         function generateAllBanknotes() {
