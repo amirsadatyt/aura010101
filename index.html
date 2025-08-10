@@ -133,7 +133,8 @@ const state = {
 
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
-    EPOCH: new Date('2024-01-01T00:00:00Z').getTime()
+    EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
+    JAB_CODE_OPTIONS: { version: 20, colors: 8 }
 };
 
 const DOMElements = {
@@ -160,6 +161,9 @@ const DOMElements = {
 };
 
 const Utils = {
+    BASE45_CHARSET: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:",
+    BASE45_MAP: null,
+
     arrayBufferToBase64: (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))),
     base64ToUint8Array: (base64) => {
         const binaryString = atob(base64);
@@ -186,7 +190,7 @@ const Utils = {
     },
     binaryToString: (binaryPayload) => {
         let str = '';
-        binaryPayload.forEach(b => { str += String.fromCharCode(b); });
+        new Uint8Array(binaryPayload).forEach(b => { str += String.fromCharCode(b); });
         return str;
     },
     stringToBinary: (str) => {
@@ -195,6 +199,52 @@ const Utils = {
             binaryPayload[i] = str.charCodeAt(i);
         }
         return binaryPayload;
+    },
+    
+    encodeBase45: function(uint8Array) {
+        let result = '';
+        for (let i = 0; i < uint8Array.length; i += 2) {
+            if (i + 1 < uint8Array.length) {
+                const x = (uint8Array[i] << 8) + uint8Array[i + 1];
+                const e = Math.floor(x / (45 * 45));
+                const rem = x % (45 * 45);
+                const d = Math.floor(rem / 45);
+                const c = rem % 45;
+                result += this.BASE45_CHARSET[c] + this.BASE45_CHARSET[d] + this.BASE45_CHARSET[e];
+            } else {
+                const x = uint8Array[i];
+                const d = Math.floor(x / 45);
+                const c = x % 45;
+                result += this.BASE45_CHARSET[c] + this.BASE45_CHARSET[d];
+            }
+        }
+        return result;
+    },
+
+    decodeBase45: function(str) {
+        if (!this.BASE45_MAP) {
+            this.BASE45_MAP = new Map(this.BASE45_CHARSET.split('').map((c, i) => [c, i]));
+        }
+        const
+        result = [];
+        for (let i = 0; i < str.length; i += 3) {
+            if (i + 2 < str.length) {
+                const c = this.BASE45_MAP.get(str[i]);
+                const d = this.BASE45_MAP.get(str[i + 1]);
+                const e = this.BASE45_MAP.get(str[i + 2]);
+                if (c === undefined || d === undefined || e === undefined) throw new Error("Invalid Base45 character");
+                const n = c + d * 45 + e * 45 * 45;
+                result.push(n >> 8, n & 0xFF);
+            } else { // Must be 2 chars
+                if (i + 1 >= str.length) throw new Error("Invalid Base45 input length");
+                const c = this.BASE45_MAP.get(str[i]);
+                const d = this.BASE45_MAP.get(str[i + 1]);
+                if (c === undefined || d === undefined) throw new Error("Invalid Base45 character");
+                const n = c + d * 45;
+                result.push(n);
+            }
+        }
+        return new Uint8Array(result);
     }
 };
 
@@ -306,7 +356,8 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
+                // Use the same JAB Code options for the visual key for consistency
+                const jabCodeBase64 = jabcode.encode_message(visualKeySecret, Constants.JAB_CODE_OPTIONS);
                 const img = new Image();
                 img.src = jabCodeBase64;
                 DOMElements.qrDisplay.appendChild(img);
@@ -465,7 +516,10 @@ const BanknoteLogic = (() => {
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const jabPayload = createBinaryPayload(noteData);
+            const binaryPayloadString = createBinaryPayload(noteData);
+            const binaryBuffer = Utils.stringToBinary(binaryPayloadString);
+            const jabPayload = Utils.encodeBase45(binaryBuffer);
+
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
@@ -484,7 +538,10 @@ const BanknoteLogic = (() => {
             const notesToDownload = [];
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                const jabPayload = createBinaryPayload(noteData);
+                const binaryPayloadString = createBinaryPayload(noteData);
+                const binaryBuffer = Utils.stringToBinary(binaryPayloadString);
+                const jabPayload = Utils.encodeBase45(binaryBuffer);
+
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
@@ -558,7 +615,9 @@ const BanknoteLogic = (() => {
                     let resultHTML = '<span class="valid">✅ JAB Code Found. Verifying signatures...</span>\n';
                     resultDiv.innerHTML = resultHTML;
 
-                    const parsedData = parseBinaryPayload(decodedText);
+                    const decodedBuffer = Utils.decodeBase45(decodedText);
+                    const binaryString = Utils.binaryToString(decodedBuffer);
+                    const parsedData = parseBinaryPayload(binaryString);
                     
                     const dataForSigOne = getStandardizedDataForSigning(parsedData);
                     const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
@@ -582,7 +641,7 @@ const BanknoteLogic = (() => {
                     
                     resultDiv.innerHTML = resultHTML;
                 } catch (e) {
-                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt.`, 'error');
+                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt or not valid Base45.`, 'error');
                     console.error(e);
                 } finally {
                     event.target.value = '';
@@ -634,7 +693,7 @@ const BanknoteDrawer = (() => {
                 ctx.shadowColor = "transparent";
 
                 try {
-                    const jabCodeBase64 = jabcode.encode_message(jabPayload);
+                    const jabCodeBase64 = jabcode.encode_message(jabPayload, Constants.JAB_CODE_OPTIONS);
                     const img = new Image();
                     img.onload = () => {
                         const qrX = width - (150 * scale) - (380 * scale);
@@ -647,7 +706,10 @@ const BanknoteDrawer = (() => {
                         ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
                         resolve();
                     };
-                    img.onerror = (err) => reject(new Error("Failed to load generated JAB Code image."));
+                    img.onerror = () => {
+                        console.error("JAB Code image failed to load. The Base45 payload may be invalid or the library options incorrect.");
+                        reject(new Error("Failed to load the generated JAB Code image onto the canvas."));
+                    };
                     img.src = jabCodeBase64;
                 } catch (err) {
                      console.error("JAB Code Generation Error:", err);
@@ -657,7 +719,7 @@ const BanknoteDrawer = (() => {
                      const centerX = width - (150 * scale) - (190 * scale);
                      const centerY = height - (330 * scale);
                      ctx.fillText("JAB CODE ERROR", centerX, centerY);
-                     reject(err);
+                     reject(new Error(`Error during JAB code generation: ${err.message}`));
                 }
             });
         }
