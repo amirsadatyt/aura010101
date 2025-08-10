@@ -7,10 +7,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
-    <script src="./qrcode.min.js"></script>
-    <script src="./jsQR.js"></script>
-    <script src="./jabcodeJSLib.min.js"></script>
-    <script src="./pako.min.js"></script>
+    <script src="./qrcode.min.js" defer></script>
+    <script src="./jsQR.js" defer></script>
+    <script src="./jabcodeJSLib.min.js" defer></script>
+    <script src="./pako.min.js" defer></script>
+    <script src="./pqc-sign-falcon-1024.min.js" defer></script>
+    <script src="./js-sha3.min.js" defer></script>
     
     <style>
         :root {
@@ -86,21 +88,26 @@
     </div>
 
     <div class="section">
-        <h2><span class="pill">Step 3</span> Generate Banknote</h2>
+        <h2><span class="pill">Step 3</span> Generate Banknote & Key Tab</h2>
         <div class="controls-grid">
             <span class="input-label">Amount:</span>
             <input type="number" id="amount-input" value="50000">
-            <button id="create-note-button" disabled>🎨 Generate Banknote</button>
-            <button id="download-note-button" disabled>📥 Download Banknote</button>
+            <button id="create-note-button" disabled>🎨 Generate New Pair</button>
         </div>
         <div id="banknote-status" class="status-box"></div>
         <canvas id="noteCanvas"></canvas>
+        <canvas id="keyTabCanvas"></canvas>
+        <button id="download-all-button" disabled>📥 Download Pair</button>
     </div>
 
     <div class="section" id="validator-section">
-        <h2><span class="pill">Step 4</span> Validate Banknote</h2>
-        <label for="validator-input" class="button">Select Banknote Image for Validation</label>
-        <input type="file" id="validator-input" accept="image/png" style="display: none;">
+        <h2><span class="pill">Step 4</span> Validate (Two-Step Scan)</h2>
+        <div class="controls-grid">
+            <label for="validator-banknote-input" class="button">1. Scan Banknote</label>
+            <input type="file" id="validator-banknote-input" accept="image/png" style="display: none;">
+            <label for="validator-key-tab-input" id="validator-key-tab-label" class="button sub-button" disabled>2. Scan Key Tab</label>
+            <input type="file" id="validator-key-tab-input" accept="image/png" style="display: none;">
+        </div>
         <div id="validation-result" class="status-box"></div>
     </div>
 </div>
@@ -114,17 +121,16 @@
   </div>
 </div>
 
-<script type="module">
-import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-
-const jabcode = new JabcodeJSInterface();
+<script>
+// This script now runs after all library scripts are loaded and parsed.
+document.addEventListener('DOMContentLoaded', () => {
 
 const state = {
     falconApi: null,
     masterPublicKey: null,
     masterPrivateKey: null,
-    puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null }
+    puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null },
+    validationDataPart1: null
 };
 
 const Constants = {
@@ -143,10 +149,13 @@ const DOMElements = {
     keyReconstructionStatus: document.getElementById('key-reconstruction-status'),
     amountInput: document.getElementById('amount-input'),
     createNoteButton: document.getElementById('create-note-button'),
-    downloadNoteButton: document.getElementById('download-note-button'),
+    downloadAllButton: document.getElementById('download-all-button'),
     noteCanvas: document.getElementById('noteCanvas'),
+    keyTabCanvas: document.getElementById('keyTabCanvas'),
     banknoteStatus: document.getElementById('banknote-status'),
-    validatorInput: document.getElementById('validator-input'),
+    validatorBanknoteInput: document.getElementById('validator-banknote-input'),
+    validatorKeyTabInput: document.getElementById('validator-key-tab-input'),
+    validatorKeyTabLabel: document.getElementById('validator-key-tab-label'),
     validationResult: document.getElementById('validation-result'),
     qrModal: document.getElementById('qr-modal'),
     qrDisplay: document.getElementById('qr-display'),
@@ -185,7 +194,6 @@ const Utils = {
 };
 
 const BankCrypto = (() => {
-    // ... (This section has no changes)
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_KEY_LENGTH = 32;
@@ -196,7 +204,7 @@ const BankCrypto = (() => {
         return await crypto.subtle.deriveKey({name: "PBKDF2",salt: salt,iterations: PBKDF2_ITERATIONS,hash: "SHA-256"},importedKey,{ name: AES_ALGO, length: PBKDF2_KEY_LENGTH * 8 },false,["encrypt", "decrypt"]);
     }
     
-    function hashMessageForSigning(message) { return Utils.hexToUint8Array(shake256(message, 1536)); }
+    function hashMessageForSigning(message) { return Utils.hexToUint8Array(sha3_256(message)); }
 
     return {
         async generateNewKeyPair() {
@@ -257,7 +265,6 @@ const BankCrypto = (() => {
 })();
 
 const UIHandlers = (() => {
-    // ... (This section has no changes)
     function updatePuzzleStatus() {
         const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
         let statusHtml = '';
@@ -412,19 +419,14 @@ const BanknoteLogic = (() => {
     const createBinaryPayloads = (noteData) => {
         const textEncoder = new TextEncoder();
         
-        let payload1Bytes, payload2Bytes;
-        let finalPayload1, finalPayload2;
-        let structureFlag = 'S0'; // S0 = Standard Structure
-
-        // --- Standard Structure (S0) ---
         // Payload 1: Metadata + Signatures
-        // Payload 2: Ephemeral Public Key
         const sigOneLen = noteData.signatureOne.length;
         const sigTwoLen = noteData.signatureTwo.length;
         const buffer1Size = 4 + 8 + 4 + 8 + 2 + sigOneLen + 2 + sigTwoLen;
         const buffer1 = new ArrayBuffer(buffer1Size);
         const view1 = new DataView(buffer1);
         let offset1 = 0;
+
         view1.setUint32(offset1, noteData.amount, false); offset1 += 4;
         new Uint8Array(buffer1, offset1).set(textEncoder.encode(noteData.verificationKey)); offset1 += 8;
         view1.setUint32(offset1, noteData.timestamp, false); offset1 += 4;
@@ -433,209 +435,157 @@ const BanknoteLogic = (() => {
         new Uint8Array(buffer1, offset1).set(noteData.signatureOne); offset1 += sigOneLen;
         view1.setUint16(offset1, sigTwoLen, false); offset1 += 2;
         new Uint8Array(buffer1, offset1).set(noteData.signatureTwo);
-        payload1Bytes = new Uint8Array(buffer1);
-        payload2Bytes = noteData.ephemeralPublicKey;
 
-        // Check if standard structure fits
-        try {
-            const p1 = Utils.arrayBufferToBase64(pako.deflate(payload1Bytes));
-            const p2 = Utils.arrayBufferToBase64(pako.deflate(payload2Bytes));
-            QRCode.toDataURL(p1); // Test if it throws an error
-            jabcode.encode_message(p2); // Test if it throws
-            finalPayload1 = p1;
-            finalPayload2 = p2;
-            Utils.log('Using Standard data structure (S0).');
-        } catch (e) {
-            Utils.log('Standard structure failed, switching to Overflow structure (S1).', 'warning');
-            structureFlag = 'S1';
-            
-            // --- Overflow Structure (S1) ---
-            // Payload 1: Metadata + Signature 1
-            // Payload 2: Ephemeral Public Key + Signature 2
-            const buffer1AltSize = 4 + 8 + 4 + 8 + 2 + sigOneLen;
-            const buffer1Alt = new ArrayBuffer(buffer1AltSize);
-            const view1Alt = new DataView(buffer1Alt);
-            let offset1Alt = 0;
-            view1Alt.setUint32(offset1Alt, noteData.amount, false); offset1Alt += 4;
-            new Uint8Array(buffer1Alt, offset1Alt).set(textEncoder.encode(noteData.verificationKey)); offset1Alt += 8;
-            view1Alt.setUint32(offset1Alt, noteData.timestamp, false); offset1Alt += 4;
-            new Uint8Array(buffer1Alt, offset1Alt).set(textEncoder.encode(noteData.serial)); offset1Alt += 8;
-            view1Alt.setUint16(offset1Alt, sigOneLen, false); offset1Alt += 2;
-            new Uint8Array(buffer1Alt, offset1Alt).set(noteData.signatureOne);
-            payload1Bytes = new Uint8Array(buffer1Alt);
+        // Payload 2: Just the large public key
+        const payload2Bytes = noteData.ephemeralPublicKey;
 
-            const buffer2AltSize = Constants.FALCON_PUBKEY_SIZE + 2 + sigTwoLen;
-            const buffer2Alt = new ArrayBuffer(buffer2AltSize);
-            let offset2Alt = 0;
-            new Uint8Array(buffer2Alt, offset2Alt).set(noteData.ephemeralPublicKey); offset2Alt += Constants.FALCON_PUBKEY_SIZE;
-            const view2Alt = new DataView(buffer2Alt);
-            view2Alt.setUint16(offset2Alt, sigTwoLen, false); offset2Alt += 2;
-            new Uint8Array(buffer2Alt, offset2Alt).set(noteData.signatureTwo);
-            payload2Bytes = new Uint8Array(buffer2Alt);
-
-            finalPayload1 = Utils.arrayBufferToBase64(pako.deflate(payload1Bytes));
-            finalPayload2 = Utils.arrayBufferToBase64(pako.deflate(payload2Bytes));
-        }
-
-        return {
-            qrPayload: `${structureFlag}:${finalPayload1}`,
-            jabPayload: `${structureFlag}:${finalPayload2}`
-        };
+        return { payload1Bytes: new Uint8Array(buffer1), payload2Bytes };
     };
 
-    const parseBinaryPayloads = (payload1Bytes, payload2Bytes, structureFlag) => {
+    const parseBinaryPayloads = (payload1Bytes, payload2Bytes) => {
+        const view1 = new DataView(payload1Bytes.buffer, payload1Bytes.byteOffset, payload1Bytes.byteLength);
         const textDecoder = new TextDecoder();
+        let offset1 = 0;
+
+        const amount = view1.getUint32(offset1, false); offset1 += 4;
+        const verificationKey = textDecoder.decode(payload1Bytes.subarray(offset1, offset1 + 8)); offset1 += 8;
+        const timestamp = view1.getUint32(offset1, false); offset1 += 4;
+        const serial = textDecoder.decode(payload1Bytes.subarray(offset1, offset1 + 8)); offset1 += 8;
         
-        if (structureFlag === 'S1') {
-            // Parse Overflow Structure
-            const view1 = new DataView(payload1Bytes.buffer, payload1Bytes.byteOffset, payload1Bytes.byteLength);
-            let offset1 = 0;
-            const amount = view1.getUint32(offset1, false); offset1 += 4;
-            const verificationKey = textDecoder.decode(payload1Bytes.subarray(offset1, offset1 + 8)); offset1 += 8;
-            const timestamp = view1.getUint32(offset1, false); offset1 += 4;
-            const serial = textDecoder.decode(payload1Bytes.subarray(offset1, offset1 + 8)); offset1 += 8;
-            const sigOneLength = view1.getUint16(offset1, false); offset1 += 2;
-            const signatureOne = payload1Bytes.subarray(offset1, offset1 + sigOneLength);
+        const sigOneLength = view1.getUint16(offset1, false); offset1 += 2;
+        const signatureOne = payload1Bytes.subarray(offset1, offset1 + sigOneLength); offset1 += sigOneLength;
+        
+        const sigTwoLength = view1.getUint16(offset1, false); offset1 += 2;
+        const signatureTwo = payload1Bytes.subarray(offset1, offset1 + sigTwoLength);
 
-            const view2 = new DataView(payload2Bytes.buffer, payload2Bytes.byteOffset, payload2Bytes.byteLength);
-            let offset2 = 0;
-            const ephemeralPublicKey = payload2Bytes.subarray(offset2, offset2 + Constants.FALCON_PUBKEY_SIZE); offset2 += Constants.FALCON_PUBKEY_SIZE;
-            const sigTwoLength = view2.getUint16(offset2, false); offset2 += 2;
-            const signatureTwo = payload2Bytes.subarray(offset2);
-            
-            return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
-
-        } else { // Default to S0
-            // Parse Standard Structure
-            const view1 = new DataView(payload1Bytes.buffer, payload1Bytes.byteOffset, payload1Bytes.byteLength);
-            let offset1 = 0;
-            const amount = view1.getUint32(offset1, false); offset1 += 4;
-            const verificationKey = textDecoder.decode(payload1Bytes.subarray(offset1, offset1 + 8)); offset1 += 8;
-            const timestamp = view1.getUint32(offset1, false); offset1 += 4;
-            const serial = textDecoder.decode(payload1Bytes.subarray(offset1, offset1 + 8)); offset1 += 8;
-            const sigOneLength = view1.getUint16(offset1, false); offset1 += 2;
-            const signatureOne = payload1Bytes.subarray(offset1, offset1 + sigOneLength); offset1 += sigOneLength;
-            const sigTwoLength = view1.getUint16(offset1, false); offset1 += 2;
-            const signatureTwo = payload1Bytes.subarray(offset1, offset1 + sigTwoLength);
-            const ephemeralPublicKey = payload2Bytes;
-
-            return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
-        }
+        const ephemeralPublicKey = payload2Bytes;
+        
+        return { amount, verificationKey, timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
     };
     
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active."); return; }
-        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Generating Banknote...`, 'info');
+        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Generating Banknote & Key Tab...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const { qrPayload, jabPayload } = createBinaryPayloads(noteData);
+            const { payload1Bytes, payload2Bytes } = createBinaryPayloads(noteData);
 
-            await BanknoteDrawer.drawNoteOnCanvas(noteData, qrPayload, jabPayload);
+            const compressedPayload1 = pako.deflate(payload1Bytes);
+            const finalPayload1 = Utils.arrayBufferToBase64(compressedPayload1);
+            
+            const compressedPayload2 = pako.deflate(payload2Bytes);
+            const finalPayload2 = Utils.arrayBufferToBase64(compressedPayload2);
 
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ New Banknote generated.`, 'success');
-            DOMElements.downloadNoteButton.disabled = false;
+            await BanknoteDrawer.drawNoteOnCanvas(noteData, finalPayload1);
+            await BanknoteDrawer.drawKeyTabOnCanvas(noteData, finalPayload2);
+
+            Utils.updateStatus(DOMElements.banknoteStatus, `✅ New Banknote and Key Tab pair generated.`, 'success');
+            DOMElements.downloadAllButton.disabled = false;
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
         }
     };
-    
-    return {
-        handleCreateAndSignNotes,
-        handleFileSelectForValidation: async (event) => {
-            const file = event.target.files[0];
-            if (!file || !state.masterPublicKey) return;
-            const resultDiv = DOMElements.validationResult;
-            Utils.updateStatus(resultDiv, '⏳ Validating banknote... Please wait.', 'info');
 
-            const img = new Image();
-            img.onload = async () => {
-                try {
-                    const fullCanvas = document.createElement('canvas');
-                    fullCanvas.width = 1350;
-                    fullCanvas.height = 750;
-                    const fullCtx = fullCanvas.getContext('2d');
-                    fullCtx.drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
+    const handleScanBanknote = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !state.masterPublicKey) return;
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning Banknote (Part 1/2)...', 'info');
+        
+        const qrCodeData = await scanQrCodeFromFile(file);
+        if (!qrCodeData) {
+            Utils.updateStatus(DOMElements.validationResult, '❌ Could not read QR code from Banknote image.', 'error');
+            return;
+        }
 
-                    const qrRegion = { x: 670, y: 250, width: 300, height: 300 };
-                    const jabRegion = { x: 1000, y: 250, width: 300, height: 300 };
+        state.validationDataPart1 = qrCodeData;
+        Utils.updateStatus(DOMElements.validationResult, '✅ Banknote scan complete. Please scan the Key Tab to finalize.', 'success');
+        DOMElements.validatorKeyTabLabel.disabled = false;
+        DOMElements.validatorKeyTabLabel.classList.remove('sub-button');
+    };
 
-                    const scanRegion = (region, isJab = false) => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = region.width;
-                        canvas.height = region.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(fullCanvas, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height);
-                        if (isJab) {
-                            return jabcode.decode_message(canvas.toDataURL());
-                        }
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        const code = jsQR(imageData.data, imageData.width, imageData.height);
-                        return code ? code.data : null;
-                    };
+    const handleScanKeyTab = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !state.validationDataPart1) return;
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning Key Tab (Part 2/2)...', 'info');
 
-                    const qrResult = await scanRegion(qrRegion);
-                    const jabResult = await scanRegion(jabRegion, true);
+        const qrCodeData = await scanQrCodeFromFile(file);
+        if (!qrCodeData) {
+            Utils.updateStatus(DOMElements.validationResult, '❌ Could not read QR code from Key Tab image.', 'error');
+            return;
+        }
+        
+        try {
+            const compressedBytes1 = Utils.base64ToUint8Array(state.validationDataPart1);
+            const originalPayloadBytes1 = pako.inflate(compressedBytes1);
 
-                    if (!qrResult || !jabResult) {
-                        Utils.updateStatus(resultDiv, '❌ One or both codes could not be read.', 'error');
-                        return;
-                    }
-                    
-                    const [qrFlag, qrB64] = qrResult.split(':');
-                    const [jabFlag, jabB64] = jabResult.split(':');
+            const compressedBytes2 = Utils.base64ToUint8Array(qrCodeData);
+            const originalPayloadBytes2 = pako.inflate(compressedBytes2);
+            
+            let resultHTML = '<span class="valid">✅ Both parts scanned & decompressed. Verifying signatures...</span>\n';
+            DOMElements.validationResult.innerHTML = resultHTML;
 
-                    if(qrFlag !== jabFlag) {
-                        Utils.updateStatus(resultDiv, '❌ Mismatched data structure flags.', 'error');
-                        return;
-                    }
+            const parsedData = parseBinaryPayloads(originalPayloadBytes1, originalPayloadBytes2);
+            
+            const dataForSigOne = getStandardizedDataForSigning(parsedData);
+            const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
+            if (!isSigOneValid) {
+                resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span><br><span>❌ VERDICT: FORGERY</span>';
+                DOMElements.validationResult.innerHTML = resultHTML;
+                return;
+            }
+            resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
 
-                    const compressedBytes1 = Utils.base64ToUint8Array(qrB64);
-                    const originalPayloadBytes1 = pako.inflate(compressedBytes1);
+            const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
+            const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
+            if (!isSigTwoValid) {
+                resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span><br><span>❌ VERDICT: FORGERY</span>';
+                DOMElements.validationResult.innerHTML = resultHTML;
+                return;
+            }
+            resultHTML += `<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n`;
+            resultHTML += `<span class="info">ℹ️ Decoded Amount: ${parsedData.amount}, Key: ${parsedData.verificationKey}</span><br>`;
+            resultHTML += `<span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>`;
+            
+            DOMElements.validationResult.innerHTML = resultHTML;
 
-                    const compressedBytes2 = Utils.base64ToUint8Array(jabB64);
-                    const originalPayloadBytes2 = pako.inflate(compressedBytes2);
-                    
-                    let resultHTML = `<span class="valid">✅ Both Codes Found (Structure: ${qrFlag}). Verifying...</span>\n`;
-                    resultDiv.innerHTML = resultHTML;
-
-                    const parsedData = parseBinaryPayloads(originalPayloadBytes1, originalPayloadBytes2, qrFlag);
-                    
-                    const dataForSigOne = getStandardizedDataForSigning(parsedData);
-                    const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                    if (!isSigOneValid) {
-                        resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span><br><span>❌ VERDICT: FORGERY</span>';
-                        resultDiv.innerHTML = resultHTML;
-                        return;
-                    }
-                    resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
-
-                    const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
-                    const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                    if (!isSigTwoValid) {
-                        resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span><br><span>❌ VERDICT: FORGERY</span>';
-                        resultDiv.innerHTML = resultHTML;
-                        return;
-                    }
-                    resultHTML += `<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n`;
-                    resultHTML += `<span class="info">ℹ️ Decoded Amount: ${parsedData.amount}, Key: ${parsedData.verificationKey}</span><br>`;
-                    resultHTML += `<span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>`;
-                    
-                    resultDiv.innerHTML = resultHTML;
-                } catch (e) {
-                    const errorMessage = e.message || e.toString();
-                    Utils.updateStatus(resultDiv, `❌ Validation Error: ${errorMessage}.`, 'error');
-                    console.error(e);
-                } finally {
-                    event.target.value = '';
-                }
-            };
-            img.onerror = () => {
-                Utils.updateStatus(resultDiv, '❌ Could not load the banknote image file.', 'error');
-            };
-            img.src = URL.createObjectURL(file);
+        } catch (e) {
+            const errorMessage = e.message || e.toString();
+            Utils.updateStatus(DOMElements.validationResult, `❌ Validation Error: ${errorMessage}.`, 'error');
+            console.error(e);
+        } finally {
+            // Reset state for next validation
+            state.validationDataPart1 = null;
+            DOMElements.validatorKeyTabLabel.disabled = true;
+            DOMElements.validatorKeyTabLabel.classList.add('sub-button');
+            event.target.value = '';
         }
     };
+    
+    const scanQrCodeFromFile = (file) => {
+        return new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    resolve(code ? code.data : null);
+                };
+                img.onerror = () => resolve(null);
+                img.src = e.target.result;
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+        });
+    };
+
+    return { handleCreateAndSignNotes, handleScanBanknote, handleScanKeyTab };
 })();
 
 
@@ -647,90 +597,106 @@ const BanknoteDrawer = (() => {
     function drawNoise(ctx, hash, w, h) { /* ... */ }
     
     return {
-        drawNoteOnCanvas: async (noteData, qrPayload, jabPayload) => {
+        drawNoteOnCanvas: async (noteData, qrPayload) => {
             const canvas = DOMElements.noteCanvas;
             canvas.width = 1350;
             canvas.height = 750;
             const ctx = canvas.getContext("2d");
             const { amount, serial, verificationKey, signatureTwo } = noteData;
-            const scale = canvas.width / 1350;
-            const visualHash = shake256(signatureTwo, 256);
+            canvas.dataset.serial = serial; // Store serial for download filename
 
-            const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            const visualHash = sha3_256(signatureTwo);
             const baseHue = H(visualHash, 0, 0, 360);
+            const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
             bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
-            ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
             drawGuilloche(ctx, visualHash, canvas.width, canvas.height);
             drawNoise(ctx, visualHash, canvas.width, canvas.height);
 
-            ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
-            ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
-            ctx.fillStyle = "#EAEAEA"; ctx.textAlign = 'left';
-            ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
-            ctx.fillText(serial, 150 * scale, 160 * scale);
-            ctx.fillText(verificationKey, 150 * scale, 280 * scale);
-            
-            ctx.font = `bold ${150 * scale}px 'Roboto Mono'`; ctx.textAlign = "right";
-            ctx.shadowBlur = 12 * scale; ctx.shadowOffsetX = 4 * scale; ctx.shadowOffsetY = 4 * scale;
-            ctx.fillText(amount.toString(), canvas.width - (120 * scale), 190 * scale);
-            ctx.shadowColor = "transparent";
+            ctx.fillStyle = "#EAEAEA";
+            ctx.textAlign = 'left';
+            ctx.font = `bold 80px 'Roboto Mono'`;
+            ctx.fillText(serial, 150, 160);
+            ctx.font = `bold 150px 'Roboto Mono'`;
+            ctx.textAlign = "right";
+            ctx.fillText(amount.toString(), canvas.width - 120, 190);
 
             try {
-                const qrCodeDataURL = await QRCode.toDataURL(qrPayload, { errorCorrectionLevel: 'H', width: 280 });
-                const jabCodeDataURL = jabcode.encode_message(jabPayload);
-
-                const imgQR = new Image();
-                const imgJAB = new Image();
-
-                let qrLoaded = false, jabLoaded = false;
-                const drawImages = () => {
-                    if (!qrLoaded || !jabLoaded) return;
-                    
-                    const size = 280 * scale;
-                    const padding = 20 * scale;
-                    const boxSize = size + (padding * 2);
-                    const jabX = canvas.width - (100 * scale) - boxSize;
-                    const qrX = jabX - boxSize - (20 * scale);
-                    const y = (canvas.height / 2) - (boxSize / 2) - 20 * scale;
-
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(qrX, y, boxSize, boxSize);
-                    ctx.drawImage(imgQR, qrX + padding, y + padding, size, size);
-
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(jabX, y, boxSize, boxSize);
-                    ctx.drawImage(imgJAB, jabX + padding, y + padding, size, size);
-                };
-
-                imgQR.onload = () => { qrLoaded = true; drawImages(); };
-                imgJAB.onload = () => { jabLoaded = true; drawImages(); };
+                const qrCodeDataURL = await QRCode.toDataURL(qrPayload, { errorCorrectionLevel: 'H', width: 380 });
+                const img = new Image();
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = qrCodeDataURL;
+                });
                 
-                imgQR.src = qrCodeDataURL;
-                imgJAB.src = jabCodeDataURL;
+                const qrX = canvas.width - 150 - 380;
+                const qrY = canvas.height - 520;
+                ctx.fillStyle = 'white';
+                ctx.fillRect(qrX - 20, qrY - 20, 380 + 40, 380 + 40);
+                ctx.drawImage(img, qrX, qrY, 380, 380);
 
             } catch (err) {
-                 console.error("Code Generation Error:", err);
-                 ctx.fillStyle = 'red';
-                 ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
-                 ctx.textAlign = 'center';
-                 ctx.fillText("CODE GEN ERROR", canvas.width / 2, canvas.height / 2);
+                console.error("QR Code Generation Error:", err);
+                throw err;
+            }
+        },
+        drawKeyTabOnCanvas: async (noteData, qrPayload) => {
+            const canvas = DOMElements.keyTabCanvas;
+            canvas.width = 500;
+            canvas.height = 250;
+            const ctx = canvas.getContext("2d");
+            const { serial } = noteData;
+            
+            ctx.fillStyle = "#1a1a2e";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            try {
+                const qrCodeDataURL = await QRCode.toDataURL(qrPayload, { errorCorrectionLevel: 'H', width: 200 });
+                const img = new Image();
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = qrCodeDataURL;
+                });
+                
+                ctx.fillStyle = 'white';
+                ctx.fillRect(20, 25, 200 + 10, 200);
+                ctx.drawImage(img, 25, 25, 200, 200);
+
+                ctx.fillStyle = '#EAEAEA';
+                ctx.font = `bold 24px 'Roboto Mono'`;
+                ctx.textAlign = 'left';
+                ctx.fillText('KEY TAB', 260, 60);
+                ctx.font = `20px 'Roboto Mono'`;
+                ctx.fillText(`For Banknote:`, 260, 120);
+                ctx.fillText(serial, 260, 150);
+
+            } catch(err) {
+                console.error("KeyTab QR Gen Error:", err);
+                throw err;
             }
         }
     };
 })();
 
 async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Crypto Module...', 'info');
+    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading crypto modules...', 'info');
+    if (typeof pqcSignFalcon1024 === 'undefined' || typeof sha3_256 === 'undefined') {
+        Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: A required library is missing. Please check file paths.`, 'error');
+        return;
+    }
+
     try {
         state.falconApi = await pqcSignFalcon1024();
-        Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded.', 'success');
+        Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. You may now generate keys.', 'success');
         Utils.log("All cryptographic modules initialized successfully.", 'success');
     } catch (e) {
-        Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
+        Utils.log(`Critical Error: Could not load modules: ${e.message}`, 'error');
         Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
-        alert("Error: Failed to load a required cryptographic module. The application cannot run.");
         return;
     }
     
@@ -741,10 +707,17 @@ async function main() {
     DOMElements.visualKeyInput.addEventListener('change', UIHandlers.handleVisualKeyInput);
     DOMElements.reconstructKeyButton.addEventListener('click', UIHandlers.handleReconstructKey);
     DOMElements.createNoteButton.addEventListener('click', BanknoteLogic.handleCreateAndSignNotes);
-    DOMElements.downloadNoteButton.addEventListener('click', () => {
-        Utils.downloadCanvasAsPNG(DOMElements.noteCanvas, 'BANKNOTE.png');
+    
+    DOMElements.downloadAllButton.addEventListener('click', async () => {
+        const noteCanvas = DOMElements.noteCanvas;
+        const keyTabCanvas = DOMElements.keyTabCanvas;
+        const serial = noteCanvas.dataset.serial || 'NOTE';
+        await Utils.downloadCanvasAsPNG(noteCanvas, `BANKNOTE-${serial}.png`);
+        await Utils.downloadCanvasAsPNG(keyTabCanvas, `KEY-TAB-${serial}.png`);
     });
-    DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
+
+    DOMElements.validatorBanknoteInput.addEventListener('change', BanknoteLogic.handleScanBanknote);
+    DOMElements.validatorKeyTabInput.addEventListener('change', BanknoteLogic.handleScanKeyTab);
     
     DOMElements.downloadQrButton.addEventListener('click', () => {
         const img = DOMElements.qrDisplay.querySelector('img');
@@ -757,6 +730,8 @@ async function main() {
 }
 
 main();
+
+});
 </script>
 </body>
 </html>
