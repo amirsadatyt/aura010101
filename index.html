@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
@@ -352,7 +351,11 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
+                
+                // *** CHANGE IS HERE #1 ***
+                // Set JAB code error correction to level 1 (~7%) for the Visual Key.
+                const jabCodeBase64 = jabcode.encode_message(visualKeySecret, { eccLevel: 1 });
+                
                 const img = new Image();
                 img.src = jabCodeBase64; 
                 DOMElements.qrDisplay.appendChild(img);
@@ -459,7 +462,6 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // FIX: JAB payload now contains the ephemeral public key and signatures
     const createJabPayload = (noteData) => {
         const payload = {
             ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
@@ -470,7 +472,6 @@ const BanknoteLogic = (() => {
         return JSON.stringify(payload);
     };
 
-    // FIX: QR payload now contains only the signatures
     const createQrPayload = (noteData) => {
         const payload = {
             signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne),
@@ -479,7 +480,6 @@ const BanknoteLogic = (() => {
         return JSON.stringify(payload);
     };
 
-    // FIX: JAB parser now reads a JSON object
     const parseJabPayload = (decodedText) => {
         return JSON.parse(decodedText);
     };
@@ -670,7 +670,9 @@ const BanknoteDrawer = (() => {
                 let jabCodePromise, qrCodePromise;
 
                 try {
-                    const jabCodeBase64 = jabcode.encode_message(jabPayload);
+                    // *** CHANGE IS HERE #2 ***
+                    // Set JAB code error correction to level 1 (~7%) for the banknote data.
+                    const jabCodeBase64 = jabcode.encode_message(jabPayload, { eccLevel: 1 });
                     const jabImg = new Image();
                     jabCodePromise = new Promise((resolve, reject) => {
                         jabImg.onload = () => resolve(jabImg);
@@ -685,8 +687,7 @@ const BanknoteDrawer = (() => {
 
                 try {
                     const qrCanvas = document.createElement('canvas');
-                    // *** CHANGE IS HERE ***
-                    // Changed errorCorrectionLevel from 'H' to 'L' (~7% correction)
+                    // QR code ECC is set to 'L' (Low, ~7%) from previous request.
                     QRCode.toCanvas(qrCanvas, qrPayload, { errorCorrectionLevel: 'L', width: 380, margin: 4 }, function (error) {
                         if (error) reject(error);
                     });
