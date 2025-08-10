@@ -2,11 +2,13 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Digital Banknote [Optimized]</title>
+    <title>Digital Banknote [Gzip QR Code Edition]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
+    <script src="./qrcode.min.js"></script>
+    <script src="./jsQR.js"></script>
     <script src="./pako.min.js"></script>
     
     <style>
@@ -73,8 +75,8 @@
               <label for="file-key-input" class="button sub-button">Upload File Key</label>
               <input type="file" id="file-key-input" accept=".json" style="display:none;" />
               <input type="password" id="password-key-input" placeholder="Password Key">
-              <label for="visual-key-input" class="button sub-button">Upload Visual Key (JAB)</label>
-              <input type="file" id="visual-key-input" accept="image/png, image/jpeg, image/svg+xml" style="display:none;" />
+              <label for="visual-key-input" class="button sub-button">Upload Visual Key (QR)</label>
+              <input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" />
         </div>
         <button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button>
         <div id="key-reconstruction-status" class="status-box"></div>
@@ -106,17 +108,14 @@
   <div class="modal-content">
     <h2 id="qr-modal-title">Your Visual Key</h2>
     <div id="qr-display"></div>
-    <button id="download-qr-button" style="margin-top: 15px;">💾 Download JAB Code</button>
+    <button id="download-qr-button" style="margin-top: 15px;">💾 Download QR Code</button>
     <button onclick="document.getElementById('qr-modal').style.display='none'">Close</button>
   </div>
 </div>
 
 <script type="module">
-import JabcodeJSInterface from './jabcodeJSLib.min.js';
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-
-const jabcode = new JabcodeJSInterface();
 
 const state = {
     falconApi: null,
@@ -177,14 +176,6 @@ const Utils = {
     log: (message, type = 'info') => {
         const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
         console.log(`[Sadat System] ${icon} ${message}`);
-    },
-    binaryToString: (binaryPayload) => {
-        const textDecoder = new TextDecoder('utf-8');
-        return textDecoder.decode(binaryPayload);
-    },
-    stringToBinary: (str) => {
-        const textEncoder = new TextEncoder();
-        return textEncoder.encode(str);
     }
 };
 
@@ -296,13 +287,13 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
+                const qrCodeDataURL = await QRCode.toDataURL(visualKeySecret, { errorCorrectionLevel: 'H', width: 256 });
                 const img = new Image();
-                img.src = jabCodeBase64;
+                img.src = qrCodeDataURL;
                 DOMElements.qrDisplay.appendChild(img);
                 DOMElements.qrModal.style.display = 'flex';
 
-                Utils.updateStatus(DOMElements.keyGenStatus, `✅ Key pair generated. Public key is active. Key files and JAB code have been downloaded.`, 'success');
+                Utils.updateStatus(DOMElements.keyGenStatus, `✅ Key pair generated. Public key is active. Key files and QR code have been downloaded.`, 'success');
 
             } catch (e) {
                 Utils.log(`Key generation failed: ${e.message}`, 'error');
@@ -317,29 +308,32 @@ const UIHandlers = (() => {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const dataUrl = e.target.result;
-                    const decodedText = await jabcode.decode_message(dataUrl);
-                    if (decodedText) {
-                        state.puzzlePieces.visualKey = decodedText;
-                        Utils.log("Visual Key loaded from file.", 'success');
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code && code.data) {
+                        state.puzzlePieces.visualKey = code.data;
+                        Utils.log("Visual Key loaded from QR Code.", 'success');
                     } else {
-                         state.puzzlePieces.visualKey = null;
-                         Utils.log("Failed to find a JAB code in the image.", 'error');
+                        state.puzzlePieces.visualKey = null;
+                        Utils.log("Failed to find a QR Code in the image.", 'error');
                     }
-                } catch (error) {
+                    updatePuzzleStatus();
+                };
+                img.onerror = () => {
+                    Utils.log("Could not load image file to scan for QR Code.", 'error');
                     state.puzzlePieces.visualKey = null;
-                    Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
-                    console.error(error);
-                } finally {
                     updatePuzzleStatus();
                 }
-            };
-            reader.onerror = () => {
-                 state.puzzlePieces.visualKey = null;
-                 Utils.log("Failed to read the image file.", 'error');
-                 updatePuzzleStatus();
+                img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         },
@@ -398,19 +392,16 @@ const BanknoteLogic = (() => {
     };
     
     const createBinaryPayload = (noteData) => {
-        const textEncoder = new TextEncoder();
-        const serialBytes = textEncoder.encode(noteData.serial);
-        const verificationKeyBytes = textEncoder.encode(noteData.verificationKey);
-
         const bufferSize = 4 + 8 + 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
+        const textEncoder = new TextEncoder();
 
         view.setUint32(offset, noteData.amount, false); offset += 4;
-        new Uint8Array(buffer, offset).set(verificationKeyBytes); offset += 8;
+        new Uint8Array(buffer, offset).set(textEncoder.encode(noteData.verificationKey)); offset += 8;
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
-        new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
+        new Uint8Array(buffer, offset).set(textEncoder.encode(noteData.serial)); offset += 8;
         new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
         view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
@@ -420,7 +411,7 @@ const BanknoteLogic = (() => {
     };
 
     const parseBinaryPayload = (payloadBytes) => {
-        const view = new DataView(payloadBytes.buffer);
+        const view = new DataView(payloadBytes.buffer, payloadBytes.byteOffset, payloadBytes.byteLength);
         const textDecoder = new TextDecoder();
         let offset = 0;
 
@@ -442,9 +433,7 @@ const BanknoteLogic = (() => {
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const payloadBytes = createBinaryPayload(noteData);
-
-            // Compress binary data, then Base64 encode the result for safe transport
-            const compressedBytes = pako.deflate(payloadBytes);
+            const compressedBytes = pako.gzip(payloadBytes);
             const finalPayload = Utils.arrayBufferToBase64(compressedBytes);
 
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, finalPayload, 1350, 750);
@@ -466,8 +455,7 @@ const BanknoteLogic = (() => {
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 const payloadBytes = createBinaryPayload(noteData);
-                
-                const compressedBytes = pako.deflate(payloadBytes);
+                const compressedBytes = pako.gzip(payloadBytes);
                 const finalPayload = Utils.arrayBufferToBase64(compressedBytes);
 
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, finalPayload, 1350, 750);
@@ -522,29 +510,26 @@ const BanknoteLogic = (() => {
                     const fullCtx = fullCanvas.getContext('2d');
                     fullCtx.drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height);
 
-                    const jabRegion = { x: 800, y: 210, width: 420, height: 420 };
+                    const qrRegion = { x: 800, y: 210, width: 420, height: 420 };
 
-                    const jabCanvas = document.createElement('canvas');
-                    jabCanvas.width = jabRegion.width;
-                    jabCanvas.height = jabRegion.height;
-                    const jabCtx = jabCanvas.getContext('2d');
+                    const qrCanvas = document.createElement('canvas');
+                    qrCanvas.width = qrRegion.width;
+                    qrCanvas.height = qrRegion.height;
+                    const qrCtx = qrCanvas.getContext('2d');
+                    qrCtx.drawImage(fullCanvas, qrRegion.x, qrRegion.y, qrRegion.width, qrRegion.height, 0, 0, qrRegion.width, qrRegion.height);
                     
-                    jabCtx.drawImage(fullCanvas, jabRegion.x, jabRegion.y, jabRegion.width, jabRegion.height, 0, 0, jabRegion.width, jabRegion.height);
+                    const imageData = qrCtx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-                    const jabDataUrl = jabCanvas.toDataURL();
-                    
-                    const decodedText = await jabcode.decode_message(jabDataUrl);
-
-                    if (!decodedText) {
-                        Utils.updateStatus(resultDiv, '❌ JAB Code not found or unreadable on the banknote.', 'error');
+                    if (!code || !code.data) {
+                        Utils.updateStatus(resultDiv, '❌ QR Code not found or unreadable on the banknote.', 'error');
                         return;
                     }
-
-                    // Base64 decode the text from JAB code, then decompress
-                    const compressedBytes = Utils.base64ToUint8Array(decodedText);
-                    const originalPayloadBytes = pako.inflate(compressedBytes);
                     
-                    let resultHTML = '<span class="valid">✅ JAB Code Found & Decompressed. Verifying signatures...</span>\n';
+                    const compressedBytes = Utils.base64ToUint8Array(code.data);
+                    const originalPayloadBytes = pako.ungzip(compressedBytes);
+                    
+                    let resultHTML = '<span class="valid">✅ QR Code Found & Decompressed. Verifying signatures...</span>\n';
                     resultDiv.innerHTML = resultHTML;
 
                     const parsedData = parseBinaryPayload(originalPayloadBytes);
@@ -594,8 +579,8 @@ const BanknoteDrawer = (() => {
     function drawNoise(ctx, hash, w, h) { /* ... */ }
     
     return {
-        drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload, width, height) => {
-            return new Promise((resolve, reject) => {
+        drawNoteOnCanvas: async (targetCanvas, noteData, qrPayload, width, height) => {
+            return new Promise( async (resolve, reject) => {
                 const ctx = targetCanvas.getContext("2d");
                 const { amount, serial, verificationKey, signatureTwo } = noteData;
                 const scale = width / 1350;
@@ -624,7 +609,7 @@ const BanknoteDrawer = (() => {
                 ctx.shadowColor = "transparent";
 
                 try {
-                    const jabCodeBase64 = jabcode.encode_message(jabPayload);
+                    const qrCodeDataURL = await QRCode.toDataURL(qrPayload, { errorCorrectionLevel: 'M', width: 380 });
                     const img = new Image();
                     img.onload = () => {
                         const qrX = width - (150 * scale) - (380 * scale);
@@ -637,16 +622,16 @@ const BanknoteDrawer = (() => {
                         ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
                         resolve();
                     };
-                    img.onerror = (err) => reject(new Error("Failed to load generated JAB Code image."));
-                    img.src = jabCodeBase64;
+                    img.onerror = (err) => reject(new Error("Failed to load generated QR Code image."));
+                    img.src = qrCodeDataURL;
                 } catch (err) {
-                     console.error("JAB Code Generation Error:", err);
+                     console.error("QR Code Generation Error:", err);
                      ctx.fillStyle = 'red';
                      ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
                      ctx.textAlign = 'center';
                      const centerX = width - (150 * scale) - (190 * scale);
                      const centerY = height - (330 * scale);
-                     ctx.fillText("JAB CODE ERROR", centerX, centerY);
+                     ctx.fillText("QR CODE ERROR", centerX, centerY);
                      reject(err);
                 }
             });
