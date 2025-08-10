@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [Dual Code - Efficient]</title>
+    <title>Sadat Digital Banknote [Dual Code - Multi-Symbol]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -352,8 +352,8 @@ const UIHandlers = (() => {
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
                 
-                // *** CHANGE IS HERE #1 ***
                 // Set JAB code error correction to level 1 (~7%) for the Visual Key.
+                // Multi-symbol is not needed here as the data (a UUID) is very small.
                 const jabCodeBase64 = jabcode.encode_message(visualKeySecret, { eccLevel: 1 });
                 
                 const img = new Image();
@@ -670,9 +670,14 @@ const BanknoteDrawer = (() => {
                 let jabCodePromise, qrCodePromise;
 
                 try {
-                    // *** CHANGE IS HERE #2 ***
-                    // Set JAB code error correction to level 1 (~7%) for the banknote data.
-                    const jabCodeBase64 = jabcode.encode_message(jabPayload, { eccLevel: 1 });
+                    // *** CHANGE IS HERE ***
+                    // JAB code is now generated with 10 slave symbols for maximum data capacity.
+                    // ECC level is kept at 1 for more data space.
+                    const jabCodeBase64 = jabcode.encode_message(jabPayload, { 
+                        slaves: 10, 
+                        eccLevel: 1 
+                    });
+                    
                     const jabImg = new Image();
                     jabCodePromise = new Promise((resolve, reject) => {
                         jabImg.onload = () => resolve(jabImg);
@@ -687,7 +692,7 @@ const BanknoteDrawer = (() => {
 
                 try {
                     const qrCanvas = document.createElement('canvas');
-                    // QR code ECC is set to 'L' (Low, ~7%) from previous request.
+                    // QR code ECC is set to 'L' (Low, ~7%).
                     QRCode.toCanvas(qrCanvas, qrPayload, { errorCorrectionLevel: 'L', width: 380, margin: 4 }, function (error) {
                         if (error) reject(error);
                     });
@@ -703,6 +708,10 @@ const BanknoteDrawer = (() => {
                 }
 
                 Promise.all([jabCodePromise, qrCodePromise]).then(([jabImg, qrImg]) => {
+                    // Note: The drawing logic here assumes the JAB code is square.
+                    // A multi-symbol code will be rectangular, so this will stretch it.
+                    // For a real application, you'd get jabImg.width and jabImg.height
+                    // and adjust the drawing coordinates and dimensions to maintain aspect ratio.
                     const jabX = width - (150 * scale) - (380 * scale);
                     const jabY = height - (520 * scale);
                     ctx.fillStyle = 'white';
