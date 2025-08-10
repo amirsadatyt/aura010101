@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [Fixed]</title>
+    <title>Sadat Digital Banknote [Dual Code]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -101,11 +101,18 @@
 
     <div class="section" id="validator-section">
         <h2><span class="pill">Step 4</span> Verify Authenticity</h2>
-        <label for="validator-input" class="button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            Select Banknote Image for Validation
-        </label>
-        <input type="file" id="validator-input" accept="image/png" style="display: none;">
+        <div class="controls-grid">
+            <label for="validator-jab-input" class="button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                Scan JAB Code
+            </label>
+            <input type="file" id="validator-jab-input" accept="image/png" style="display: none;">
+            <label for="validator-qr-input" class="button sub-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="3" x2="12" y2="21"></line><line x1="3" y1="12" x2="21" y2="12"></line></svg>
+                Scan QR Code
+            </label>
+            <input type="file" id="validator-qr-input" accept="image/png" style="display: none;">
+        </div>
         <div id="validation-result" class="status-box">Awaiting banknote for validation...</div>
     </div>
 </div>
@@ -121,34 +128,34 @@
 </div>
 
 <script type="module">
-// --- MODIFICATION: Import JAB Code and cryptographic libraries ---
 import JabcodeJSInterface from './jabcodeJSLib.min.js';
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import QRCode from 'https://cdn.skypack.dev/qrcode';
 
-// --- MODIFICATION: Instantiate JAB Code Interface ---
+
 const jabcode = new JabcodeJSInterface();
 
-
-// --- Global State ---
 const state = {
     falconApi: null,
     masterPublicKey: null,
-    masterPrivateKey: null, // This will be held temporarily only during signing
+    masterPrivateKey: null,
     puzzlePieces: {
         fileKey: null,
         passwordKey: null,
         visualKey: null
+    },
+    validationData: {
+        jabPayload: null,
+        qrPayload: null,
     }
 };
 
-// --- CONSTANTS ---
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime()
 };
 
-// --- DOM Elements ---
 const DOMElements = {
     generateKeysButton: document.getElementById('generate-keys-button'),
     importPublicKey: document.getElementById('import-public-key'),
@@ -164,7 +171,8 @@ const DOMElements = {
     downloadBatchButton: document.getElementById('download-batch-button'),
     noteCanvas: document.getElementById('noteCanvas'),
     banknoteStatus: document.getElementById('banknote-status'),
-    validatorInput: document.getElementById('validator-input'),
+    validatorJabInput: document.getElementById('validator-jab-input'),
+    validatorQrInput: document.getElementById('validator-qr-input'),
     validationResult: document.getElementById('validation-result'),
     qrModal: document.getElementById('qr-modal'),
     qrDisplay: document.getElementById('qr-display'),
@@ -172,7 +180,6 @@ const DOMElements = {
     downloadQrButton: document.getElementById('download-qr-button')
 };
 
-// --- Utility Functions ---
 const Utils = {
     arrayBufferToBase64: (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))),
     base64ToUint8Array: (base64) => {
@@ -198,7 +205,6 @@ const Utils = {
         const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
         console.log(`[Sadat System] ${icon} ${message}`);
     },
-    // --- FIX: Add binary-to-string helpers back for compact payloads ---
     binaryToString: (binaryPayload) => {
         let str = '';
         binaryPayload.forEach(b => { str += String.fromCharCode(b); });
@@ -211,7 +217,6 @@ const Utils = {
         }
         return binaryPayload;
     }
-    // --- END FIX ---
 };
 
 // ===================================================================================
@@ -221,14 +226,39 @@ const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_KEY_LENGTH = 32;
+    const AES_KEY_LENGTH = 256;
 
     async function pbkdf2DeriveKey(password, salt) {
         const passwordBuffer = new TextEncoder().encode(password);
-        const importedKey = await crypto.subtle.importKey("raw",passwordBuffer,{ name: "PBKDF2" },false,["deriveKey"]);
-        return await crypto.subtle.deriveKey({name: "PBKDF2",salt: salt,iterations: PBKDF2_ITERATIONS,hash: "SHA-256"},importedKey,{ name: AES_ALGO, length: PBKDF2_KEY_LENGTH * 8 },false,["encrypt", "decrypt"]);
+        const importedKey = await crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        return await crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" }, importedKey, { name: AES_ALGO, length: PBKDF2_KEY_LENGTH * 8 }, false, ["encrypt", "decrypt"]);
     }
     
     function hashMessageForSigning(message) { return Utils.hexToUint8Array(shake256(message, 1536)); }
+
+    async function deriveAESKeyFromPublicKey(publicKey) {
+        const publicKeyHash = shake256(Utils.arrayBufferToBase64(publicKey), AES_KEY_LENGTH);
+        const keyData = Utils.hexToUint8Array(publicKeyHash);
+        return await crypto.subtle.importKey("raw", keyData, { name: AES_ALGO, length: AES_KEY_LENGTH }, false, ["encrypt", "decrypt"]);
+    }
+
+    async function encryptPayload(payload, publicKey) {
+        const key = await deriveAESKeyFromPublicKey(publicKey);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = await crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, key, new TextEncoder().encode(JSON.stringify(payload)));
+        return {
+            iv: Utils.arrayBufferToBase64(iv),
+            cipherText: Utils.arrayBufferToBase64(encrypted)
+        };
+    }
+
+    async function decryptPayload(encryptedPayload, publicKey) {
+        const key = await deriveAESKeyFromPublicKey(publicKey);
+        const iv = Utils.base64ToUint8Array(encryptedPayload.iv);
+        const cipherText = Utils.base64ToUint8Array(encryptedPayload.cipherText);
+        const decrypted = await crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, key, cipherText);
+        return JSON.parse(new TextDecoder().decode(decrypted));
+    }
 
     return {
         async generateNewKeyPair() {
@@ -284,7 +314,10 @@ const BankCrypto = (() => {
             const cryptoVisualKey = await pbkdf2DeriveKey(visualKeySecret, visualKeySalt);
             const masterPrivateKeyBytes = await crypto.subtle.decrypt({ name: AES_ALGO, iv: visualKeyIV }, cryptoVisualKey, visualCipherText);
             return new Uint8Array(masterPrivateKeyBytes);
-        }
+        },
+        deriveAESKeyFromPublicKey,
+        encryptPayload,
+        decryptPayload
     };
 })();
 
@@ -330,7 +363,6 @@ const UIHandlers = (() => {
                 DOMElements.qrDisplay.innerHTML = '';
                 const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
                 const img = new Image();
-                // FIX: Corrected variable name from jabCodeBase664 to jabCodeBase64
                 img.src = jabCodeBase64; 
                 DOMElements.qrDisplay.appendChild(img);
                 DOMElements.qrModal.style.display = 'flex';
@@ -399,16 +431,13 @@ const UIHandlers = (() => {
 // ===================================================================================
 const BanknoteLogic = (() => {
 
-    // --- MODIFICATION: Include amount in the signed data for signature one ---
     const getStandardizedDataForSigning = (noteData) => JSON.stringify({
         amount: noteData.amount,
         timestamp: noteData.timestamp,
         serial: noteData.serial,
     }, ['amount', 'timestamp', 'serial']);
-    // --- END MODIFICATION ---
-
+    
     const getStandardizedDataForMasterSig = (noteData) => {
-        // Create a temporary object with base64 strings for consistent hashing
         const tempNoteData = {
             ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
             signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne)
@@ -430,10 +459,8 @@ const BanknoteLogic = (() => {
             signatureTwo: null
         };
         
-        // --- MODIFICATION: Signing now includes the amount
         const dataForSigOne = getStandardizedDataForSigning(noteData);
         noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
-        // --- END MODIFICATION ---
         
         const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
         noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
@@ -441,57 +468,48 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // --- FIX: Re-implement compact binary payload to prevent data-too-large errors ---
-    const createBinaryPayload = (noteData) => {
-        const textEncoder = new TextEncoder();
-        const serialBytes = textEncoder.encode(noteData.serial);
-
-        // --- MODIFICATION: Increase buffer size to account for the amount (4 bytes)
-        const bufferSize = 4 + 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+    const createJabPayload = (noteData) => {
+        const bufferSize = Constants.FALCON_PUBKEY_SIZE + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
-        const view = new DataView(buffer);
         let offset = 0;
+        const view = new DataView(buffer);
 
-        view.setUint32(offset, noteData.timestamp, false); offset += 4;
-        // --- MODIFICATION: Add amount to the buffer
-        view.setUint32(offset, noteData.amount, false); offset += 4;
-        new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
         new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
-        view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
 
-        return Utils.binaryToString(new Uint8Array(buffer)); // Convert binary buffer to a string for the encoder
+        return Utils.binaryToString(new Uint8Array(buffer));
     };
 
-    const parseBinaryPayload = (binaryString) => {
+    const createQrPayload = async (noteData) => {
+        const payload = {
+            timestamp: noteData.timestamp,
+            amount: noteData.amount,
+            serial: noteData.serial
+        };
+        const encryptedPayload = await BankCrypto.encryptPayload(payload, noteData.ephemeralPublicKey);
+        return JSON.stringify(encryptedPayload);
+    };
+
+    const parseJabPayload = (binaryString) => {
         const buffer = Utils.stringToBinary(binaryString);
-        const view = new DataView(buffer.buffer);
-        const textDecoder = new TextDecoder();
         let offset = 0;
-
-        const timestamp = view.getUint32(offset, false); offset += 4;
-        // --- MODIFICATION: Read amount from the buffer
-        const amount = view.getUint32(offset, false); offset += 4;
-        const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
         const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
-        const sigOneLength = view.getUint16(offset, false); offset += 2;
-        const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
+        const signatureOne = buffer.subarray(offset, offset + 128); offset += 128;
         const signatureTwo = buffer.subarray(offset);
-        
-        // --- MODIFICATION: Return the parsed amount
-        return { timestamp, amount, serial, ephemeralPublicKey, signatureOne, signatureTwo };
+        return { ephemeralPublicKey, signatureOne, signatureTwo };
     };
-    // --- END FIX ---
-    
+
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
-        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
+        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote with dual codes...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const jabPayload = createBinaryPayload(noteData); // Use the compact binary payload
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
+            const jabPayload = createJabPayload(noteData);
+            const qrPayload = await createQrPayload(noteData);
+
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, qrPayload, 1350, 750);
+            Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed with dual codes and ready for download.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
@@ -508,12 +526,13 @@ const BanknoteLogic = (() => {
             const notesToDownload = [];
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                const jabPayload = createBinaryPayload(noteData); // Use the compact binary payload
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, 1350, 750);
+                const jabPayload = createJabPayload(noteData);
+                const qrPayload = await createQrPayload(noteData);
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, qrPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
                 if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, qrPayload, 1350, 750);
                 }
             }
             
@@ -536,65 +555,115 @@ const BanknoteLogic = (() => {
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
-            UIHandlers.handlePasswordKeyInput({target:{value:null}}); // Clear password state
+            UIHandlers.handlePasswordKeyInput({target:{value:null}});
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.", 'warning');
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch download complete. For security, the Master Key has been cleared from memory. Please reactivate in Step 2 for more actions.`, 'success');
             Utils.log("Key cleared for security after batch operation.", 'warning');
         }
     };
 
+    const handleJabFileSelect = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !state.masterPublicKey) return;
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning JAB Code...', 'info');
+        try {
+            const decodedText = await jabcode.decode_message(file);
+            if (!decodedText) throw new Error('JAB Code not found or unreadable.');
+            const parsedData = parseJabPayload(decodedText);
+            state.validationData.jabPayload = parsedData;
+            Utils.updateStatus(DOMElements.validationResult, '✅ JAB Code scanned. Awaiting QR code scan.', 'info');
+            DOMElements.validatorJabInput.value = '';
+            await validateNote();
+        } catch (e) {
+            Utils.updateStatus(DOMElements.validationResult, `❌ JAB Code scan failed: ${e.message}`, 'error');
+            state.validationData.jabPayload = null;
+            state.validationData.qrPayload = null;
+            DOMElements.validatorJabInput.value = '';
+        }
+    };
+
+    const handleQrFileSelect = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !state.masterPublicKey) return;
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Scanning QR Code...', 'info');
+        try {
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            await new Promise((resolve) => { img.onload = resolve; });
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+            const imageData = ctx.getImageData(0, 0, img.width, img.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (!code) throw new Error('QR Code not found or unreadable.');
+            state.validationData.qrPayload = JSON.parse(code.data);
+            Utils.updateStatus(DOMElements.validationResult, '✅ QR Code scanned. Awaiting JAB code scan.', 'info');
+            DOMElements.validatorQrInput.value = '';
+            await validateNote();
+        } catch (e) {
+            Utils.updateStatus(DOMElements.validationResult, `❌ QR Code scan failed: ${e.message}`, 'error');
+            state.validationData.jabPayload = null;
+            state.validationData.qrPayload = null;
+            DOMElements.validatorQrInput.value = '';
+        }
+    };
+
+    const validateNote = async () => {
+        const { jabPayload, qrPayload } = state.validationData;
+        if (!jabPayload || !qrPayload) {
+            return;
+        }
+
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Both codes scanned. Starting verification...', 'info');
+        let resultHTML = '<span class="valid">✅ Both codes scanned. Verifying signatures...</span>\n';
+
+        try {
+            const decryptedData = await BankCrypto.decryptPayload(qrPayload, jabPayload.ephemeralPublicKey);
+            
+            const noteDataForVerification = {
+                ...decryptedData,
+                ephemeralPublicKey: jabPayload.ephemeralPublicKey,
+                signatureOne: jabPayload.signatureOne,
+                signatureTwo: jabPayload.signatureTwo
+            };
+
+            const dataForSigOne = getStandardizedDataForSigning(noteDataForVerification);
+            const isSigOneValid = await BankCrypto.verifySignature(noteDataForVerification.signatureOne, dataForSigOne, noteDataForVerification.ephemeralPublicKey);
+            if (!isSigOneValid) {
+                resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                DOMElements.validationResult.innerHTML = resultHTML;
+                return;
+            }
+            resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
+
+            const dataForSigTwo = getStandardizedDataForMasterSig(noteDataForVerification);
+            const isSigTwoValid = await BankCrypto.verifySignature(noteDataForVerification.signatureTwo, dataForSigTwo, state.masterPublicKey);
+            if (!isSigTwoValid) {
+                resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                DOMElements.validationResult.innerHTML = resultHTML;
+                return;
+            }
+            resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+            resultHTML += `\n<span style="font-size:14px;font-weight:600;">Amount: ${decryptedData.amount} SAD</span>`;
+            
+            DOMElements.validationResult.innerHTML = resultHTML;
+
+        } catch (e) {
+            resultHTML += `❌ Verification Failed: ${e.message}`;
+            DOMElements.validationResult.innerHTML = resultHTML;
+        } finally {
+            state.validationData.jabPayload = null;
+            state.validationData.qrPayload = null;
+        }
+    };
+
+
     return {
         handleCreateAndSignNotes,
         handleDownloadBatch,
-        handleFileSelectForValidation: async (event) => {
-            const file = event.target.files[0];
-            if (!file || !state.masterPublicKey) return;
-            const resultDiv = DOMElements.validationResult;
-            Utils.updateStatus(resultDiv, '⏳ Validating banknote... Please wait.', 'info');
-            try {
-                const decodedText = await jabcode.decode_message(file);
-                if (!decodedText) {
-                    Utils.updateStatus(resultDiv, '❌ JAB Code not found or unreadable on the banknote.', 'error');
-                    return;
-                }
-                
-                let resultHTML = '<span class="valid">✅ JAB Code Found. Verifying signatures...</span>\n';
-                resultDiv.innerHTML = resultHTML;
-
-                const parsedData = parseBinaryPayload(decodedText); // Use the binary parser
-                
-                // --- MODIFICATION: The amount must be part of the signed data
-                const dataForSigOne = getStandardizedDataForSigning(parsedData);
-                const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                if (!isSigOneValid) {
-                    resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
-                    resultDiv.innerHTML = resultHTML;
-                    return;
-                }
-                resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
-                // --- END MODIFICATION ---
-
-                const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
-                const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                if (!isSigTwoValid) {
-                    resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
-                    resultDiv.innerHTML = resultHTML;
-                    return;
-                }
-                resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
-                
-                // --- MODIFICATION: Display amount from the JAB code
-                resultHTML += `\n<span style="font-size:14px;font-weight:600;">Amount: ${parsedData.amount} SAD</span>`;
-                // --- END MODIFICATION ---
-
-                resultDiv.innerHTML = resultHTML;
-            } catch (e) {
-                Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt.`, 'error');
-                console.error(e);
-            } finally {
-                event.target.value = '';
-            }
-        }
+        handleJabFileSelect,
+        handleQrFileSelect
     };
 })();
 
@@ -606,7 +675,7 @@ const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
     
     return {
-        drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload, width, height) => {
+        drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload, qrPayload, width, height) => {
             return new Promise((resolve, reject) => {
                 const ctx = targetCanvas.getContext("2d");
                 const { amount, serial, verificationKey, signatureTwo } = noteData;
@@ -618,8 +687,6 @@ const BanknoteDrawer = (() => {
                 bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
                 bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
                 ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, width, height);
-                
-                // Drawing logic for Guilloche, Watermark, and Noise has been removed.
                 
                 ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
                 ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
@@ -633,35 +700,59 @@ const BanknoteDrawer = (() => {
                 ctx.fillText(amount.toString(), width - (120 * scale), 190 * scale);
                 ctx.shadowColor = "transparent";
 
+                let jabCodePromise, qrCodePromise;
+
                 try {
                     const jabCodeBase64 = jabcode.encode_message(jabPayload);
-                    const img = new Image();
-                    img.onload = () => {
-                        const qrX = width - (150 * scale) - (380 * scale);
-                        const qrY = height - (520 * scale);
-                        ctx.fillStyle = 'white';
-                        ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), (380 * scale) + (40 * scale), (380 * scale) + (40 * scale));
-                        ctx.drawImage(img, qrX, qrY, 380 * scale, 380 * scale);
-                        
-                        ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
-                        ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
-                        resolve();
-                    };
-                    img.onerror = (err) => {
-                        // Pass the error object to reject
-                        reject(new Error("Failed to load generated JAB Code image."));
-                    };
-                    img.src = jabCodeBase64;
+                    const jabImg = new Image();
+                    jabCodePromise = new Promise((resolve, reject) => {
+                        jabImg.onload = () => resolve(jabImg);
+                        jabImg.onerror = reject;
+                        jabImg.src = jabCodeBase64;
+                    });
                 } catch (err) {
                      console.error("JAB Code Generation Error:", err);
-                     ctx.fillStyle = 'red';
-                     ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
-                     ctx.textAlign = 'center';
-                     const centerX = width - (150 * scale) - (190 * scale);
-                     const centerY = height - (330 * scale);
-                     ctx.fillText("JAB CODE ERROR", centerX, centerY);
                      reject(err);
+                     return;
                 }
+
+                try {
+                    const qrCanvas = document.createElement('canvas');
+                    QRCode.toCanvas(qrCanvas, qrPayload, { errorCorrectionLevel: 'H', width: 380, margin: 4 }, function (error) {
+                        if (error) reject(error);
+                    });
+                    qrCodePromise = new Promise(resolve => {
+                        const qrImg = new Image();
+                        qrImg.onload = () => resolve(qrImg);
+                        qrImg.src = qrCanvas.toDataURL('image/png');
+                    });
+                } catch (err) {
+                    console.error("QR Code Generation Error:", err);
+                    reject(err);
+                    return;
+                }
+
+                Promise.all([jabCodePromise, qrCodePromise]).then(([jabImg, qrImg]) => {
+                    const jabX = width - (150 * scale) - (380 * scale);
+                    const jabY = height - (520 * scale);
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(jabX - (20 * scale), jabY - (20 * scale), (380 * scale) + (40 * scale), (380 * scale) + (40 * scale));
+                    ctx.drawImage(jabImg, jabX, jabY, 380 * scale, 380 * scale);
+                    
+                    const qrX = 150 * scale;
+                    const qrY = height - (520 * scale);
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), (380 * scale) + (40 * scale), (380 * scale) + (40 * scale));
+                    ctx.drawImage(qrImg, qrX, qrY, 380 * scale, 380 * scale);
+
+                    ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
+                    ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", width / 2, height - 60 * scale);
+                    resolve();
+
+                }).catch(err => {
+                    console.error("Code Drawing Error:", err);
+                    reject(err);
+                });
             });
         }
     };
@@ -691,7 +782,8 @@ async function main() {
     DOMElements.reconstructKeyButton.addEventListener('click', UIHandlers.handleReconstructKey);
     DOMElements.createNoteButton.addEventListener('click', BanknoteLogic.handleCreateAndSignNotes);
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
-    DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
+    DOMElements.validatorJabInput.addEventListener('change', BanknoteLogic.handleJabFileSelect);
+    DOMElements.validatorQrInput.addEventListener('change', BanknoteLogic.handleQrFileSelect);
     
     DOMElements.downloadQrButton.addEventListener('click', () => {
         const img = DOMElements.qrDisplay.querySelector('img');
@@ -701,6 +793,11 @@ async function main() {
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
+
+    // Load jsQR library dynamically
+    const script = document.createElement('script');
+    script.src = 'https://cdn.skypack.dev/jsqr';
+    document.head.appendChild(script);
 }
 
 main();
