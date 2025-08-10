@@ -35,6 +35,7 @@
         h1 {
             color: #34495e;
             font-size: 2.5rem;
+            text-align: center;
         }
         
         @media (max-width: 768px) {
@@ -88,16 +89,16 @@
             align-items: flex-start;
             gap: 5px;
             font-weight: bold;
-            font-size: 1.8rem;
+            font-size: 1.5rem;
         }
         
-        .serial { color: #e74c3c; }
-        .key { color: #f39c12; }
+        .serial, .key, .visual-key, .amount {
+             transition: color 0.5s ease;
+        }
+        
         .amount {
             font-size: 2.5rem;
             font-weight: bold;
-            transition: color 0.5s ease;
-            color: #3498db;
         }
         
         .barcode-container {
@@ -109,12 +110,15 @@
             grid-template-rows: 1fr 1fr;
             place-items: center;
             padding: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
 
         .barcode {
             width: 100px;
             height: 100px;
-            opacity: 0.2;
+            opacity: 0.15;
             transition: opacity 0.5s ease;
         }
         
@@ -135,7 +139,7 @@
         .input-group label {
             display: flex;
             flex-direction: column;
-            width: calc(50% - 5px);
+            flex: 1;
             min-width: 150px;
             font-size: 0.9rem;
             color: #555;
@@ -173,26 +177,14 @@
             transform: translateY(-2px);
         }
 
-        #redesignBtn {
-            background-color: #3498db;
-        }
-        #redesignBtn:hover {
-            background-color: #2980b9;
-        }
+        #redesignBtn { background-color: #3498db; }
+        #redesignBtn:hover { background-color: #2980b9; }
 
-        #downloadBtn {
-            background-color: #2ecc71;
-        }
-        #downloadBtn:hover {
-            background-color: #27ae60;
-        }
+        #downloadBtn { background-color: #2ecc71; }
+        #downloadBtn:hover { background-color: #27ae60; }
 
-        #generateAllBtn {
-            background-color: #e67e22;
-        }
-        #generateAllBtn:hover {
-            background-color: #d35400;
-        }
+        #generateAllBtn { background-color: #e67e22; }
+        #generateAllBtn:hover { background-color: #d35400; }
 
         .validation-section {
             width: 100%;
@@ -210,6 +202,14 @@
         .validation-section h3 {
             margin-top: 0;
             color: #333;
+        }
+        
+        #validateBtn {
+            flex-grow: 0;
+            background-color: #9b59b6;
+        }
+        #validateBtn:hover {
+            background-color: #8e44ad;
         }
         
         .validation-result {
@@ -241,26 +241,27 @@
         <h1>Digital Banknote Creator</h1>
 
         <div class="banknote-container" id="banknote-container">
+             <div class="barcode-container">
+                <img id="barcode-1" class="barcode" alt="Amount JAB Code">
+                <img id="barcode-2" class="barcode" alt="Serial JAB Code">
+                <img id="barcode-3" class="barcode" alt="Verification Key JAB Code">
+                <img id="barcode-4" class="barcode" alt="Visual Key JAB Code">
+            </div>
             <div class="banknote-details">
                 <div class="details-top">
                     <div class="serial-key-group">
-                        <span class="serial" id="serial">12345678</span>
-                        <span class="key" id="key">87654321</span>
+                        <span class="serial" id="serial">SERIALNUMB</span>
+                        <span class="key" id="key">VERIFYKEY</span>
+                        <span class="visual-key" id="visual-key">VISUALKEY</span>
                     </div>
                     <span class="amount" id="amount-display">100</span>
-                </div>
-                <div class="barcode-container">
-                    <img id="barcode-1" class="barcode">
-                    <img id="barcode-2" class="barcode">
-                    <img id="barcode-3" class="barcode">
-                    <img id="barcode-4" class="barcode">
                 </div>
             </div>
         </div>
 
         <div class="controls">
             <div class="input-group">
-                <label for="inputAmount">Amount (Max 100):
+                <label for="inputAmount">Amount (1-100):
                     <input type="number" id="inputAmount" value="100" min="1" max="100">
                 </label>
                 <label for="inputCount">Number of Banknotes:
@@ -278,8 +279,8 @@
         <div class="validation-section">
             <h3>Banknote Validation</h3>
             <div class="input-group">
-                <label for="validationKey">Enter Validation Key:
-                    <input type="text" id="validationKey" placeholder="Enter 8-digit key">
+                <label for="validationKey">Enter Verification Key:
+                    <input type="text" id="validationKey" placeholder="Enter 8-character key">
                 </label>
                 <button id="validateBtn">Validate</button>
             </div>
@@ -293,10 +294,12 @@
 
     <script src="jabcodeJSLib.min.js"></script>
     <script>
+        // DOM Elements
         const banknoteContainer = document.getElementById('banknote-container');
         const amountDisplay = document.getElementById('amount-display');
         const serialDisplay = document.getElementById('serial');
         const keyDisplay = document.getElementById('key');
+        const visualKeyDisplay = document.getElementById('visual-key');
         const barcodes = [
             document.getElementById('barcode-1'),
             document.getElementById('barcode-2'),
@@ -315,15 +318,34 @@
         let validKeys = {};
         const jabcode = new JabcodeJSInterface();
 
-        function generateTimeBasedCode(length) {
-            const time = Math.floor(Date.now() / 30000); // 30-second window
-            let code = (time * 123456789).toString().substring(0, length);
+        /**
+         * Generates a time-based code using the current time and a salt.
+         * @param {number} length - The desired length of the code.
+         * @param {number} salt - A number to make the generated code unique.
+         * @returns {string} The generated time-based code.
+         */
+        function generateTimeBasedCode(length, salt) {
+            const time = Math.floor(Date.now() / 1000); // Time in seconds
+            let code = (time * salt).toString(36).toUpperCase();
             while (code.length < length) {
-                code += '0';
+                code = '0' + code;
             }
-            return code;
+            return code.slice(-length);
+        }
+        
+        /**
+         * Generates a random alphanumeric code.
+         * @param {number} length - The desired length of the code.
+         * @returns {string} The random code.
+         */
+        function generateRandomCode(length) {
+            return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
         }
 
+        /**
+         * Generates a random hex color string.
+         * @returns {string} A color in hex format (e.g., "#RRGGBB").
+         */
         function getRandomColor() {
             const letters = '0123456789ABCDEF';
             let color = '#';
@@ -333,92 +355,130 @@
             return color;
         }
 
-        async function updateBanknote() {
-            const newBgColor = getRandomColor();
-            const newSerialColor = getRandomColor();
-            const newKeyColor = getRandomColor();
-            
-            banknoteContainer.style.backgroundColor = newBgColor;
-            serialDisplay.style.color = newSerialColor;
-            keyDisplay.style.color = newKeyColor;
-            
-            const newSerial = generateTimeBasedCode(8);
-            const newKey = generateTimeBasedCode(8);
-            
-            serialDisplay.innerText = newSerial;
-            keyDisplay.innerText = newKey;
-            
-            // Generate four JAB Codes for a more complex look
-            for (let i = 0; i < barcodes.length; i++) {
-                const message = `Serial:${newSerial},Key:${newKey},Code:${i}`;
-                barcodes[i].src = jabcode.encode_message(message, 1, 10);
-            }
-            
-            validKeys[newKey] = true;
+        /**
+         * Determines if a background color is light or dark and returns a contrasting text color.
+         * @param {string} hexcolor - The background color in hex format.
+         * @returns {string} Either "#000000" (black) or "#FFFFFF" (white).
+         */
+        function getContrastYIQ(hexcolor) {
+            hexcolor = hexcolor.replace("#", "");
+            const r = parseInt(hexcolor.substr(0, 2), 16);
+            const g = parseInt(hexcolor.substr(2, 2), 16);
+            const b = parseInt(hexcolor.substr(4, 2), 16);
+            const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+            return (yiq >= 128) ? '#000000' : '#FFFFFF';
         }
 
+        /**
+         * Updates the banknote with new colors, keys, and JAB codes.
+         */
+        async function updateBanknote() {
+            // --- Generate New Data ---
+            const amount = inputAmount.value;
+            const newSerial = generateTimeBasedCode(8, 12345);
+            const newVerificationKey = generateTimeBasedCode(8, 67890);
+            const newVisualKey = generateRandomCode(8);
+            
+            // --- Update Visuals ---
+            const newBgColor = getRandomColor();
+            const newTextColor = getContrastYIQ(newBgColor);
+            
+            banknoteContainer.style.backgroundColor = newBgColor;
+            [amountDisplay, serialDisplay, keyDisplay, visualKeyDisplay].forEach(el => {
+                el.style.color = newTextColor;
+            });
+            
+            serialDisplay.innerText = newSerial;
+            keyDisplay.innerText = newVerificationKey;
+            visualKeyDisplay.innerText = newVisualKey;
+            amountDisplay.innerText = amount;
+            
+            // --- Generate and Assign JAB Codes ---
+            const dataForBarcodes = [amount, newSerial, newVerificationKey, newVisualKey];
+            dataForBarcodes.forEach((data, i) => {
+                if(data){
+                    barcodes[i].src = jabcode.encode_message(data, 1, 10);
+                }
+            });
+            
+            // Store the key for validation
+            validKeys[newVerificationKey] = true;
+        }
+
+        /**
+         * Draws the current banknote design onto a hidden canvas and triggers a download.
+         */
         async function createAndDownloadBanknote() {
             const canvas = document.getElementById('banknoteCanvas');
             const ctx = canvas.getContext('2d');
             
-            // Draw banknote background
-            ctx.fillStyle = window.getComputedStyle(banknoteContainer).backgroundColor;
+            // Get computed styles from the displayed banknote
+            const bgColor = window.getComputedStyle(banknoteContainer).backgroundColor;
+            const textColor = window.getComputedStyle(amountDisplay).color; // All text has same color
+
+            // 1. Draw banknote background
+            ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw amount
+            // 2. Draw Text (Amount, Serial, Keys)
+            ctx.fillStyle = textColor;
             ctx.font = "bold 40px Vazir";
             ctx.textAlign = "right";
-            ctx.fillStyle = window.getComputedStyle(amountDisplay).color;
             ctx.fillText(amountDisplay.innerText, 580, 60);
 
-            // Draw serial and key
-            ctx.font = "bold 30px Vazir";
+            ctx.font = "bold 24px Vazir";
             ctx.textAlign = "left";
-            ctx.fillStyle = window.getComputedStyle(serialDisplay).color;
-            ctx.fillText(serialDisplay.innerText, 20, 60);
-            ctx.fillStyle = window.getComputedStyle(keyDisplay).color;
-            ctx.fillText(keyDisplay.innerText, 20, 100);
+            ctx.fillText(serialDisplay.innerText, 20, 40);
+            ctx.fillText(keyDisplay.innerText, 20, 75);
+            ctx.fillText(visualKeyDisplay.innerText, 20, 110);
 
-            // Draw all four barcodes to canvas
-            const barcodePositions = [
-                { x: 100, y: 120, width: 150, height: 150 }, 
-                { x: 350, y: 120, width: 150, height: 150 },
-                { x: 100, y: 220, width: 150, height: 150 }, 
-                { x: 350, y: 220, width: 150, height: 150 }
-            ];
-
-            const barcodeDrawPromises = barcodes.map((barcode, index) => {
+            // 3. Draw all four JAB Codes onto the canvas
+            const barcodeDrawPromises = barcodes.map((barcodeImg, index) => {
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.onload = () => {
-                        ctx.drawImage(img, barcodePositions[index].x, barcodePositions[index].y, barcodePositions[index].width, barcodePositions[index].height);
+                        // Position the barcodes in a 2x2 grid in the center
+                        const x = (index % 2 === 0) ? 125 : 325;
+                        const y = (index < 2) ? 150 : 250;
+                        ctx.globalAlpha = 0.8; // Make JAB codes more visible on canvas
+                        ctx.drawImage(img, x, y, 150, 150);
+                        ctx.globalAlpha = 1.0; // Reset alpha
                         resolve();
                     };
-                    img.src = barcode.src;
+                    img.onerror = () => resolve(); // Resolve even if image fails to load
+                    img.src = barcodeImg.src;
                 });
             });
 
             await Promise.all(barcodeDrawPromises);
 
-            // Download the canvas as an image
+            // 4. Trigger Download
             const link = document.createElement('a');
             link.download = `banknote-${serialDisplay.innerText}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
         }
 
+        /**
+         * Generates and downloads a specified number of unique banknotes.
+         */
         async function generateAllBanknotes() {
             const count = parseInt(inputCount.value);
             if (count > 0) {
                 for (let i = 0; i < count; i++) {
                     await updateBanknote();
+                    // A small delay to ensure the next banknote gets a new time-based key
+                    await new Promise(resolve => setTimeout(resolve, 50)); 
                     await createAndDownloadBanknote();
                 }
             }
         }
 
+        /**
+         * Validates the user-entered key against the list of generated keys.
+         */
         function validateKey() {
-            const inputKey = validationKeyInput.value;
+            const inputKey = validationKeyInput.value.toUpperCase();
             validationResult.style.display = 'block';
             if (validKeys[inputKey]) {
                 validationResult.className = 'validation-result valid';
@@ -429,6 +489,7 @@
             }
         }
         
+        // --- Event Listeners ---
         redesignBtn.addEventListener('click', updateBanknote);
         downloadBtn.addEventListener('click', createAndDownloadBanknote);
         generateAllBtn.addEventListener('click', generateAllBanknotes);
@@ -436,18 +497,17 @@
 
         inputAmount.addEventListener('input', (e) => {
             let value = parseInt(e.target.value);
-            if (value > 100) {
-                e.target.value = 100;
-                value = 100;
-            }
-            if (value < 1) {
-                e.target.value = 1;
-                value = 1;
-            }
+            if (isNaN(value)) value = 1;
+            if (value > 100) value = 100;
+            if (value < 1) value = 1;
+            
+            e.target.value = value;
             amountDisplay.innerText = value;
+            // Update the amount JAB code in real-time
+            barcodes[0].src = jabcode.encode_message(String(value), 1, 10);
         });
 
-        // Initial setup
+        // --- Initial Setup ---
         updateBanknote();
     </script>
 </body>
