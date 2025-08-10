@@ -106,13 +106,22 @@
             transition: color 0.5s ease;
         }
 
-        .amount, .serial, .key {
+        .amount {
             font-size: 2.5rem;
             font-weight: bold;
             transition: color 0.5s ease;
+            color: #3498db;
+        }
+
+        .serial-key-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+            font-weight: bold;
+            font-size: 1.8rem;
         }
         
-        .amount { color: #3498db; }
         .serial { color: #e74c3c; }
         .key { color: #f39c12; }
         
@@ -241,16 +250,14 @@
         <div class="banknote-container" id="banknote-container">
             <div class="banknote-details">
                 <div class="details-top">
-                    <span class="serial" id="serial">12345678</span>
+                    <div class="serial-key-group">
+                        <span class="serial" id="serial">12345678</span>
+                        <span class="key" id="key">87654321</span>
+                    </div>
                     <span class="amount" id="amount-display">100</span>
                 </div>
                 <div class="jan-codes">
-                    <span class="jan-code" id="jan1">12345</span>
-                    <span class="jan-code" id="jan2">67890</span>
-                    <span class="jan-code" id="jan3">54321</span>
-                </div>
-                <div class="details-bottom">
-                    <span class="key" id="key">87654321</span>
+                    <span class="jan-code" id="jan1">1234567890128</span>
                 </div>
             </div>
         </div>
@@ -288,14 +295,14 @@
         <canvas id="banknoteCanvas" width="600" height="400"></canvas>
     </div>
 
+    <script src="jan-generator.js"></script>
+    <script src="jan-validator.js"></script>
     <script>
         const banknoteContainer = document.getElementById('banknote-container');
         const amountDisplay = document.getElementById('amount-display');
         const serialDisplay = document.getElementById('serial');
         const keyDisplay = document.getElementById('key');
         const jan1 = document.getElementById('jan1');
-        const jan2 = document.getElementById('jan2');
-        const jan3 = document.getElementById('jan3');
         const redesignBtn = document.getElementById('redesignBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const generateAllBtn = document.getElementById('generateAllBtn');
@@ -307,6 +314,16 @@
         
         let validKeys = {};
 
+        // A simple TOTP-like implementation for demonstration
+        function generateTimeBasedCode(length) {
+            const time = Math.floor(Date.now() / 30000); // 30-second window
+            let code = (time * 123456789).toString().substring(0, length);
+            while (code.length < length) {
+                code += '0';
+            }
+            return code;
+        }
+
         function getRandomColor() {
             const letters = '0123456789ABCDEF';
             let color = '#';
@@ -314,14 +331,6 @@
                 color += letters[Math.floor(Math.random() * 16)];
             }
             return color;
-        }
-
-        function getRandomNumber(length) {
-            let result = '';
-            for (let i = 0; i < length; i++) {
-                result += Math.floor(Math.random() * 10).toString();
-            }
-            return result;
         }
 
         function updateBanknote() {
@@ -333,22 +342,17 @@
             banknoteContainer.style.backgroundColor = newBgColor;
             serialDisplay.style.color = newSerialColor;
             keyDisplay.style.color = newKeyColor;
-            
             jan1.style.color = newJanColor;
-            jan2.style.color = newJanColor;
-            jan3.style.color = newJanColor;
 
-            const newSerial = getRandomNumber(8);
-            const newKey = getRandomNumber(8);
-            const newJan1 = getRandomNumber(5);
-            const newJan2 = getRandomNumber(5);
-            const newJan3 = getRandomNumber(5);
+            const newSerial = generateTimeBasedCode(8);
+            const newKey = generateTimeBasedCode(8);
+            
+            // Assuming the Jan Code library provides this function
+            const newJan = typeof generateJanCode === 'function' ? generateJanCode() : '1234567890128';
 
             serialDisplay.innerText = newSerial;
             keyDisplay.innerText = newKey;
-            jan1.innerText = newJan1;
-            jan2.innerText = newJan2;
-            jan3.innerText = newJan3;
+            jan1.innerText = newJan;
             
             validKeys[newKey] = true;
         }
@@ -366,19 +370,17 @@
             ctx.fillStyle = window.getComputedStyle(amountDisplay).color;
             ctx.fillText(amountDisplay.innerText, 580, 60);
 
+            ctx.font = "bold 30px Vazir";
             ctx.textAlign = "left";
             ctx.fillStyle = window.getComputedStyle(serialDisplay).color;
             ctx.fillText(serialDisplay.innerText, 20, 60);
-
-            ctx.textAlign = "center";
             ctx.fillStyle = window.getComputedStyle(keyDisplay).color;
-            ctx.fillText(keyDisplay.innerText, 300, 380);
+            ctx.fillText(keyDisplay.innerText, 20, 100);
 
             ctx.font = "bold 24px Vazir";
+            ctx.textAlign = "center";
             ctx.fillStyle = window.getComputedStyle(jan1).color;
-            ctx.fillText(jan1.innerText, 300, 180);
-            ctx.fillText(jan2.innerText, 300, 220);
-            ctx.fillText(jan3.innerText, 300, 260);
+            ctx.fillText(jan1.innerText, 300, 200);
 
             const link = document.createElement('a');
             link.download = `banknote-${serialDisplay.innerText}.png`;
