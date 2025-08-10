@@ -1,540 +1,454 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Banknote Creator</title>
+    <title>Sadat Digital Banknote (Falcon-1024 + JAB Code)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        @font-face {
-            font-family: 'Vazir';
-            src: url('https://cdn.rawgit.com/rastikerdar/vazir-font/v27.0.0/dist/Vazir-Bold.woff2') format('woff2');
-            font-weight: bold;
+        :root {
+            --primary-font: 'Poppins', 'Segoe UI', sans-serif; [cite_start]/* [cite: 1] */
+            --mono-font: 'Roboto Mono', monospace; [cite_start]/* [cite: 2] */
+            --dark-bg: #10101a; [cite_start]/* [cite: 2] */
+            --medium-bg: #1a1a2e; [cite_start]/* [cite: 2] */
+            --light-bg: #2a2a3e; [cite_start]/* [cite: 2] */
+            --accent-color-1: #e040fb; [cite_start]/* [cite: 2] */
+            --accent-color-2: #7c4dff; [cite_start]/* [cite: 2] */
+            --text-color: #e0e0e0; [cite_start]/* [cite: 2] */
+            --text-muted: #a0a0c0; [cite_start]/* [cite: 2] */
+            --success-color: #00e676; [cite_start]/* [cite: 2] */
+            --error-color: #ff5252; [cite_start]/* [cite: 3] */
+            --info-color: #40c4ff; [cite_start]/* [cite: 3] */
+            --border-color: rgba(124, 77, 255, 0.2); [cite_start]/* [cite: 3] */
         }
-
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            font-family: 'Vazir', sans-serif;
-            background-color: #f0f2f5;
-            margin: 0;
-            padding: 20px;
-            color: #2c3e50;
+        body { margin: 0; [cite_start]/* [cite: 3] */
+            font-family: var(--primary-font); background-color: var(--dark-bg); background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%); [cite_start]/* [cite: 4] */
+            color: var(--text-color); text-align: center; padding: 24px; [cite_start]} /* [cite: 5] */
+        .container { max-width: 900px; [cite_start]/* [cite: 5] */
+            margin: 0 auto; background: rgba(26, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); [cite_start]/* [cite: 6] */
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); [cite_start]} /* [cite: 7] */
+        .header { border-bottom: 1px solid var(--border-color); [cite_start]/* [cite: 7] */
+            padding-bottom: 16px; margin-bottom: 24px; [cite_start]} /* [cite: 8] */
+        h1 { font-size: 2.5rem; font-weight: 600; color: #fff; [cite_start]/* [cite: 8] */
+            margin: 0 0 8px 0; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; [cite_start]/* [cite: 9] */
         }
-
-        .container {
-            width: 100%;
-            max-width: 700px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
+        .header p { font-size: 1rem; color: var(--text-muted); margin: 0; [cite_start]/* [cite: 10] */
         }
-
-        h1 {
-            color: #34495e;
-            font-size: 2.5rem;
-            text-align: center;
+        .jabcode-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 20px; margin-top: 24px; background: #050508; border-radius: 16px; border: 1px solid var(--border-color); }
+        .jabcode-container img { max-width: calc(50% - 20px); height: auto; border: 2px solid var(--light-bg); border-radius: 8px; }
+        .jabcode-container p { width: 100%; color: var(--text-muted); font-size: 0.9rem; margin-top: 10px; }
+        input[type="number"], button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); [cite_start]/* [cite: 13] */
+            border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; [cite_start]/* [cite: 14] */
+            outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; [cite_start]/* [cite: 15] */
         }
-        
-        @media (max-width: 768px) {
-            h1 {
-                font-size: 2rem;
-            }
+        input[type="number"] { font-family: var(--mono-font); font-weight: 700; text-align: center; width: 150px; [cite_start]/* [cite: 16] */
         }
-
-        .banknote-container {
-            width: 600px;
-            height: 400px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            border-radius: 15px;
-            overflow: hidden;
-            position: relative;
-            transition: all 0.5s ease-in-out;
-            background-color: #f7f9fc;
-            border: 1px solid #e0e0e0;
+        input[type="number"]:focus { border-color: var(--accent-color-2); box-shadow: 0 0 15px rgba(124, 77, 255, 0.5); [cite_start]/* [cite: 17] */
         }
-        
-        @media (max-width: 768px) {
-            .banknote-container {
-                width: 100%;
-                max-width: 400px;
-                height: 267px;
-            }
+        button:not([disabled]), label:not([disabled]) { font-weight: 600; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); border: none; [cite_start]/* [cite: 18] */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); [cite_start]} /* [cite: 19] */
+        button.sub-button, label.sub-button { background: var(--light-bg); [cite_start]/* [cite: 19] */
+            border: 1px solid var(--border-color); [cite_start]} /* [cite: 20] */
+        button[disabled], label[disabled] { cursor: not-allowed; opacity: 0.5; [cite_start]/* [cite: 20] */
+            background: var(--light-bg); border: 1px solid var(--border-color); [cite_start]} /* [cite: 21] */
+        button:hover:not([disabled]), label:hover:not([disabled]) { transform: translateY(-2px); [cite_start]/* [cite: 21] */
+            box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); [cite_start]} /* [cite: 22] */
+        .section { background: rgba(16, 16, 26, 0.5); [cite_start]/* [cite: 22] */
+            padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); [cite_start]/* [cite: 23] */
         }
-
-        .banknote-details {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            left: 20px;
-            bottom: 20px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            color: #2c3e50;
+        h2 { font-size: 1.5rem; color: var(--text-color); margin-top: 0; margin-bottom: 20px; font-weight: 600; [cite_start]/* [cite: 24] */
+            border-bottom: 1px solid var(--border-color); padding-bottom: 10px; [cite_start]} /* [cite: 25] */
+        .controls-grid { display: flex; justify-content: center; [cite_start]/* [cite: 25] */
+            align-items: center; flex-wrap: wrap; gap: 16px; [cite_start]} /* [cite: 26] */
+        #validation-result, #key-status { margin-top: 20px; [cite_start]/* [cite: 26] */
+            font-size: 12px; font-weight: normal; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; [cite_start]/* [cite: 27] */
+            font-family: var(--mono-font); border: 1px solid var(--border-color); transition: all 0.3s ease; [cite_start]/* [cite: 28] */
         }
-
-        .details-top {
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .serial-key-group {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 5px;
-            font-weight: bold;
-            font-size: 1.5rem;
-        }
-        
-        .serial, .key, .visual-key, .amount {
-             transition: color 0.5s ease;
-        }
-        
-        .amount {
-            font-size: 2.5rem;
-            font-weight: bold;
-        }
-        
-        .barcode-container {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr;
-            place-items: center;
-            padding: 20px;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .barcode {
-            width: 100px;
-            height: 100px;
-            opacity: 0.15;
-            transition: opacity 0.5s ease;
-        }
-        
-        .controls {
-            width: 100%;
-            max-width: 600px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .input-group label {
-            display: flex;
-            flex-direction: column;
-            flex: 1;
-            min-width: 150px;
-            font-size: 0.9rem;
-            color: #555;
-        }
-
-        .input-group input {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            outline: none;
-            font-family: 'Vazir', sans-serif;
-            font-size: 1rem;
-        }
-        
-        .buttons {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        button {
-            flex: 1;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: 'Vazir', sans-serif;
-            font-size: 1rem;
-            font-weight: bold;
-            color: white;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-        }
-
-        #redesignBtn { background-color: #3498db; }
-        #redesignBtn:hover { background-color: #2980b9; }
-
-        #downloadBtn { background-color: #2ecc71; }
-        #downloadBtn:hover { background-color: #27ae60; }
-
-        #generateAllBtn { background-color: #e67e22; }
-        #generateAllBtn:hover { background-color: #d35400; }
-
-        .validation-section {
-            width: 100%;
-            max-width: 600px;
-            margin-top: 20px;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            background-color: #fff;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .validation-section h3 {
-            margin-top: 0;
-            color: #333;
-        }
-        
-        #validateBtn {
-            flex-grow: 0;
-            background-color: #9b59b6;
-        }
-        #validateBtn:hover {
-            background-color: #8e44ad;
-        }
-        
-        .validation-result {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 8px;
-            font-weight: bold;
-            text-align: center;
-            display: none;
-        }
-
-        .validation-result.valid {
-            background-color: #e8f9ee;
-            color: #2ecc71;
-        }
-        
-        .validation-result.invalid {
-            background-color: #ffeaea;
-            color: #e74c3c;
-        }
-        
-        .canvas-container {
-            display: none;
+        .valid { color: var(--success-color); } .invalid { color: var(--error-color); [cite_start]/* [cite: 29] */
+        } .info { color: var(--info-color); [cite_start]} /* [cite: 30] */
+        code { background: var(--medium-bg); padding: 2px 6px; [cite_start]/* [cite: 30] */
+            border-radius: 4px; font-size: 1em; [cite_start]} /* [cite: 31] */
+        .input-label { font-size: 0.9rem; color: var(--text-muted); margin-right: -10px; [cite_start]/* [cite: 31] */
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Digital Banknote Creator</h1>
+<div class="container">
+    <div class="header">
+        <h1>Sadat Digital Banknote</h1>
+        <p>A secure, verifiable digital currency concept using Falcon-1024 Signatures and JAB Code.</p>
+    </div>
 
-        <div class="banknote-container" id="banknote-container">
-             <div class="barcode-container">
-                <img id="barcode-1" class="barcode" alt="Amount JAB Code">
-                <img id="barcode-2" class="barcode" alt="Serial JAB Code">
-                <img id="barcode-3" class="barcode" alt="Verification Key JAB Code">
-                <img id="barcode-4" class="barcode" alt="Visual Key JAB Code">
-            </div>
-            <div class="banknote-details">
-                <div class="details-top">
-                    <div class="serial-key-group">
-                        <span class="serial" id="serial">SERIALNUMB</span>
-                        <span class="key" id="key">VERIFYKEY</span>
-                        <span class="visual-key" id="visual-key">VISUALKEY</span>
-                    </div>
-                    <span class="amount" id="amount-display">100</span>
-                </div>
-            </div>
-        </div>
+    <div class="jabcode-container" id="jabcode-container">
+        <p>Generated JAB Codes will appear here.</p>
+    </div>
 
-        <div class="controls">
-            <div class="input-group">
-                <label for="inputAmount">Amount (1-100):
-                    <input type="number" id="inputAmount" value="100" min="1" max="100">
-                </label>
-                <label for="inputCount">Number of Banknotes:
-                    <input type="number" id="inputCount" value="1" min="1">
-                </label>
-            </div>
-            
-            <div class="buttons">
-                <button id="redesignBtn">Redesign</button>
-                <button id="downloadBtn">Download</button>
-                <button id="generateAllBtn">Generate All</button>
-            </div>
-        </div>
-
-        <div class="validation-section">
-            <h3>Banknote Validation</h3>
-            <div class="input-group">
-                <label for="validationKey">Enter Verification Key:
-                    <input type="text" id="validationKey" placeholder="Enter 8-character key">
-                </label>
-                <button id="validateBtn">Validate</button>
-            </div>
-            <div class="validation-result" id="validationResult"></div>
+    <div class="section">
+        <h2>Banknote Controls</h2>
+        <div class="controls-grid">
+            <span class="input-label">Amount:</span>
+            <input type="number" 
+                   id="amount-input" value="50000">
+            <span class="input-label">Quantity:</span>
+            <input type="number" id="quantity-input" value="1" min="1" max="100">
+            <button id="create-note-button" disabled>🎨 Generate Banknote Codes</button>
         </div>
     </div>
+
+    <div class="section">
+        <h2>Bank Key Management</h2>
+        <div class="controls-grid">
+ 
+            <button id="generate-keys-button">🔑 Generate & Export Keys</button>
+            <label for="import-public-key" class="sub-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                Import Public Key
+   
+            </label>
+            <input type="file" id="import-public-key" accept=".json" style="display: none;">
+            <label for="import-private-key" class="sub-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+           
+                 Import Private Key
+            </label>
+            <input type="file" id="import-private-key" accept=".json" style="display: none;">
+        </div>
+        <div id="key-status">Key pair status will be displayed here.</div>
+    </div>
+
+    <div class="section" id="validator-section">
+        <h2>Validate Main Banknote Code</h2>
+        <label for="validator-input">
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Select Main JAB Code Image
+        </label>
+        <input type="file" id="validator-input" accept="image/png" style="display: none;">
+        <div id="validation-result">Validation result will be displayed here.</div>
+    </div>
+</div>
+
+<script type="module">
+// --- JAB CODE INTEGRATION: Import JAB code and other libraries ---
+import JabcodeJSInterface from './jabcodeJSLib.min.js';
+import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+import { shake256 } from 'https://cdn.skypack.dev/js-sha3'; [cite_start]/* [cite: 38] */
+
+// --- Global State ---
+const jabcodeContainer = document.getElementById("jabcode-container");
+let currentNoteData = {}; [cite_start]/* [cite: 39] */
+let activeKeys = { publicKey: null, privateKey: null }; [cite_start]/* [cite: 39] */
+let falconApi = null; [cite_start]/* [cite: 39] */
+const jabcode = new JabcodeJSInterface(); // JAB Code instance
+
+// --- Utility Functions ---
+const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))); [cite_start]/* [cite: 40] */
+[cite_start]const base64ToUint8Array = (base64) => { /* [cite: 41] */
+    const binary_string = window.atob(base64); [cite_start]/* [cite: 41] */
+    const len = binary_string.length; [cite_start]/* [cite: 41] */
+    const bytes = new Uint8Array(len); [cite_start]/* [cite: 42] */
+    [cite_start]for (let i = 0; i < len; i++) { /* [cite: 42] */
+        bytes[i] = binary_string.charCodeAt(i); [cite_start]/* [cite: 42] */
+    }
+    return bytes; [cite_start]/* [cite: 43] */
+};
+const hexToUint8Array = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))); [cite_start]/* [cite: 43] */
+
+// ===================================================================================
+// Bank Key Management and Falcon-1024 Crypto Logic (largely unchanged)
+// ===================================================================================
+
+const BankCrypto = (() => {
+    function hashMessageForSigning(message) {
+        const hexHash = shake256(message, 1536);
+        return hexToUint8Array(hexHash);
+    }
+
+    function hashMessageForVisual(message) {
+        [cite_start]return shake256(message, 256); /* [cite: 44] */
+    }
     
-    <div class="canvas-container">
-        <canvas id="banknoteCanvas" width="600" height="400"></canvas>
-    </div>
+    async function generateNewKeyPair() {
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        return await falconApi.keypair();
+    }
 
-    <script>
-    /*
- JAB-Code-JavaScript - an open-source JAB Code Implementation for JavaScript
- Copyright (c) 2019-2023, Bc. Stefan Hausner, BA
- All rights reserved.
- Redistribution and use in source and binary forms, with or without
- modification, are permitted provided that the following conditions are met:
- 1. Redistributions of source code must retain the above copyright notice, this
-    list of conditions and the following disclaimer.
- 2. Redistributions in binary form must reproduce the above copyright notice,
-    this list of conditions and the following disclaimer in the documentation
-    and/or other materials provided with the distribution.
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
- ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-var JabcodeJSInterface=function(){this.encode_message=function(r,t,e){var a=new JABCode(r,t,e),n=a.getModuleData(),o=document.createElement("canvas"),i=Math.floor(500/n[0].length),l=n[0].length*i,d=n.length*i;return o.width=l,o.height=d,this.draw(o,a,i),o.toDataURL("image/png")},this.draw=function(r,t,e){for(var a=r.getContext("2d"),n=t.getModuleData(),o=0;o<n.length;o++)for(var i=0;i<n[o].length;i++){var l=n[o][i].getColor();a.fillStyle=l,a.fillRect(i*e,o*e,e,e)}}};var Color=function(r){var t,e,a,n,o=JabColors.getPredefinedColor(r);return null!=o?o:(t=r,a=(e=new Array)[0]=(n=Math.floor(r/64))>>2&1,e[1]=n>>1&1,e[2]=1&n,t-=64*n,e[3]=(n=Math.floor(t/8))>>2&1,e[4]=n>>1&1,e[5]=1&n,t-=8*n,e[6]=t>>2&1,e[7]=t>>1&1,e[8]=1&t,this.bits=e,this)},JabColors={};JabColors.BLACK=new Color(0),JabColors.WHITE=new Color(511),JabColors.RED=new Color(292),JabColors.GREEN=new Color(42),JabColors.BLUE=new Color(146),JabColors.CYAN=new Color(188),JabColors.MAGENTA=new Color(438),JabColors.YELLOW=new Color(334),JabColors.VIOLET=new Color(219),JabColors.LIME=new Color(110),JabColors.AZURE=new Color(73),JabColors.ORANGE=new Color(310),JabColors.predefinedColors=[JabColors.BLACK,JabColors.WHITE,JabColors.RED,JabColors.GREEN,JabColors.BLUE,JabColors.CYAN,JabColors.MAGENTA,JabColors.YELLOW,JabColors.VIOLET,JabColors.LIME,JabColors.AZURE,JabColors.ORANGE],JabColors.colorNames=["BLACK","WHITE","RED","GREEN","BLUE","CYAN","MAGENTA","YELLOW","VIOLET","LIME","AZURE","ORANGE"],JabColors.getPredefinedColor=function(r){for(var t=0;t<JabColors.predefinedColors.length;t++)if(JabColors.predefinedColors[t].getName()==JabColors.colorNames[r])return JabColors.predefinedColors[t]};var Color=function(r){var t,e,a,n,o=JabColors.getPredefinedColor(r);return null!=o?o:(t=r,a=(e=new Array)[0]=(n=Math.floor(r/64))>>2&1,e[1]=n>>1&1,e[2]=1&n,t-=64*n,e[3]=(n=Math.floor(t/8))>>2&1,e[4]=n>>1&1,e[5]=1&n,t-=8*n,e[6]=t>>2&1,e[7]=t>>1&1,e[8]=1&t,this.bits=e,this)},ColorUtils={};ColorUtils.colorValue=function(r){return 8*ColorUtils.colorValueSection([r[3],r[4],r[5]])+ColorUtils.colorValueSection([r[6],r[7],r[8]])+64*ColorUtils.colorValueSection([r[0],r[1],r[2]])},ColorUtils.colorValueSection=function(r){return 4*r[0]+2*r[1]+r[2]},ColorUtils.getRGB=function(r){return[Math.round(255*ColorUtils.getDecimal(r[0],r[1],r[2])),Math.round(255*ColorUtils.getDecimal(r[3],r[4],r[5])),Math.round(255*ColorUtils.getDecimal(r[6],r[7],r[8]))]},ColorUtils.getDecimal=function(r,t,e){return.5*r+.25*t+.125*e},Color.prototype.getBits=function(){return this.bits},Color.prototype.getColor=function(){var r=ColorUtils.getRGB(this.getBits());return"rgb("+r[0]+","+r[1]+","+r[2]+")"},Color.prototype.getName=function(){return ColorUtils.colorValue(this.bits)};var ReedSolomon={};ReedSolomon.gexp=new Array(512),ReedSolomon.glog=new Array(256),ReedSolomon.INITIALIZED=!1,ReedSolomon.initialize=function(){var r,t;for(ReedSolomon.gexp[0]=1,ReedSolomon.gexp[255]=1,ReedSolomon.glog[0]=0,r=1,t=0;t<255;t++)r<<=1,r&256&&(r^=285),ReedSolomon.gexp[t]=r,ReedSolomon.glog[r]=t;for(t=255;t<512;t++)ReedSolomon.gexp[t]=ReedSolomon.gexp[t-255]},ReedSolomon.add=function(r,t){return r^t},ReedSolomon.sub=function(r,t){return r^t},ReedSolomon.mult=function(r,t){if(0==r||0==t)return 0;var e=ReedSolomon.glog[r],a=ReedSolomon.glog[t];return ReedSolomon.gexp[e+a]},ReedSolomon.div=function(r,t){if(0==t)throw"division by zero";if(0==r)return 0;var e=ReedSolomon.glog[r],a=ReedSolomon.glog[t];return ReedSolomon.gexp[e-a+255]},ReedSolomon.polyMult=function(r,t){for(var e=new Array(r.length+t.length-1),a=0;a<e.length;a++)e[a]=0;for(a=0;a<r.length;a++)for(var n=0;n<t.length;n++)e[a+n]=ReedSolomon.add(e[a+n],ReedSolomon.mult(r[a],t[n]));return e},ReedSolomon.polyDiv=function(r,t){for(var e=new Array(r.length),a=0;a<r.length;a++)e[a]=r[a];for(a=0;a<=e.length-t.length;a++){var n=e[a];if(0!=n)for(var o=1;o<t.length;o++)e[a+o]=ReedSolomon.sub(e[a+o],ReedSolomon.mult(t[o],n))}return e.slice(e.length-t.length+1)},ReedSolomon.generator=function(r){for(var t=[1],e=0;e<r;e++){var a=[1,ReedSolomon.gexp[e]];t=ReedSolomon.polyMult(t,a)}return t},ReedSolomon.encode=function(r,t){ReedSolomon.INITIALIZED||(ReedSolomon.initialize(),ReedSolomon.INITIALIZED=!0);for(var e=new Array(r.length+t),a=0;a<r.length;a++)e[a]=r[a];for(a=0;a<t;a++)e[r.length+a]=0;var n=ReedSolomon.generator(t);return e=ReedSolomon.polyDiv(e,n)};var Symbol=function(r,t,e,a){this.symbolSize=new SymbolSize(r,t),this.data=e,this.symbolType=a,this.moduleData=new Array};Symbol.prototype.placeFinderPatterns=function(){for(var r=0;r<this.symbolSize.getHeight();r++)for(var t=0;t<this.symbolSize.getWidth();t++)this.placeFinderPattern(r,t)},Symbol.prototype.placeFinderPattern=function(r,t){var e=this.symbolSize.getSymbolTypeSize().getDock(),a=this.symbolSize.getSymbolTypeSize().getSideLength();if(r<e&&t<e)this.setModule(r,t,JabColors.BLACK);else if(r<e&&t>=this.symbolSize.getWidth()-e)this.setModule(r,t,JabColors.RED);else if(r>=this.symbolSize.getHeight()-e&&t<e)this.setModule(r,t,JabColors.GREEN);else if(r>=this.symbolSize.getHeight()-e&&t>=this.symbolSize.getWidth()-e)this.setModule(r,t,JabColors.BLUE);else if(r<e)this.setModule(r,t,new Color(t%2));else if(r>=this.symbolSize.getHeight()-e)this.setModule(r,t,new Color(t%2));else if(t<e)this.setModule(r,t,new Color(r%2));else if(t>=this.symbolSize.getWidth()-e)this.setModule(r,t,new Color(r%2));else{var n=this.symbolSize.getSymbolTypeSize().getTile(),o=Math.floor((r-e)/n),i=Math.floor((t-e)/n);r-e-o*n==n-1&&t-e-i*n==n-1?this.setModule(r,t,JabColors.BLACK):r-e-o*n==n-1?this.setModule(r,t,new Color((t-e-i*n)%2)):t-e-i*n==n-1?this.setModule(r,t,new Color((r-e-o*n)%2)):this.setModule(r,t,new Color(7))}},Symbol.prototype.setModule=function(r,t,e,a){var n=new Module(r,t,e,a);this.moduleData[r][t]=n},Symbol.prototype.getModule=function(r,t){return this.moduleData[r][t]},Symbol.prototype.getModuleData=function(){return this.moduleData},Symbol.prototype.placeData=function(){for(var r=this.getBitStream(),t=0,e=0;e<r.length;e++){var a=this.getNextLocation(),n=new Color(r[e]);this.setModule(a[0],a[1],n),t++}},Symbol.prototype.getBitStream=function(){var r=new BitStream,t=this.getByteStream();r.addByte(this.symbolType);for(var e=0;e<this.data.length;e++)r.addByte(this.data.charCodeAt(e));var a=r.getBits();if(0==this.symbolSize.getSymbolTypeSize().getDataBits()){var n=r.getTerminator(this.symbolSize.getDataCodewords());return a.concat(n)}var o=this.symbolSize.getDataCodewords()-Math.ceil(a.length/9);if(o<0)throw"data too large";if(o>0)for(e=0;e<o;e++){var i=e%2==0?292:146;r.addByte(i)}var l=r.getBits();a=l;var d=new Array;for(e=0;e<this.symbolSize.getDataCodewords();e++){for(var s=0,b=0;b<9;b++)s+=Math.pow(2,8-b)*a[9*e+b];d.push(s)}var u=this.symbolSize.getRSNumber(),c=ReedSolomon.encode(d,u),g=new Array;for(e=0;e<c.length;e++)for(var h=c[e],C=8;C>=0;C--){var p=h-Math.pow(2,C);p>=0?(g.push(1),h=p):g.push(0)}var f=this.symbolSize.getSymbolTypeSize().getExtraBits();f>0&&(g=g.slice(0,g.length-f));return g},Symbol.prototype.getByteStream=function(){var r=new Array;r.push(this.symbolType);for(var t=0;t<this.data.length;t++)r.push(this.data.charCodeAt(t));var e=this.symbolSize.getDataCodewords()-r.length;if(e<0)throw"data too large";if(e>0)for(t=0;t<e;t++){var a=t%2==0?292:146;r.push(a)}var n=this.symbolSize.getRSNumber(),o=ReedSolomon.encode(r,n),i=new Array;for(t=0;t<o.length;t++)i.push(o[t]);return i},Symbol.prototype.initModuleData=function(){for(var r=0;r<this.symbolSize.getHeight();r++){this.moduleData.push(new Array);for(var t=0;t<this.symbolSize.getWidth();t++)this.moduleData[r].push(void 0)}},Symbol.prototype.getNextLocation=function(){for(var r=0;r<this.symbolSize.getHeight();r++)for(var t=0;t<this.symbolSize.getWidth();t++)if(void 0==this.getModule(r,t))return[r,t]};var SymbolSize=function(r,t){this.primarySymbol=r,this.secondarySymbols=t,this.totalSymbols=1+t,this.symbolTypeSize=new SymbolTypeSize(r),this.height=this.symbolTypeSize.getSideLength(),this.width=this.symbolTypeSize.getSideLength()*this.totalSymbols+(this.totalSymbols-1),this.dataCodewords=this.symbolTypeSize.getDataCodewords()*this.totalSymbols,this.rsNumber=this.symbolTypeSize.getRSNumber()*this.totalSymbols};SymbolSize.prototype.getPrimarySymbol=function(){return this.primarySymbol},SymbolSize.prototype.getSecondarySymbols=function(){return this.secondarySymbols},SymbolSize.prototype.getTotalSymbols=function(){return this.totalSymbols},SymbolSize.prototype.getSymbolTypeSize=function(){return this.symbolTypeSize},SymbolSize.prototype.getHeight=function(){return this.height},SymbolSize.prototype.getWidth=function(){return this.width},SymbolSize.prototype.getDataCodewords=function(){return this.dataCodewords},SymbolSize.prototype.getRSNumber=function(){return this.rsNumber};var JABCode=function(r,t,e){this.data=r,this.primarySymbol=t,this.secondarySymbols=e,this.symbolSize=new SymbolSize(t,e),this.symbol=new Symbol(this.primarySymbol,this.secondarySymbols,this.data,t),this.moduleData=new Array,this.initModuleData(),this.placeFinderPatterns(),this.placeData()};JABCode.prototype.initModuleData=function(){for(var r=0;r<this.symbolSize.getHeight();r++){this.moduleData.push(new Array);for(var t=0;t<this.symbolSize.getWidth();t++)this.moduleData[r].push(void 0)}},JABCode.prototype.placeFinderPatterns=function(){for(var r=0;r<this.symbolSize.getHeight();r++)for(var t=0;t<this.symbolSize.getWidth();t++)this.placeFinderPattern(r,t)},JABCode.prototype.placeFinderPattern=function(r,t){var e=this.symbolSize.getSymbolTypeSize().getDock(),a=this.symbolSize.getSymbolTypeSize().getSideLength(),n=this.symbolSize.getTotalSymbols();if(t>a*n-1)return this.setModule(r,t,JabColors.BLACK);var o=Math.floor(t/a);if(0==r&&0==t)this.setModule(r,t,JabColors.BLACK);else if(r<e&&t<e)this.setModule(r,t,JabColors.BLACK);else if(r<e&&t>=this.symbolSize.getWidth()-e)this.setModule(r,t,JabColors.RED);else if(r>=this.symbolSize.getHeight()-e&&t<e)this.setModule(r,t,JabColors.GREEN);else if(r>=this.symbolSize.getHeight()-e&&t>=this.symbolSize.getWidth()-e)this.setModule(r,t,JabColors.BLUE);else if(t%(a+1)==a)this.setModule(r,t,JabColors.BLACK);else if(r<e)t%2==0?this.setModule(r,t,JabColors.LIME):this.setModule(r,t,JabColors.VIOLET);else if(r>=this.symbolSize.getHeight()-e)t%2==0?this.setModule(r,t,JabColors.AZURE):this.setModule(r,t,JabColors.ORANGE);else if(t-o*(a+1)<e)r%2==0?this.setModule(r,t,JabColors.LIME):this.setModule(r,t,JabColors.VIOLET);else if(t-o*(a+1)>=a-e)r%2==0?this.setModule(r,t,JabColors.AZURE):this.setModule(r,t,JabColors.ORANGE);else{var i=this.symbolSize.getSymbolTypeSize().getTile(),l=Math.floor((r-e)/i),d=Math.floor((t-e-o*(e-1))/i);r-e-l*i==i-1&&t-e-o*(e-1)-d*i==i-1?this.setModule(r,t,JabColors.BLACK):r-e-l*i==i-1?t%2==0?this.setModule(r,t,JabColors.LIME):this.setModule(r,t,JabColors.VIOLET):t-e-o*(e-1)-d*i==i-1?r%2==0?this.setModule(r,t,JabColors.LIME):this.setModule(r,t,JabColors.VIOLET):this.setModule(r,t,new Color(7))}},JABCode.prototype.placeData=function(){for(var r=this.getBitStream(),t=0;t<r.length;t++){var e=this.getNextLocation(),a=r[t],n=this.getColor(a,e[0],e[1]);this.setModule(e[0],e[1],n,a)}},JABCode.prototype.getColor=function(r,t,e){var a=this.symbolSize.getSymbolTypeSize().getSideLength(),n=this.symbolSize.getTotalSymbols(),o=new Array(9);for(i=0;i<9;i++)o[i]=r[i];if(1==this.symbolSize.getSymbolTypeSize().getPalette())return new Color(ColorUtils.colorValue(o));var l=this.symbolSize.getSymbolTypeSize().getDock(),d=Math.floor(e/(a+1));return t<l?e%2==0?new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.LIME.getBits())))):new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.VIOLET.getBits())))):t>=this.symbolSize.getHeight()-l?e%2==0?new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.AZURE.getBits())))):new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.ORANGE.getBits())))):e-d*(a+1)<l?t%2==0?new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.LIME.getBits())))):new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.VIOLET.getBits())))):e-d*(a+1)>=a-l?t%2==0?new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.AZURE.getBits())))):new Color(this.add(o,ColorUtils.get9Bits(ColorUtils.colorValue(JabColors.ORANGE.getBits())))):new Color(this.add(o,ColorUtils.get9Bits(7)))},JABCode.prototype.add=function(r,t){for(var e=new Array(9),a=0;a<9;a++)e[a]=(r[a]+t[a])%2;return ColorUtils.colorValue(e)},JABCode.prototype.getBitStream=function(){var r=new BitStream,t=this.getByteStream(),e=this.symbolSize.getDataCodewords();r.add(2,2),r.add(t.length,Math.ceil(Math.log2(e)));for(var a=0;a<t.length;a++){var n=t[a];r.add(n,8)}var o=r.getBits(),i=this.symbolSize.getDataCodewords()*this.symbolSize.getSymbolTypeSize().getBitsPerCodeword()-o.length;i>0&&r.add(0,i);var l=r.getBits(),d=new Array;for(a=0;a<this.symbolSize.getDataCodewords();a++){for(var s=0,b=0;b<this.symbolSize.getSymbolTypeSize().getBitsPerCodeword();b++)s+=Math.pow(2,this.symbolSize.getSymbolTypeSize().getBitsPerCodeword()-1-b)*l[this.symbolSize.getSymbolTypeSize().getBitsPerCodeword()*a+b];d.push(s)}var u=this.symbolSize.getRSNumber(),c=ReedSolomon.encode(d,u),g=new Array;for(a=0;a<c.length;a++)for(var h=c[a],C=this.symbolSize.getSymbolTypeSize().getBitsPerCodeword()-1;C>=0;C--){var p=h-Math.pow(2,C);p>=0?(g.push(1),h=p):g.push(0)}var f=new Array,y=0;for(a=0;a<l.length;a+=9)f[y]=l.slice(a,a+9),y++;for(a=0;a<g.length;a+=9)f[y]=g.slice(a,a+9),y++;return f},JABCode.prototype.getByteStream=function(){var r=new Array;if(0==this.symbolSize.getSymbolTypeSize().getEncodingMode())for(var t=0;t<this.data.length;t++)r.push(this.data.charCodeAt(t));else if(1==this.symbolSize.getSymbolTypeSize().getEncodingMode()){var e=this.data.split(""),a=new Array;for(t=0;t<e.length;t+=2)t+1<e.length?a.push(45*parseInt(e[t])+parseInt(e[t+1])):a.push(45*parseInt(e[t]));r=a}return r},JABCode.prototype.setModule=function(r,t,e,a){var n=new Module(r,t,e,a);this.moduleData[r][t]=n},JABCode.prototype.getModule=function(r,t){return this.moduleData[r][t]},JABCode.prototype.getNextLocation=function(){for(var r=0;r<this.symbolSize.getHeight();r++)for(var t=0;t<this.symbolSize.getWidth();t++)if(void 0==this.getModule(r,t))return[r,t]},JABCode.prototype.getModuleData=function(){return this.moduleData};var BitStream=function(){this.bits=new Array,this.byte=new Array};BitStream.prototype.add=function(r,t){for(var e=t-1;e>=0;e--){var a=r-Math.pow(2,e);a>=0?(this.bits.push(1),r=a):this.bits.push(0)}},BitStream.prototype.addByte=function(r){for(var t=7;t>=0;t--){var e=r-Math.pow(2,t);e>=0?(this.bits.push(1),this.byte.push(1),r=e):(this.bits.push(0),this.byte.push(0))}},BitStream.prototype.getBits=function(){return this.bits},BitStream.prototype.getTerminator=function(r){for(var t=r-Math.ceil(this.bits.length/9),e=new Array,a=0;a<t;a++){var n=a%2==0?[0,0,1,0,0,1,0,0,1]:[0,1,0,0,1,0,0,1,0];e=e.concat(n)}return e};var Module=function(r,t,e,a){this.x=r,this.y=t,this.color=e,this.isData=!1,void 0!=a&&(this.isData=!0,this.bitValue=a)};Module.prototype.getColor=function(){return this.color.getColor()},Module.prototype.isData=function(){return this.isData};var SymbolTypeSize=function(r){switch(r){case 0:this.sideLength=29,this.dock=3,this.tile=4,this.dataCodewords=20,this.rsNumber=10,this.palette=0,this.encodingMode=0,this.bitsPerCodeword=8,this.extraBits=0;break;case 1:this.sideLength=29,this.dock=3,this.tile=4,this.dataCodewords=20,this.rsNumber=10,this.palette=1,this.encodingMode=0,this.bitsPerCodeword=9,this.extraBits=0;break;case 2:this.sideLength=29,this.dock=3,this.tile=4,this.dataCodewords=20,this.rsNumber=10,this.palette=2,this.encodingMode=0,this.bitsPerCodeword=9,this.extraBits=0;break;case 3:this.sideLength=39,this.dock=4,this.tile=5,this.dataCodewords=42,this.rsNumber=15,this.palette=0,this.encodingMode=0,this.bitsPerCodeword=8,this.extraBits=0;break;case 4:this.sideLength=39,this.dock=4,this.tile=5,this.dataCodewords=42,this.rsNumber=15,this.palette=1,this.encodingMode=0,this.bitsPerCodeword=9,this.extraBits=0;break;case 5:this.sideLength=39,this.dock=4,this.tile=5,this.dataCodewords=42,this.rsNumber=15,this.palette=2,this.encodingMode=0,this.bitsPerCodeword=9,this.extraBits=0;break;case 6:this.sideLength=55,this.dock=5,this.tile=6,this.dataCodewords=90,this.rsNumber=20,this.palette=0,this.encodingMode=0,this.bitsPerCodeword=8,this.extraBits=0;break;case 7:this.sideLength=55,this.dock=5,this.tile=6,this.dataCodewords=90,this.rsNumber=20,this.palette=1,this.encodingMode=0,this.bitsPerCodeword=9,this.extraBits=0;break;case 8:this.sideLength=55,this.dock=5,this.tile=6,this.dataCodewords=90,this.rsNumber=20,this.palette=2,this.encodingMode=0,this.bitsPerCodeword=9,this.extraBits=0;break;case 9:this.sideLength=29,this.dock=3,this.tile=4,this.dataCodewords=41,this.rsNumber=15,this.palette=0,this.encodingMode=1,this.bitsPerCodeword=8,this.extraBits=4;break;case 10:this.sideLength=29,this.dock=3,this.tile=4,this.dataCodewords=41,this.rsNumber=15,this.palette=1,this.encodingMode=1,this.bitsPerCodeword=9,this.extraBits=0;break;case 11:this.sideLength=29,this.dock=3,this.tile=4,this.dataCodewords=41,this.rsNumber=15,this.palette=2,this.encodingMode=1,this.bitsPerCodeword=9,this.extraBits=0}};SymbolTypeSize.prototype.getSideLength=function(){return this.sideLength},SymbolTypeSize.prototype.getDock=function(){return this.dock},SymbolTypeSize.prototype.getTile=function(){return this.tile},SymbolTypeSize.prototype.getDataCodewords=function(){return this.dataCodewords},SymbolTypeSize.prototype.getRSNumber=function(){return this.rsNumber},SymbolTypeSize.prototype.getPalette=function(){return this.palette},SymbolTypeSize.prototype.getEncodingMode=function(){return this.encodingMode},SymbolTypeSize.prototype.getBitsPerCodeword=function(){return this.bitsPerCodeword},SymbolTypeSize.prototype.getExtraBits=function(){return this.extraBits};
-    </script>
+    async function signData(data, privateKey) {
+        if (!privateKey) throw new Error("Private key is not available for signing.");
+        if (!falconApi) throw new Error("Falcon API not initialized.");
+        const dataHash = hashMessageForSigning(data); [cite_start]/* [cite: 46] */
+        const { signature } = await falconApi.sign(dataHash, privateKey); [cite_start]/* [cite: 46] */
+        return signature; [cite_start]/* [cite: 46] */
+    }
 
-    <script>
-        // DOM Elements
-        const banknoteContainer = document.getElementById('banknote-container');
-        const amountDisplay = document.getElementById('amount-display');
-        const serialDisplay = document.getElementById('serial');
-        const keyDisplay = document.getElementById('key');
-        const visualKeyDisplay = document.getElementById('visual-key');
-        const barcodes = [
-            document.getElementById('barcode-1'),
-            document.getElementById('barcode-2'),
-            document.getElementById('barcode-3'),
-            document.getElementById('barcode-4')
-        ];
-        const redesignBtn = document.getElementById('redesignBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const generateAllBtn = document.getElementById('generateAllBtn');
-        const inputAmount = document.getElementById('inputAmount');
-        const inputCount = document.getElementById('inputCount');
-        const validationKeyInput = document.getElementById('validationKey');
-        const validateBtn = document.getElementById('validateBtn');
-        const validationResult = document.getElementById('validationResult');
+    async function verifySignature(signature, data, publicKey) {
+        if (!publicKey) throw new Error("Public key is not available for verification."); [cite_start]/* [cite: 47] */
+        if (!falconApi) throw new Error("Falcon API not initialized."); [cite_start]/* [cite: 48] */
+        const dataHash = hashMessageForSigning(data); [cite_start]/* [cite: 48] */
+        return await falconApi.verify(signature, dataHash, publicKey); [cite_start]/* [cite: 48] */
+    }
+    
+    // Encrypt/Decrypt functions remain the same
+    async function encryptPrivateKey(privateKeyBytes, password) {
+        const passwordBuffer = new TextEncoder().encode(password); [cite_start]/* [cite: 49] */
+        const salt = window.crypto.getRandomValues(new Uint8Array(16)); [cite_start]/* [cite: 50] */
+        const iv = window.crypto.getRandomValues(new Uint8Array(12)); [cite_start]/* [cite: 50] */
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]); [cite_start]/* [cite: 51] */
+        [cite_start]const derivedKey = await window.crypto.subtle.deriveKey( /* [cite: 52] */
+            [cite_start]{ name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" }, /* [cite: 52] */
+            [cite_start]keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"] /* [cite: 52] */
+        );
+        const keyObject = { keyData: arrayBufferToBase64(privateKeyBytes) }; [cite_start]/* [cite: 53] */
+        const encodedKey = new TextEncoder().encode(JSON.stringify(keyObject)); [cite_start]/* [cite: 53] */
+        const encryptedKey = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, derivedKey, encodedKey); [cite_start]/* [cite: 54] */
+        [cite_start]return { /* [cite: 55] */
+            [cite_start]cipherText: arrayBufferToBase64(encryptedKey), /* [cite: 55] */
+            [cite_start]salt: arrayBufferToBase64(salt), /* [cite: 55] */
+            [cite_start]iv: arrayBufferToBase64(iv) /* [cite: 55] */
+        };
+    }
+    
+    async function decryptPrivateKey(encryptedData, password) {
+        const passwordBuffer = new TextEncoder().encode(password); [cite_start]/* [cite: 56] */
+        const salt = base64ToUint8Array(encryptedData.salt); [cite_start]/* [cite: 57] */
+        const iv = base64ToUint8Array(encryptedData.iv); [cite_start]/* [cite: 57] */
+        const cipherText = base64ToUint8Array(encryptedData.cipherText); [cite_start]/* [cite: 57] */
+        const keyMaterial = await window.crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]); [cite_start]/* [cite: 58] */
+        [cite_start]const derivedKey = await window.crypto.subtle.deriveKey( /* [cite: 59] */
+            [cite_start]{ name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" }, /* [cite: 59] */
+            [cite_start]keyMaterial, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"] /* [cite: 59] */
+        );
+        const decryptedKeyBuffer = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, derivedKey, cipherText); [cite_start]/* [cite: 60] */
+        const keyObject = JSON.parse(new TextDecoder().decode(decryptedKeyBuffer)); [cite_start]/* [cite: 60] */
+        return base64ToUint8Array(keyObject.keyData); [cite_start]/* [cite: 61] */
+    }
 
-        let validKeys = {};
-        // The JabcodeJSInterface class is now globally available from the script above
-        const jabcode = new JabcodeJSInterface();
+    return { generateNewKeyPair, signData, verifySignature, encryptPrivateKey, decryptPrivateKey, hashMessageForVisual }; [cite_start]/* [cite: 61] */
+})();
 
-        /**
-         * Generates a time-based code using the current time and a salt.
-         * @param {number} length - The desired length of the code.
-         * @param {number} salt - A number to make the generated code unique.
-         * @returns {string} The generated time-based code.
-         */
-        function generateTimeBasedCode(length, salt) {
-            const time = Math.floor(Date.now() / 1000); // Time in seconds
-            let code = (time * salt).toString(36).toUpperCase();
-            while (code.length < length) {
-                code = '0' + code;
-            }
-            return code.slice(-length);
+// This data is what gets digitally signed
+function getStandardizedDataForSigning(noteData) {
+    const dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.verificationKey }; [cite_start]/* [cite: 62] */
+    return JSON.stringify(dataToSign, Object.keys(dataToSign).sort()); [cite_start]/* [cite: 63] */
+}
+
+// UI update functions
+function updateKeyStatus(message) { document.getElementById('key-status').innerHTML = message; }
+function updateControlsState(isEnabled) {
+    document.getElementById('create-note-button').disabled = !isEnabled; [cite_start]/* [cite: 66] */
+}
+
+// ===================================================================================
+// UI Handlers for Key Management (Unchanged)
+// ===================================================================================
+async function handleGenerateAndExportKeys() {
+    const password = prompt("Enter a strong password to encrypt your private key file:"); [cite_start]/* [cite: 67] */
+    [cite_start]if (!password) { /* [cite: 68] */
+        updateKeyStatus('<span class="invalid">❌ Key generation cancelled. Password is required.</span>'); [cite_start]/* [cite: 68] */
+        return; [cite_start]/* [cite: 68] */
+    }
+    updateKeyStatus('<span class="info">⏳ Generating new Falcon-1024 key pair and encrypting... Please wait.</span>'); [cite_start]/* [cite: 69] */
+    [cite_start]try { /* [cite: 70] */
+        const keyPair = await BankCrypto.generateNewKeyPair(); [cite_start]/* [cite: 70] */
+        activeKeys.publicKey = keyPair.publicKey; [cite_start]/* [cite: 70] */
+        activeKeys.privateKey = keyPair.privateKey; [cite_start]/* [cite: 70] */
+        const publicKeyB64 = arrayBufferToBase64(keyPair.publicKey); [cite_start]/* [cite: 71] */
+        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-Falcon-public-key.json', 'application/json'); [cite_start]/* [cite: 71] */
+        const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password); [cite_start]/* [cite: 71] */
+        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-Falcon-private-key.json', 'application/json'); [cite_start]/* [cite: 72] */
+        updateKeyStatus('<span class="valid">✅ New Falcon-1024 key pair generated and exported! The new keys are now active.</span>'); [cite_start]/* [cite: 72] */
+        updateControlsState(true); [cite_start]/* [cite: 73] */
+        await handleCreateNewNote(); [cite_start]/* [cite: 73] */
+    } catch (e) {
+        console.error("Key generation failed:", e); [cite_start]/* [cite: 73] */
+        updateKeyStatus(`<span class="invalid">❌ Failed to generate keys: ${e.message}</span>`); [cite_start]/* [cite: 74] */
+    }
+}
+
+async function handleImportPublicKey(event) {
+    const file = event.target.files[0]; [cite_start]/* [cite: 74] */
+    if (!file) return; [cite_start]/* [cite: 75] */
+    const reader = new FileReader(); [cite_start]/* [cite: 75] */
+    [cite_start]reader.onload = async (e) => { /* [cite: 75] */
+        [cite_start]try { /* [cite: 75] */
+            const data = JSON.parse(e.target.result); [cite_start]/* [cite: 75] */
+            if (!data.keyData) throw new Error("Invalid public key file format."); [cite_start]/* [cite: 76] */
+            activeKeys.publicKey = base64ToUint8Array(data.keyData); [cite_start]/* [cite: 76] */
+            updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>'); [cite_start]/* [cite: 77] */
+        } catch (error) {
+            updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`); [cite_start]/* [cite: 78] */
         }
+    };
+    reader.readAsText(file); [cite_start]/* [cite: 79] */
+    event.target.value = ''; [cite_start]/* [cite: 79] */
+}
 
-        /**
-         * Generates a random alphanumeric code.
-         * @param {number} length - The desired length of the code.
-         * @returns {string} The random code.
-         */
-        function generateRandomCode(length) {
-            return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
+async function handleImportPrivateKey(event) {
+    const file = event.target.files[0]; [cite_start]/* [cite: 79] */
+    if (!file) return; [cite_start]/* [cite: 80] */
+    const password = prompt("Enter the password to decrypt the private key file:"); [cite_start]/* [cite: 80] */
+    [cite_start]if (!password) { /* [cite: 81] */
+        updateKeyStatus('<span class="invalid">❌ Import cancelled. Password is required to decrypt.</span>'); [cite_start]/* [cite: 81] */
+        return; [cite_start]/* [cite: 81] */
+    }
+    const reader = new FileReader(); [cite_start]/* [cite: 82] */
+    [cite_start]reader.onload = async (e) => { /* [cite: 82] */
+        [cite_start]try { /* [cite: 82] */
+            const encryptedData = JSON.parse(e.target.result); [cite_start]/* [cite: 82] */
+            updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>'); [cite_start]/* [cite: 83] */
+            activeKeys.privateKey = await BankCrypto.decryptPrivateKey(encryptedData, password); [cite_start]/* [cite: 83] */
+            updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>'); [cite_start]/* [cite: 84] */
+            updateControlsState(true); [cite_start]/* [cite: 84] */
+        } catch (error) {
+            updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key. Check your password and file: ${error.message}</span>`); [cite_start]/* [cite: 85] */
         }
+    };
+    reader.readAsText(file); [cite_start]/* [cite: 86] */
+    event.target.value = ''; [cite_start]/* [cite: 86] */
+}
 
-        /**
-         * Generates a random hex color string.
-         * @returns {string} A color in hex format (e.g., "#RRGGBB").
-         */
-        function getRandomColor() {
-            const letters = '0123456789ABCDEF';
-            let color = '#';
-            for (let i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
+function downloadFile(data, filename, type) {
+    const blob = new Blob([data], { type: type }); [cite_start]/* [cite: 86] */
+    const url = URL.createObjectURL(blob); [cite_start]/* [cite: 87] */
+    const a = document.createElement('a'); [cite_start]/* [cite: 87] */
+    a.href = url; a.download = filename; [cite_start]/* [cite: 87] */
+    document.body.appendChild(a); a.click(); [cite_start]/* [cite: 87] */
+    document.body.removeChild(a); URL.revokeObjectURL(url); [cite_start]/* [cite: 87] */
+}
+
+// ===================================================================================
+// Validation Logic (Modified for JAB Code)
+// ===================================================================================
+async function handleFileSelect(event) {
+    const file = event.target.files[0]; [cite_start]/* [cite: 88] */
+    if (!file) return; [cite_start]/* [cite: 88] */
+    [cite_start]if (!activeKeys.publicKey) { /* [cite: 89] */
+        alert("Error: No public key is active for validation. Please generate or import one."); [cite_start]/* [cite: 89] */
+        return; [cite_start]/* [cite: 90] */
+    }
+    const resultDiv = document.getElementById('validation-result'); [cite_start]/* [cite: 90] */
+    resultDiv.innerHTML = `<span class="info">⏳ Reading JAB Code from image...</span>`; [cite_start]/* [cite: 90] */
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const imageData = e.target.result;
+        try {
+            const decodedPayload = await jabcode.decode_message(imageData);
+            const parts = decodedPayload.split('|');
+            if (parts.length !== 3) throw new Error("Invalid main JAB code format.");
+            
+            resultDiv.innerHTML = `<span class="valid">✅ Main JAB Code successfully read.</span>
+            \n<span class="info">Timestamp: ${parts[0]}</span>
+            \n<span class="info">Verification Key: ${parts[1]}</span>
+            \n<span class="info">Signature (Base64): ${parts[2].substring(0, 30)}...</span>
+            \n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">
+            \n<span class="invalid">⚠️ Full validation is not possible. Amount and Serial are in other codes.</span>`;
+
+        } catch (error) {
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: Could not decode JAB Code. ${error.message}</span>`;
         }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+}
 
-        /**
-         * Determines if a background color is light or dark and returns a contrasting text color.
-         * @param {string} hexcolor - The background color in hex format.
-         * @returns {string} Either "#000000" (black) or "#FFFFFF" (white).
-         */
-        function getContrastYIQ(hexcolor) {
-            hexcolor = hexcolor.replace("#", "");
-            const r = parseInt(hexcolor.substr(0, 2), 16);
-            const g = parseInt(hexcolor.substr(2, 2), 16);
-            const b = parseInt(hexcolor.substr(4, 2), 16);
-            const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-            return (yiq >= 128) ? '#000000' : '#FFFFFF';
-        }
+// ===================================================================================
+// Banknote Creation Logic (Modified for JAB Code)
+// ===================================================================================
+async function createNoteData(amount, index = 0) {
+    [cite_start]if (!activeKeys.privateKey) { /* [cite: 113] */
+        alert("Error: No private key is active for signing banknotes. Please generate or import a private key."); [cite_start]/* [cite: 113] */
+        return null; [cite_start]/* [cite: 114] */
+    }
+    const now = Date.now(); [cite_start]/* [cite: 114] */
+    [cite_start]const noteData = { /* [cite: 115] */
+        amount: parseInt(amount) || [cite_start]0, /* [cite: 115] */
+        [cite_start]verificationKey: Math.random().toString(16).substring(2, 10).toUpperCase(), /* [cite: 116] */
+        [cite_start]serial: (now + index).toString().slice(-8), /* [cite: 116] */
+        [cite_start]timestamp: now /* [cite: 116] */
+    };
+    const stringToSign = getStandardizedDataForSigning(noteData); [cite_start]/* [cite: 117] */
+    const signatureBytes = await BankCrypto.signData(stringToSign, activeKeys.privateKey); [cite_start]/* [cite: 117] */
+    noteData.signature = arrayBufferToBase64(signatureBytes); [cite_start]/* [cite: 117] */
+    noteData.visualHash = BankCrypto.hashMessageForVisual(noteData.signature); [cite_start]/* [cite: 117] */
+    return noteData; [cite_start]/* [cite: 117] */
+}
 
-        /**
-         * Updates the banknote with new colors, keys, and JAB codes.
-         */
-        async function updateBanknote() {
-            // --- Generate New Data ---
-            const amount = inputAmount.value;
-            const newSerial = generateTimeBasedCode(8, 12345);
-            const newVerificationKey = generateTimeBasedCode(8, 67890);
-            const newVisualKey = generateRandomCode(8);
+async function handleCreateNewNote() {
+    const amount = document.getElementById("amount-input").value; [cite_start]/* [cite: 118] */
+    updateKeyStatus('<span class="info">⏳ Generating new banknote JAB Codes...</span>'); [cite_start]/* [cite: 118] */
+    const noteData = await createNoteData(amount); [cite_start]/* [cite: 119] */
+    [cite_start]if (noteData) { /* [cite: 119] */
+        currentNoteData = noteData; [cite_start]/* [cite: 119] */
+        await generateAndDisplayJabCodes(noteData); [cite_start]/* [cite: 120] */
+        updateKeyStatus('<span class="valid">✅ New banknote codes are ready.</span>'); [cite_start]/* [cite: 120] */
+    } else {
+        updateKeyStatus('<span class="invalid">❌ Failed to create a new banknote.</span>'); [cite_start]/* [cite: 121] */
+    }
+}
 
-            // --- Update Visuals ---
-            const newBgColor = getRandomColor();
-            const newTextColor = getContrastYIQ(newBgColor);
+// --- JAB CODE GENERATION: This function creates and displays the four codes ---
+async function generateAndDisplayJabCodes(noteData) {
+    jabcodeContainer.innerHTML = '<p>Generating codes...</p>';
+    try {
+        // --- PAYLOAD SPLIT: Create a separate payload for each JAB Code ---
+        const payload1_main = `${noteData.timestamp}|${noteData.verificationKey}|${noteData.signature}`;
+        const payload2_amount = `${noteData.amount}`;
+        const payload3_serial = noteData.serial;
+        const payload4_hash = noteData.visualHash;
 
-            banknoteContainer.style.backgroundColor = newBgColor;
-            [amountDisplay, serialDisplay, keyDisplay, visualKeyDisplay].forEach(el => {
-                el.style.color = newTextColor;
-            });
+        // Encode all four payloads
+        const [img1, img2, img3, img4] = await Promise.all([
+            jabcode.encode_message(payload1_main),
+            jabcode.encode_message(payload2_amount),
+            jabcode.encode_message(payload3_serial),
+            jabcode.encode_message(payload4_hash)
+        ]);
 
-            serialDisplay.innerText = newSerial;
-            keyDisplay.innerText = newVerificationKey;
-            visualKeyDisplay.innerText = newVisualKey;
-            amountDisplay.innerText = amount;
+        // Clear the container and display the new images
+        jabcodeContainer.innerHTML = `
+            <img src="${img1}" alt="Main JAB Code">
+            <img src="${img2}" alt="Amount JAB Code">
+            <img src="${img3}" alt="Serial JAB Code">
+            <img src="${img4}" alt="Visual Hash JAB Code">
+            <p style="width: 50%; text-align: left;"><b>1. Main Code:</b> Contains signature &amp; key data.</p>
+            <p style="width: 50%; text-align: left;"><b>2. Amount Code:</b> Contains the value.</p>
+            <p style="width: 50%; text-align: left;"><b>3. Serial Code:</b> Contains the serial number.</p>
+            <p style="width: 50%; text-align: left;"><b>4. Visual Hash:</b> Contains the visual hash.</p>
+        `;
+    } catch (err) {
+        jabcodeContainer.innerHTML = `<p class="invalid">Error generating JAB Codes: ${err.message}</p>`;
+    }
+}
 
-            // --- Generate and Assign JAB Codes ---
-            const dataForBarcodes = [amount, newSerial, newVerificationKey, newVisualKey];
-            dataForBarcodes.forEach((data, i) => {
-                if (data) {
-                    barcodes[i].src = jabcode.encode_message(data, 1, 10);
-                }
-            });
+// ===================================================================================
+// Application Initialization
+// ===================================================================================
+async function main() {
+    updateControlsState(false); [cite_start]/* [cite: 144] */
+    updateKeyStatus('<span class="info">⏳ Loading Falcon-1024 Crypto Module...</span>'); [cite_start]/* [cite: 145] */
+    [cite_start]try { /* [cite: 145] */
+        falconApi = await pqcSignFalcon1024(); [cite_start]/* [cite: 145] */
+        updateKeyStatus('<span class="info">Ready. Please generate a new key pair or import existing keys to begin.</span>'); [cite_start]/* [cite: 146] */
+    } catch (e) {
+        console.error("Failed to load Falcon module:", e); [cite_start]/* [cite: 147] */
+        updateKeyStatus(`<span class="invalid">❌ Critical Error: Could not load Falcon-1024 module. Please check that 'pqc-sign-falcon-1024.min.js' is in the same directory and your browser supports modern JavaScript.</span>`); [cite_start]/* [cite: 148] */
+        alert("Error: Failed to load cryptographic module. See the console for details."); [cite_start]/* [cite: 149] */
+        return; [cite_start]/* [cite: 149] */
+    }
+    
+    // Event Listeners
+    document.getElementById('generate-keys-button').addEventListener('click', handleGenerateAndExportKeys); [cite_start]/* [cite: 150] */
+    document.getElementById('create-note-button').addEventListener('click', handleCreateNewNote); [cite_start]/* [cite: 150] */
+    document.getElementById('import-public-key').addEventListener('change', handleImportPublicKey); [cite_start]/* [cite: 150] */
+    document.getElementById('import-private-key').addEventListener('change', handleImportPrivateKey); [cite_start]/* [cite: 150] */
+    document.getElementById('validator-input').addEventListener('change', handleFileSelect); [cite_start]/* [cite: 150] */
+}
 
-            // Store the key for validation
-            validKeys[newVerificationKey] = true;
-        }
+// Start the application
+main(); [cite_start]/* [cite: 151] */
 
-        /**
-         * Draws the current banknote design onto a hidden canvas and triggers a download.
-         */
-        async function createAndDownloadBanknote() {
-            const canvas = document.getElementById('banknoteCanvas');
-            const ctx = canvas.getContext('2d');
-
-            // Get computed styles from the displayed banknote
-            const bgColor = window.getComputedStyle(banknoteContainer).backgroundColor;
-            const textColor = window.getComputedStyle(amountDisplay).color; // All text has same color
-
-            // 1. Draw banknote background
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 2. Draw Text (Amount, Serial, Keys)
-            ctx.fillStyle = textColor;
-            ctx.font = "bold 40px Vazir";
-            ctx.textAlign = "right";
-            ctx.fillText(amountDisplay.innerText, 580, 60);
-
-            ctx.font = "bold 24px Vazir";
-            ctx.textAlign = "left";
-            ctx.fillText(serialDisplay.innerText, 20, 40);
-            ctx.fillText(keyDisplay.innerText, 20, 75);
-            ctx.fillText(visualKeyDisplay.innerText, 20, 110);
-
-            // 3. Draw all four JAB Codes onto the canvas
-            const barcodeDrawPromises = barcodes.map((barcodeImg, index) => {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        // Position the barcodes in a 2x2 grid in the center
-                        const x = (index % 2 === 0) ? 125 : 325;
-                        const y = (index < 2) ? 150 : 250;
-                        ctx.globalAlpha = 0.8; // Make JAB codes more visible on canvas
-                        ctx.drawImage(img, x, y, 150, 150);
-                        ctx.globalAlpha = 1.0; // Reset alpha
-                        resolve();
-                    };
-                    img.onerror = () => resolve(); // Resolve even if image fails to load
-                    img.src = barcodeImg.src;
-                });
-            });
-
-            await Promise.all(barcodeDrawPromises);
-
-            // 4. Trigger Download
-            const link = document.createElement('a');
-            link.download = `banknote-${serialDisplay.innerText}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        }
-
-        /**
-         * Generates and downloads a specified number of unique banknotes.
-         */
-        async function generateAllBanknotes() {
-            const count = parseInt(inputCount.value);
-            if (count > 0) {
-                for (let i = 0; i < count; i++) {
-                    await updateBanknote();
-                    // A small delay to ensure the next banknote gets a new time-based key
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    await createAndDownloadBanknote();
-                }
-            }
-        }
-
-        /**
-         * Validates the user-entered key against the list of generated keys.
-         */
-        function validateKey() {
-            const inputKey = validationKeyInput.value.toUpperCase();
-            validationResult.style.display = 'block';
-            if (validKeys[inputKey]) {
-                validationResult.className = 'validation-result valid';
-                validationResult.innerText = '✅ This banknote is valid.';
-            } else {
-                validationResult.className = 'validation-result invalid';
-                validationResult.innerText = '❌ This banknote is invalid.';
-            }
-        }
-
-        // --- Event Listeners ---
-        redesignBtn.addEventListener('click', updateBanknote);
-        downloadBtn.addEventListener('click', createAndDownloadBanknote);
-        generateAllBtn.addEventListener('click', generateAllBanknotes);
-        validateBtn.addEventListener('click', validateKey);
-
-        inputAmount.addEventListener('input', (e) => {
-            let value = parseInt(e.target.value);
-            if (isNaN(value)) value = 1;
-            if (value > 100) value = 100;
-            if (value < 1) value = 1;
-
-            e.target.value = value;
-            amountDisplay.innerText = value;
-            // Update the amount JAB code in real-time
-            barcodes[0].src = jabcode.encode_message(String(value), 1, 10);
-        });
-
-        // --- Initial Setup ---
-        updateBanknote();
-    </script>
+</script>
 </body>
 </html>
