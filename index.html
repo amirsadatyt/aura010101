@@ -134,7 +134,8 @@ const state = {
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    JAB_CODE_OPTIONS: { version: 20, colors: 8 }
+    // Set version to 0 for auto-selection. This is more robust.
+    JAB_CODE_OPTIONS: { version: 0, colors: 8 }
 };
 
 const DOMElements = {
@@ -356,7 +357,6 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                // Use the same JAB Code options for the visual key for consistency
                 const jabCodeBase64 = jabcode.encode_message(visualKeySecret, Constants.JAB_CODE_OPTIONS);
                 const img = new Image();
                 img.src = jabCodeBase64;
@@ -459,6 +459,7 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
+    // FIX: This function now returns a Uint8Array directly.
     const createBinaryPayload = (noteData) => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
@@ -484,7 +485,7 @@ const BanknoteLogic = (() => {
         
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
 
-        return Utils.binaryToString(new Uint8Array(buffer));
+        return new Uint8Array(buffer);
     };
 
     const parseBinaryPayload = (binaryString) => {
@@ -516,9 +517,9 @@ const BanknoteLogic = (() => {
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const binaryPayloadString = createBinaryPayload(noteData);
-            const binaryBuffer = Utils.stringToBinary(binaryPayloadString);
-            const jabPayload = Utils.encodeBase45(binaryBuffer);
+            // FIX: Streamlined payload creation
+            const binaryPayloadBuffer = createBinaryPayload(noteData);
+            const jabPayload = Utils.encodeBase45(binaryPayloadBuffer);
 
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload, 1350, 750);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
@@ -538,9 +539,9 @@ const BanknoteLogic = (() => {
             const notesToDownload = [];
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                const binaryPayloadString = createBinaryPayload(noteData);
-                const binaryBuffer = Utils.stringToBinary(binaryPayloadString);
-                const jabPayload = Utils.encodeBase45(binaryBuffer);
+                // FIX: Streamlined payload creation
+                const binaryPayloadBuffer = createBinaryPayload(noteData);
+                const jabPayload = Utils.encodeBase45(binaryPayloadBuffer);
 
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload, 1350, 750);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
