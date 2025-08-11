@@ -373,11 +373,10 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const qrImg = document.createElement('img');
-                qrImg.style.width = '256px';
-                qrImg.style.height = '256px';
+                const qrCanvas = document.createElement('canvas');
+                DOMElements.qrDisplay.appendChild(qrCanvas);
 
-                new QRCode(qrImg, {
+                new QRCode(qrCanvas, {
                     text: visualKeySecret,
                     width: 256,
                     height: 256,
@@ -386,7 +385,6 @@ const UIHandlers = (() => {
                     correctLevel: QRCode.CorrectLevel.L
                 });
                 
-                DOMElements.qrDisplay.appendChild(qrImg);
                 DOMElements.qrModal.style.display = 'flex';
 
                 Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key QR Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
@@ -513,7 +511,6 @@ const BanknoteLogic = (() => {
         }
 
         const firstChunk = chunks[0];
-        const prefix = firstChunk.prefix;
         const totalChunks = firstChunk.total;
 
         if (chunks.length !== totalChunks) {
@@ -841,10 +838,10 @@ async function main() {
     DOMElements.validateButton.addEventListener('click', BanknoteLogic.handleValidation);
 
     DOMElements.downloadQrButton.addEventListener('click', () => {
-        const img = DOMElements.qrDisplay.querySelector('img');
-        if (img && img.src) {
+        const img = DOMElements.qrDisplay.querySelector('canvas');
+        if (img) {
             const a = document.createElement('a');
-            a.href = img.src; a.download = 'Sadat-VISUAL-KEY.png';
+            a.href = img.toDataURL('image/png'); a.download = 'Sadat-VISUAL-KEY.png';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
