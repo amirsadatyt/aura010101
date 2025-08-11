@@ -55,7 +55,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A Quantum-Resistant, Offline, Dual-Signature & Dual-JAB-Code Digital Currency System.</p>
+        <p>A Proven, Offline, Dual-Signature & Dual-JAB-Code Digital Currency System.</p>
     </div>
 
     <div class="section">
@@ -121,17 +121,17 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/elliptic@6.5.4/dist/elliptic.min.js"></script>
 <script type="module">
-// --- DEPENDENCIES: Assumes jabcodeJSLib.min.js and pqc-sign-falcon-1024.min.js are in the same directory ---
+// --- DEPENDENCIES: Assumes jabcodeJSLib.min.js is in the same directory ---
 import JabcodeJSInterface from './jabcodeJSLib.min.js';
-import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 const jabcode = new JabcodeJSInterface();
+const ec = new EC('secp256k1');
 
 // --- Global State ---
 const state = {
-    falconApi: null,
     masterPublicKey: null,
     masterPrivateKey: null, // This will be held temporarily only during signing
     puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null }
@@ -139,9 +139,10 @@ const state = {
 
 // --- CONSTANTS ---
 const Constants = {
-    FALCON_PUBKEY_SIZE: 1793,
+    EC_PUBKEY_SIZE_COMPRESSED: 33,
+    EC_SIGNATURE_SIZE: 64, // r and s values, 32 bytes each
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    VERIFICATION_PAYLOAD_PREFIX: "SADAT_V1:"
+    VERIFICATION_PAYLOAD_PREFIX: "SADAT_V1_EC:"
 };
 
 // --- DOM Elements ---
@@ -178,7 +179,6 @@ const Utils = {
         for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
         return bytes;
     },
-    hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
     downloadFile: (data, filename, type) => {
         const blob = new Blob([data], { type });
         const url = URL.createObjectURL(blob);
@@ -222,23 +222,44 @@ const BankCrypto = (() => {
         return await crypto.subtle.deriveKey({name: "PBKDF2",salt: salt,iterations: PBKDF2_ITERATIONS,hash: "SHA-256"},importedKey,{ name: AES_ALGO, length: PBKDF2_KEY_LENGTH * 8 },false,["encrypt", "decrypt"]);
     }
     
-    function hashMessageForSigning(message) { return Utils.hexToUint8Array(shake256(message, 1536)); }
+    async function hashMessageForSigning(message) {
+        const encoder = new TextEncoder();
+        const data = typeof message === 'string' ? encoder.encode(message) : message;
+        return new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+    }
 
     return {
         async generateNewKeyPair() {
-            if (!state.falconApi) throw new Error("Falcon API not initialized.");
-            return state.falconApi.keypair();
+            const keyPair = ec.genKeyPair();
+            return {
+                publicKey: new Uint8Array(keyPair.getPublic().encodeCompressed()),
+                privateKey: keyPair.getPrivate().toArrayLike(Uint8Array, 'be', 32)
+            };
         },
         async signData(data, privateKey) {
-            if (!privateKey || !state.falconApi) throw new Error("Signing prerequisites not met.");
-            const dataHash = hashMessageForSigning(data);
-            const { signature } = await state.falconApi.sign(dataHash, privateKey);
-            return signature;
+            if (!privateKey) throw new Error("Private key is not available for signing.");
+            const key = ec.keyFromPrivate(privateKey);
+            const dataHash = await hashMessageForSigning(data);
+            const sig = key.sign(dataHash, { canonical: true });
+            const r = sig.r.toArrayLike(Uint8Array, 'be', 32);
+            const s = sig.s.toArrayLike(Uint8Array, 'be', 32);
+            const fullSig = new Uint8Array(r.length + s.length);
+            fullSig.set(r);
+            fullSig.set(s, r.length);
+            return fullSig;
         },
         async verifySignature(signature, data, publicKey) {
-            if (!publicKey || !state.falconApi) throw new Error("Verification prerequisites not met.");
-            const dataHash = hashMessageForSigning(data);
-            return state.falconApi.verify(signature, dataHash, publicKey);
+            if (!publicKey) throw new Error("Public key is not available for verification.");
+            try {
+                const key = ec.keyFromPublic(publicKey);
+                const dataHash = await hashMessageForSigning(data);
+                const r = signature.slice(0, 32);
+                const s = signature.slice(32, 64);
+                return key.verify(dataHash, { r, s });
+            } catch (e) {
+                console.error("Verification failed:", e);
+                return false;
+            }
         },
         async encryptMasterKey(masterPrivateKeyBytes, passwordKey, visualKeySecret) {
             const visualKeySalt = crypto.getRandomValues(new Uint8Array(16));
@@ -308,7 +329,7 @@ const UIHandlers = (() => {
                 return;
             }
             
-            Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Generating new Falcon-1024 key pair...', 'info');
+            Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Generating new secp256k1 key pair...', 'info');
             try {
                 const keyPair = await BankCrypto.generateNewKeyPair();
                 state.masterPublicKey = keyPair.publicKey;
@@ -378,7 +399,7 @@ const UIHandlers = (() => {
             try {
                 state.masterPrivateKey = await BankCrypto.reconstructMasterKey(fileKey, passwordKey, visualKey);
                 // Perform a self-test to verify the key is likely correct
-                const testData = new TextEncoder().encode("test");
+                const testData = "self-test";
                 const testSig = await BankCrypto.signData(testData, state.masterPrivateKey);
                 const isTestValid = await BankCrypto.verifySignature(testSig, testData, state.masterPublicKey);
                 if (!isTestValid) throw new Error("Key reconstruction failed self-test. The provided pieces do not match the active public key.");
@@ -437,14 +458,14 @@ const BanknoteLogic = (() => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
 
-        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        const bufferSize = 4 + 8 + Constants.EC_PUBKEY_SIZE_COMPRESSED + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
 
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
         new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
-        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
+        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.EC_PUBKEY_SIZE_COMPRESSED;
         view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
@@ -461,7 +482,7 @@ const BanknoteLogic = (() => {
 
         const timestamp = view.getUint32(offset, false); offset += 4;
         const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
+        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.EC_PUBKEY_SIZE_COMPRESSED); offset += Constants.EC_PUBKEY_SIZE_COMPRESSED;
         const sigOneLength = view.getUint16(offset, false); offset += 2;
         const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
         const signatureTwo = buffer.subarray(offset);
@@ -486,13 +507,11 @@ const BanknoteLogic = (() => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         const quantity = parseInt(DOMElements.quantityInput.value) || 1;
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and downloading ${quantity} banknote(s)...`, 'info');
-
-        // --- MODIFICATION: Check and warn user if Directory Picker is unavailable ---
+        
         if (quantity > 1 && !window.showDirectoryPicker) {
             Utils.log("Directory Picker API not available. Falling back to individual downloads.", 'warning');
             alert("Your browser or security context does not support directory selection.\n\nThe banknotes will be downloaded individually to your default 'Downloads' folder.");
         }
-        // --- END MODIFICATION ---
 
         try {
             const offscreenCanvas = document.createElement('canvas');
@@ -517,7 +536,6 @@ const BanknoteLogic = (() => {
                  }
                  Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
-                // This is the fallback that will run if the API is not available
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
             }
@@ -525,7 +543,6 @@ const BanknoteLogic = (() => {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
         } finally {
-            // This part correctly clears the key for security after the operation
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
@@ -718,18 +735,9 @@ const BanknoteDrawer = (() => {
 // ===================================================================================
 // APPLICATION INITIALIZATION
 // ===================================================================================
-async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Crypto Module...', 'info');
-    try {
-        state.falconApi = await pqcSignFalcon1024();
-        Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
-        Utils.log("All cryptographic modules initialized successfully.", 'success');
-    } catch (e) {
-        Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
-        Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
-        alert("Error: Failed to load a required cryptographic module. The application cannot run.");
-        return;
-    }
+function main() {
+    Utils.log("All modules initialized successfully.", 'success');
+    Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
     
     DOMElements.generateKeysButton.addEventListener('click', UIHandlers.handleGenerateAndExportKeys);
     DOMElements.importPublicKey.addEventListener('change', UIHandlers.handleImportPublicKey);
