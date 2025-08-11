@@ -560,60 +560,38 @@ const BanknoteLogic = (() => {
         handleFileSelectForValidation: (event) => {
             const file = event.target.files[0];
             const resultDiv = DOMElements.validationResult;
-            if (!file || !state.masterPublicKey) { event.target.value = ''; return; }
+            if (!file || !state.masterPublicKey) {
+                event.target.value = '';
+                return;
+            }
             Utils.updateStatus(resultDiv, '⏳ Reading banknote image...', 'info');
 
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = async () => {
-                    Utils.updateStatus(resultDiv, '⏳ Stage 1: Locating JAB Code...', 'info');
+                    Utils.updateStatus(resultDiv, '⏳ Preparing and scanning banknote...', 'info');
 
-                    // Stage 1: Location Scan on a low-res image to find the code's position
-                    const lowResCanvas = document.createElement('canvas');
-                    const lowResCtx = lowResCanvas.getContext('2d');
-                    const lowResWidth = 800;
-                    lowResCanvas.width = lowResWidth;
-                    lowResCanvas.height = img.naturalHeight * (lowResWidth / img.naturalWidth);
-                    lowResCtx.drawImage(img, 0, 0, lowResCanvas.width, lowResCanvas.height);
-                    const lowResDataUrl = lowResCanvas.toDataURL('image/png');
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const MAX_WIDTH = 1280; // A reasonable size to ensure detail is preserved
 
-                    let locationResult;
-                    try {
-                        locationResult = await jabcode.decode_message(lowResDataUrl, { returnDetails: true });
-                        if (!locationResult || !locationResult.location) {
-                            Utils.updateStatus(resultDiv, '❌ JAB Code could not be located on the banknote.', 'error');
-                            return;
-                        }
-                    } catch (err) {
-                        Utils.updateStatus(resultDiv, `❌ JAB Code location scan failed. The code may be damaged or absent.`, 'error');
-                        return;
+                    // Resize image to a standard, high-quality size for reliable scanning
+                    if (img.naturalWidth > MAX_WIDTH) {
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.naturalHeight * (MAX_WIDTH / img.naturalWidth);
+                    } else {
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
                     }
-
-                    // Stage 2: Precision Scan on a high-res crop of the original image
-                    Utils.updateStatus(resultDiv, '⏳ Stage 2: Performing high-resolution scan of located code...', 'info');
-                    const highResCropCanvas = document.createElement('canvas');
-                    const cropCtx = highResCropCanvas.getContext('2d');
-
-                    const scaleX = img.naturalWidth / lowResCanvas.width;
-                    const scaleY = img.naturalHeight / lowResCanvas.height;
-                    const loc = locationResult.location;
-                    const padding = 20;
-
-                    const sx = Math.max(0, (loc.x * scaleX) - padding);
-                    const sy = Math.max(0, (loc.y * scaleY) - padding);
-                    const sWidth = Math.min(img.naturalWidth - sx, (loc.width * scaleX) + (padding * 2));
-                    const sHeight = Math.min(img.naturalHeight - sy, (loc.height * scaleY) + (padding * 2));
-
-                    highResCropCanvas.width = sWidth;
-                    highResCropCanvas.height = sHeight;
-                    cropCtx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
-                    const highResCropDataUrl = highResCropCanvas.toDataURL();
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    const imageDataUrl = canvas.toDataURL('image/png');
 
                     try {
-                        const decodedText = await jabcode.decode_message(highResCropDataUrl);
+                        const decodedText = await jabcode.decode_message(imageDataUrl);
                         if (!decodedText) {
-                            Utils.updateStatus(resultDiv, '❌ High-resolution scan failed. The code is unreadable.', 'error');
+                            Utils.updateStatus(resultDiv, '❌ JAB Code could not be decoded. The banknote may be damaged, altered, or not a valid note.', 'error');
                             return;
                         }
 
@@ -631,6 +609,7 @@ const BanknoteLogic = (() => {
                         if (!isSigTwoValid) { resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; }
                         resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
                         resultDiv.innerHTML = resultHTML;
+
                     } catch (err) {
                         Utils.updateStatus(resultDiv, `❌ Validation Error: ${err.message}. The banknote data may be corrupt.`, 'error');
                         console.error(err);
