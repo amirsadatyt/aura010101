@@ -345,11 +345,20 @@ const UIHandlers = (() => {
             reader.onload = async (e) => {
                 try {
                     const dataUrl = e.target.result;
-                    // JAB library now returns an array of decoded strings
                     const decodedTextArray = await jabcode.decode_message(dataUrl);
+
                     if (decodedTextArray && decodedTextArray.length > 0) {
-                        state.puzzlePieces.visualKey = decodedTextArray[0]; // Use the first decoded result
-                        Utils.log("Visual Key loaded from file.", 'success');
+                        const decodedText = decodedTextArray[0];
+
+                        // INNOVATION: Add a check to prevent users from uploading a banknote instead of their visual key.
+                        if (decodedText.startsWith('{') || decodedText.startsWith(Constants.VERIFICATION_PAYLOAD_PREFIX)) {
+                            Utils.log('User uploaded a banknote image instead of the Visual Key.', 'error');
+                            Utils.updateStatus(DOMElements.keyReconstructionStatus, '❌ <strong>Incorrect Image:</strong> You have uploaded a banknote, not your private Visual Key. Please upload the separate JAB Code image that was saved during key generation.', 'error');
+                            state.puzzlePieces.visualKey = null; // Ensure the piece is not set
+                        } else {
+                            state.puzzlePieces.visualKey = decodedText;
+                            Utils.log("Visual Key loaded from file.", 'success');
+                        }
                     } else {
                          state.puzzlePieces.visualKey = null;
                          Utils.log("Failed to find a JAB code in the image.", 'error');
@@ -390,7 +399,6 @@ const UIHandlers = (() => {
                 const isTestValid = await BankCrypto.verifySignature(testSig, testData, state.masterPublicKey);
                 
                 if (!isTestValid) {
-                    // This is the specific error the user is encountering. We throw a custom, more descriptive error.
                     throw new Error("Key reconstruction failed self-test. The provided puzzle pieces do not correspond to the active Master Public Key.");
                 }
 
@@ -416,11 +424,16 @@ const UIHandlers = (() => {
                         <li><strong>Correct Public Key:</strong> Is the correct <code>Sadat-MASTER-PUBLIC-KEY.json</code> loaded?</li>
                         <li><strong>Correct File Key:</strong> Did you upload the matching <code>Sadat-FILE-KEY.json</code>?</li>
                         <li><strong>Correct Password:</strong> Is your password typed exactly as you created it?</li>
-                        <li><strong>Correct Visual Key:</strong> Did you upload the matching JAB Code image?</li>
+                        <li><strong>Correct Visual Key:</strong> Did you upload the correct JAB Code image?</li>
                     </ol>`;
                 } else {
-                     // Catch other potential decryption errors (e.g., malformed file)
-                    errorMessage = `❌ <strong>Decryption Failed.</strong> Could not reconstruct the key. One of the files might be corrupt or the password is wrong. Error: ${error.message}`;
+                     // Catch other potential decryption errors (e.g., malformed file or wrong password)
+                    errorMessage = `❌ <strong>Decryption Failed.</strong> Could not reconstruct the key. This is typically caused by:
+                    <ul style="text-align:left; margin-left:20px; list-style-type: '→ '; padding-left: 20px;">
+                        <li>An incorrect <strong>Password Key</strong> (Piece 2).</li>
+                        <li>A corrupted or incorrect <strong>File Key</strong> (Piece 1).</li>
+                    </ul>
+                    Please verify these two pieces and try again.`;
                 }
                 
                 Utils.updateStatus(DOMElements.keyReconstructionStatus, errorMessage, 'error');
@@ -473,7 +486,11 @@ const BanknoteLogic = (() => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
 
-        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        // Calculate buffer size dynamically
+        const sigOneLen = noteData.signatureOne.length;
+        const sigTwoLen = noteData.signatureTwo.length;
+        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + sigOneLen + sigTwoLen;
+        
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
@@ -481,8 +498,8 @@ const BanknoteLogic = (() => {
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
         new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
         new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
-        view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
-        new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
+        view.setUint16(offset, sigOneLen, false); offset += 2;
+        new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += sigOneLen;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
 
         const payloadString = Utils.binaryToString(new Uint8Array(buffer));
@@ -589,14 +606,12 @@ const BanknoteLogic = (() => {
             const resultDiv = DOMElements.validationResult;
             Utils.updateStatus(resultDiv, '⏳ Validating banknote... Please wait.', 'info');
             try {
-                // The JAB library returns an array of decoded strings.
                 const decodedTextArray = await jabcode.decode_message(file);
                 if (!decodedTextArray || decodedTextArray.length === 0) {
                     Utils.updateStatus(resultDiv, '❌ JAB Code not found or unreadable on the banknote.', 'error');
                     return;
                 }
                 
-                // Find the payload with the correct prefix from the array of decoded results.
                 const decodedText = decodedTextArray.find(text => text.startsWith(Constants.VERIFICATION_PAYLOAD_PREFIX));
 
                 if (!decodedText) {
@@ -613,7 +628,7 @@ const BanknoteLogic = (() => {
                 const dataForSigOne = getStandardizedDataForSigning(parsedData);
                 const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
                 if (!isSigOneValid) {
-                    resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                    resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID. Data may have been tampered with.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
                     resultDiv.innerHTML = resultHTML;
                     return;
                 }
@@ -680,14 +695,12 @@ const BanknoteDrawer = (() => {
     async function createJabImage(payload, size) {
         return new Promise((resolve, reject) => {
             try {
-                // JAB library encodes the payload and returns a Base64 string of the image
                 const rawBase64 = jabcode.encode_message(payload);
 
                 if (!rawBase64 || typeof rawBase64 !== 'string' || rawBase64.length < 20) {
                     throw new Error(`JAB code library returned invalid data for payload.`);
                 }
                 
-                // Ensure it's a full Data URL for the image source
                 const fullDataURL = rawBase64.startsWith('data:image') ? rawBase64 : `data:image/png;base64,${rawBase64}`;
 
                 const img = new Image(size, size);
@@ -707,7 +720,6 @@ const BanknoteDrawer = (() => {
     }
     
     return {
-        // Expose createJabImage for use in other modules like UIHandlers
         createJabImage,
         drawNoteOnCanvas: async (targetCanvas, noteData, width, height) => {
             const ctx = targetCanvas.getContext("2d");
@@ -804,7 +816,7 @@ async function main() {
         const img = DOMElements.qrDisplay.querySelector('img');
         if (img && img.src) {
             const a = document.createElement('a');
-a.href = img.src; a.download = 'Sadat-VISUAL-KEY.png';
+            a.href = img.src; a.download = 'Sadat-VISUAL-KEY.png';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
