@@ -60,7 +60,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A Quantum-Resistant, Offline, Dual-Signature Digital Currency System.</p>
+        <p>A Quantum-Resistant, Offline, Digital Currency System.</p>
     </div>
 
     <div class="section" id="guardian-setup-section">
@@ -437,34 +437,20 @@ const BanknoteLogic = (() => {
         timestamp: noteData.timestamp,
         serial: noteData.serial,
     }, ['timestamp', 'serial']);
-
-    const getStandardizedDataForMasterSig = (noteData) => {
-        const tempNoteData = {
-            ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
-            signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne)
-        };
-        return JSON.stringify(tempNoteData, Object.keys(tempNoteData).sort());
-    };
     
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
-        const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
         
         const noteData = {
             amount: parseInt(amount) || 0,
             serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
             timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
             verificationKey: Math.random().toString(36).substring(2, 10).toUpperCase(),
-            ephemeralPublicKey: ephemeralKeyPair.publicKey,
-            signatureOne: null,
             signatureTwo: null
         };
         
-        const dataForSigOne = getStandardizedDataForSigning(noteData);
-        noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
-        
-        const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
-        noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
+        const dataToSign = getStandardizedDataForSigning(noteData);
+        noteData.signatureTwo = await BankCrypto.signData(dataToSign, state.masterPrivateKey);
         
         return noteData;
     };
@@ -472,15 +458,12 @@ const BanknoteLogic = (() => {
     const createBinaryPayload = (noteData) => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
-        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        const bufferSize = 4 + 8 + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
         new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
-        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
-        view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
-        new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
         return Utils.binaryToString(new Uint8Array(buffer));
     };
@@ -492,11 +475,8 @@ const BanknoteLogic = (() => {
         let offset = 0;
         const timestamp = view.getUint32(offset, false); offset += 4;
         const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
-        const sigOneLength = view.getUint16(offset, false); offset += 2;
-        const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
         const signatureTwo = buffer.subarray(offset);
-        return { timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
+        return { timestamp, serial, signatureTwo };
     };
     
     const handleCreateAndSignNotes = async () => {
@@ -595,19 +575,21 @@ const BanknoteLogic = (() => {
                             return;
                         }
 
-                        let resultHTML = '<span class="valid">✅ JAB Code Found & Read. Verifying signatures...</span>\n';
+                        let resultHTML = '<span class="info">ℹ️ JAB Code Found & Read. Verifying master signature...</span>\n';
                         resultDiv.innerHTML = resultHTML;
 
                         const parsedData = parseBinaryPayload(decodedText);
-                        const dataForSigOne = getStandardizedDataForSigning(parsedData);
-                        const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                        if (!isSigOneValid) { resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; }
-                        resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
+                        
+                        const dataToVerify = getStandardizedDataForSigning(parsedData);
+                        const isSigValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataToVerify, state.masterPublicKey);
 
-                        const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
-                        const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                        if (!isSigTwoValid) { resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; }
-                        resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+                        if (!isSigValid) {
+                            resultHTML += '<span class="invalid">❌ Master Signature INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                            resultDiv.innerHTML = resultHTML;
+                            return;
+                        }
+                        
+                        resultHTML += '<span class="valid">✅ Master Signature OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
                         resultDiv.innerHTML = resultHTML;
 
                     } catch (err) {
@@ -691,7 +673,7 @@ const BanknoteDrawer = (() => {
                         ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
                         
                         ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
-                        ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60 * scale);
+                        ctx.fillText("Signed by Sadat Guardian Authority (Falcon-1024)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60 * scale);
                         resolve();
                     };
                     img.onerror = (err) => reject(new Error("Failed to load generated JAB Code image."));
