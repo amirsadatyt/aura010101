@@ -353,7 +353,7 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const jabCodeBase64 = jabcode.encode_message(visualKeySecret, { version: 'M8' });
+                const jabCodeBase64 = jabcode.encode_message(visualKeySecret, { version: 'M8', securityLevel: 1 });
                 
                 const img = new Image();
                 img.src = jabCodeBase64;
@@ -376,30 +376,38 @@ const UIHandlers = (() => {
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const dataUrl = e.target.result;
-                    const decodedText = await jabcode.decode_message(dataUrl);
-                    if (decodedText) {
-                        state.puzzlePieces.visualKey = decodedText;
-                        Utils.log("Visual Key loaded from file.", 'success');
-                    } else {
-                         state.puzzlePieces.visualKey = null;
-                         Utils.log("Failed to find a JAB code in the image.", 'error');
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = async () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const decodedText = await jabcode.decode_message(imageData);
+                        
+                        if (decodedText) {
+                            state.puzzlePieces.visualKey = decodedText;
+                            Utils.log("Visual Key loaded from file.", 'success');
+                        } else {
+                            state.puzzlePieces.visualKey = null;
+                            Utils.log("Failed to find a JAB code in the image.", 'error');
+                        }
+                    } catch (error) {
+                        state.puzzlePieces.visualKey = null;
+                        Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
+                        console.error(error);
+                    } finally {
+                        updatePuzzleStatus();
+                        event.target.value = '';
                     }
-                } catch (error) {
-                    state.puzzlePieces.visualKey = null;
-                    Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
-                    console.error(error);
-                } finally {
-                    updatePuzzleStatus();
-                }
+                };
+                img.onerror = () => { Utils.log("Could not load visual key image data from file.", 'error'); updatePuzzleStatus(); };
+                img.src = e.target.result;
             };
-            reader.onerror = () => {
-                 state.puzzlePieces.visualKey = null;
-                 Utils.log("Failed to read the image file.", 'error');
-                 updatePuzzleStatus();
-            };
+            reader.onerror = () => { Utils.log("Failed to read the visual key file.", 'error'); updatePuzzleStatus(); };
             reader.readAsDataURL(file);
         },
 
@@ -426,7 +434,7 @@ const UIHandlers = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE LOGIC (Updated with Two-Stage Precise Scan)
+// BANKNOTE LOGIC
 // ===================================================================================
 const BanknoteLogic = (() => {
 
@@ -573,11 +581,11 @@ const BanknoteLogic = (() => {
                     lowResCanvas.width = lowResWidth;
                     lowResCanvas.height = img.naturalHeight * (lowResWidth / img.naturalWidth);
                     lowResCtx.drawImage(img, 0, 0, lowResCanvas.width, lowResCanvas.height);
-                    const lowResDataUrl = lowResCanvas.toDataURL('image/jpeg');
+                    const lowResImageData = lowResCtx.getImageData(0, 0, lowResCanvas.width, lowResCanvas.height);
 
                     let locationResult;
                     try {
-                        locationResult = await jabcode.decode_message(lowResDataUrl, { returnDetails: true });
+                        locationResult = await jabcode.decode_message(lowResImageData, { returnDetails: true });
                         if (!locationResult || !locationResult.location) {
                             Utils.updateStatus(resultDiv, '❌ JAB Code could not be located on the banknote.', 'error');
                             return;
@@ -605,10 +613,10 @@ const BanknoteLogic = (() => {
                     highResCropCanvas.width = sWidth;
                     highResCropCanvas.height = sHeight;
                     cropCtx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
-                    const highResCropDataUrl = highResCropCanvas.toDataURL();
+                    const highResImageData = cropCtx.getImageData(0, 0, highResCropCanvas.width, highResCropCanvas.height);
 
                     try {
-                        const decodedText = await jabcode.decode_message(highResCropDataUrl);
+                        const decodedText = await jabcode.decode_message(highResImageData);
                         if (!decodedText) {
                             Utils.updateStatus(resultDiv, '❌ High-resolution scan failed. The code is unreadable.', 'error');
                             return;
@@ -698,7 +706,7 @@ const BanknoteDrawer = (() => {
                 ctx.shadowColor = "transparent";
 
                 try {
-                    const jabCodeBase64 = jabcode.encode_message(jabPayload, { version: 'M8' });
+                    const jabCodeBase64 = jabcode.encode_message(jabPayload, { version: 'M8', securityLevel: 1 });
                     const img = new Image();
                     img.onload = () => {
                         const qrSize = 380 * scale;
