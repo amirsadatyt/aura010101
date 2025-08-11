@@ -239,10 +239,14 @@ const BankCrypto = (() => {
             const cryptoPasswordKey = await pbkdf2DeriveKey(passwordKey, passwordSalt);
             const decryptedIntermediateBuffer = await crypto.subtle.decrypt({ name: AES_ALGO, iv: passwordIV }, cryptoPasswordKey, passwordCipherText);
             const intermediatePayload = JSON.parse(new TextDecoder().decode(decryptedIntermediateBuffer));
+            
             const visualKeySalt = Utils.base64ToUint8Array(intermediatePayload.salt);
             const visualKeyIV = Utils.base64ToUint8Array(intermediatePayload.iv);
             const visualCipherText = Utils.base64ToUint8Array(intermediatePayload.encryptedKey);
+
+            // FIX: Changed 'passwordKey' to 'visualKeySecret' to use the correct key for the inner decryption layer.
             const cryptoVisualKey = await pbkdf2DeriveKey(visualKeySecret, visualKeySalt);
+            
             const masterPrivateKeyBytes = await crypto.subtle.decrypt({ name: AES_ALGO, iv: visualKeyIV }, cryptoVisualKey, visualCipherText);
             return new Uint8Array(masterPrivateKeyBytes);
         }
