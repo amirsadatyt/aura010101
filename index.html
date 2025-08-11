@@ -558,11 +558,11 @@ async function handleFileSelect(event) {
         // --- SIMPLIFIED VALIDATION PIPELINE ---
         
         // Step 1: Read JAB Code
-        resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Codes...</span>`;
+        resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Code...</span>`;
         const barcodeData = await readBarcodeFromCanvas(tempCanvas);
 
         if (!barcodeData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Codes not found or unreadable. Validation stopped.</span>`;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable. Validation stopped.</span>`;
             return;
         }
         let resultHTML = `<span class="valid">✅ 1. JAB Code data successfully read.</span>`;
@@ -603,46 +603,39 @@ async function validateDigitalSignature(barcodeData) {
 }
 
 async function readBarcodeFromCanvas(canvasToCheck) {
-    // These values MUST match the drawing logic in the 'drawNoteOnCanvas' function.
+    // ## FIX STARTS HERE ##
+    // The canvas being checked is the full banknote canvas (e.g., 1350x750).
+    // We must calculate the exact region of the barcode to avoid scanning the noisy background.
     const w = canvasToCheck.width;
     const h = canvasToCheck.height;
     const scale = w / 1350;
 
-    const barcodeSize = 180 * scale;
-    const barcodeY = h - (420 * scale);
-    const barcodeSpacing = 30 * scale;
-    const startX = w - (150 * scale) - (barcodeSize * 3) - (barcodeSpacing * 2);
+    // These values MUST match the drawing logic in the 'drawNoteOnCanvas' function.
+    const barcodeSize = 380 * scale;
+    const barcodeX = w - (150 * scale) - barcodeSize;
+    const barcodeY = h - (520 * scale);
     
-    const results = [];
-    
-    for(let i = 0; i < 3; i++) {
-        const barcodeX = startX + i * (barcodeSize + barcodeSpacing);
-        const barcodeRegion = { x: barcodeX, y: barcodeY, width: barcodeSize, height: barcodeSize };
+    // Define the precise region to crop from the main canvas.
+    const barcodeRegion = { x: barcodeX, y: barcodeY, width: barcodeSize, height: barcodeSize };
+    // ## FIX ENDS HERE ##
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = barcodeRegion.width;
-        tempCanvas.height = barcodeRegion.height;
-        const tempCtx = tempCanvas.getContext('2d');
-        
-        tempCtx.drawImage(canvasToCheck, barcodeRegion.x, barcodeRegion.y, barcodeRegion.width, barcodeRegion.height, 0, 0, barcodeRegion.width, barcodeRegion.height);
-        
-        const imageDataUrl = tempCanvas.toDataURL("image/png");
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = barcodeRegion.width;
+    tempCanvas.height = barcodeRegion.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Copy only the exact barcode area (which has a white background) to the temporary canvas for decoding.
+    tempCtx.drawImage(canvasToCheck, barcodeRegion.x, barcodeRegion.y, barcodeRegion.width, barcodeRegion.height, 0, 0, barcodeRegion.width, barcodeRegion.height);
+    
+    const imageDataUrl = tempCanvas.toDataURL("image/png");
 
-        try {
-            const decodedString = await jabcode.decode_message(imageDataUrl);
-            results.push(JSON.parse(decodedString));
-        } catch (error) {
-            console.error(`JAB Code ${i+1} decoding failed:`, error);
-            return null;
-        }
+    try {
+        const decodedString = await jabcode.decode_message(imageDataUrl);
+        return JSON.parse(decodedString);
+    } catch (error) {
+        console.error("JAB Code decoding failed:", error);
+        return null;
     }
-    
-    // Combine the data from the three JAB codes
-    if (results.length === 3) {
-        return { ...results[0], ...results[1], ...results[2] };
-    }
-    
-    return null;
 }
 
 // ===================================================================================
@@ -672,7 +665,7 @@ async function createNoteData(amount, index = 0) {
 }
 function arrayBufferToBase64(buffer) {
     let binary = '';
-    const bytes = new Uint8-bit array(buffer);
+    const bytes = new Uint8Array(buffer);
     for (let i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
@@ -744,7 +737,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
         if (Object.keys(noteData).length === 0) return reject("No note data provided.");
 
         const ctx = targetCanvas.getContext("2d");
-        const { amount, verificationKey, serial, visualHash, signature } = noteData;
+        const { amount, verificationKey, serial, visualHash } = noteData;
 
         const w = width;
         const h = height;
@@ -778,43 +771,29 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
         ctx.fillText(amount.toString(), w - (120 * scale), 190 * scale);
         ctx.shadowColor = "transparent";
 
-        // Split data into three parts
-        const dataPart1 = { amount: amount, serial: serial };
-        const dataPart2 = { timestamp: noteData.timestamp, verificationKey: verificationKey };
-        const dataPart3 = { signature: signature, visualHash: visualHash };
-        const dataStrings = [JSON.stringify(dataPart1), JSON.stringify(dataPart2), JSON.stringify(dataPart3)];
+        const dataString = JSON.stringify(noteData);
+        const jabCodeBase64 = jabcode.encode_message(dataString, 4, null); 
+        const jabCodeImg = new Image();
         
-        const barcodeSize = 180 * scale;
-        const barcodeY = h - (420 * scale);
-        const barcodeSpacing = 30 * scale;
-        const startX = w - (150 * scale) - (barcodeSize * 3) - (barcodeSpacing * 2);
+        jabCodeImg.onload = () => {
+            const barcodeSize = 380 * scale;
+            const barcodeX = w - (150 * scale) - barcodeSize;
+            const barcodeY = h - (520 * scale);
+            ctx.fillStyle = 'white';
+            ctx.fillRect(barcodeX, barcodeY, barcodeSize, barcodeSize);
+            ctx.drawImage(jabCodeImg, barcodeX, barcodeY, barcodeSize, barcodeSize);
 
-        for (let i = 0; i < 3; i++) {
-            const jabCodeBase64 = jabcode.encode_message(dataStrings[i], 4, null); 
-            const jabCodeImg = new Image();
+            ctx.font = `${30 * scale}px 'Roboto Mono'`;
+            ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+            ctx.textAlign = "center";
+            ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
             
-            await new Promise(resolveImage => {
-                jabCodeImg.onload = () => {
-                    const barcodeX = startX + i * (barcodeSize + barcodeSpacing);
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(barcodeX, barcodeY, barcodeSize, barcodeSize);
-                    ctx.drawImage(jabCodeImg, barcodeX, barcodeY, barcodeSize, barcodeSize);
-                    resolveImage();
-                };
-                jabCodeImg.onerror = (err) => {
-                    reject("Failed to load generated JAB Code image.");
-                };
-                jabCodeImg.src = jabCodeBase64;
-            });
-            await new Promise(r => setTimeout(r, 5000)); // 5-second delay
-        }
-
-        ctx.font = `${30 * scale}px 'Roboto Mono'`;
-        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-        ctx.textAlign = "center";
-        ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
-        
-        resolve();
+            resolve();
+        };
+        jabCodeImg.onerror = (err) => {
+            reject("Failed to load generated JAB Code image.");
+        };
+        jabCodeImg.src = jabCodeBase64;
     });
 }
 
