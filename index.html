@@ -373,13 +373,20 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const qr = qrcode(0, Constants.QR_ERROR_CORRECTION);
-                qr.addData(visualKeySecret);
-                qr.make();
-                const qrImg = qr.createImgTag(10);
+                const qrImg = document.createElement('img');
                 qrImg.style.width = '256px';
                 qrImg.style.height = '256px';
-                DOMElements.qrDisplay.innerHTML = qrImg;
+
+                new QRCode(qrImg, {
+                    text: visualKeySecret,
+                    width: 256,
+                    height: 256,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+                
+                DOMElements.qrDisplay.appendChild(qrImg);
                 DOMElements.qrModal.style.display = 'flex';
 
                 Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key QR Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
@@ -490,13 +497,31 @@ const BanknoteLogic = (() => {
 
     // Reassembles a chunked payload from an array of strings
     const reassembleChunkedPayload = (chunkStrings) => {
-        const chunks = chunkStrings.map(s => {
-            const [header, chunk] = s.split(':');
-            const [prefix, meta] = header.split('/');
-            const [index, total] = meta.split(':').map(Number);
+        const payloads = chunkStrings.filter(s => s); // Filter out any null/undefined entries
+        const chunks = payloads.map(s => {
+            const parts = s.split(':');
+            const [prefix, meta] = parts[0].split('/');
+            const [indexStr, totalStr] = meta.split(':');
+            const chunk = parts.slice(1).join(':'); // Handle cases where chunk data contains ':'
+            const index = parseInt(indexStr);
+            const total = parseInt(totalStr);
             return { chunk, index, total };
         });
-        return Utils.base64ToUint8Array(Utils.reassembleChunks(chunks));
+
+        if (chunks.length === 0) {
+            throw new Error('No QR code data provided for reassembly.');
+        }
+
+        const firstChunk = chunks[0];
+        const prefix = firstChunk.prefix;
+        const totalChunks = firstChunk.total;
+
+        if (chunks.length !== totalChunks) {
+            throw new Error(`Incomplete payload. Expected ${totalChunks} chunks but received ${chunks.length}.`);
+        }
+
+        const sortedChunks = chunks.sort((a, b) => a.index - b.index);
+        return Utils.base64ToUint8Array(sortedChunks.map(c => c.chunk).join(''));
     };
 
     const handleCreateAndSignNotes = async () => {
@@ -697,11 +722,17 @@ const BanknoteDrawer = (() => {
     }
     
     const createQrCodeImage = (payload, size) => {
-        const qr = qrcode(0, Constants.QR_ERROR_CORRECTION);
-        qr.addData(payload);
-        qr.make();
+        const qrCanvas = document.createElement('canvas');
+        new QRCode(qrCanvas, {
+            text: payload,
+            width: size,
+            height: size,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.L
+        });
         const img = new Image(size, size);
-        img.src = qr.createDataURL(10); // Scale is 10
+        img.src = qrCanvas.toDataURL();
         return img;
     };
     
