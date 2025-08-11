@@ -73,7 +73,7 @@
 
     <div class="section">
         <h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security against malware and keyloggers.</p>
+        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p>
         <div class="controls-grid">
              <label for="file-key-input" class="button sub-button">1. Upload File Key</label>
              <input type="file" id="file-key-input" accept=".json" style="display:none;" />
@@ -101,10 +101,10 @@
 
     <div class="section" id="validator-section">
         <h2><span class="pill">Step 4</span> Verify Authenticity</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of its <strong>Verification Seal JAB Code</strong> (the one on the right).</p>
+        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the **entire banknote**. The system will scan all JAB codes simultaneously to perform verification.</p>
         <label for="validator-input" class="button">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            Select Banknote JAB Code for Validation
+            Select Banknote Image for Validation
         </label>
         <input type="file" id="validator-input" accept="image/png" style="display: none;">
         <div id="validation-result" class="status-box">Awaiting banknote for validation...</div>
@@ -140,8 +140,14 @@ const state = {
 // --- CONSTANTS ---
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
+    FALCON_SIG_SIZE: 666,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    VERIFICATION_PAYLOAD_PREFIX: "SADAT_V1:"
+    JAB_SECURITY_LEVEL: 1,
+    JAB_PREFIXES: {
+        PUBLIC_AND_EPH_PUBKEY: "SADAT_PUB_EPH:",
+        MASTER_SIG: "SADAT_MAS:",
+        SIGNATURE_ONE: "SADAT_SIG_ONE:"
+    }
 };
 
 // --- DOM Elements ---
@@ -272,14 +278,10 @@ const BankCrypto = (() => {
             const cryptoPasswordKey = await pbkdf2DeriveKey(passwordKey, passwordSalt);
             const decryptedIntermediateBuffer = await crypto.subtle.decrypt({ name: AES_ALGO, iv: passwordIV }, cryptoPasswordKey, passwordCipherText);
             const intermediatePayload = JSON.parse(new TextDecoder().decode(decryptedIntermediateBuffer));
-            
             const visualKeySalt = Utils.base64ToUint8Array(intermediatePayload.salt);
             const visualKeyIV = Utils.base64ToUint8Array(intermediatePayload.iv);
             const visualCipherText = Utils.base64ToUint8Array(intermediatePayload.encryptedKey);
-            
-            // This corrected line uses the 'visualKeySecret' for the second decryption stage.
-            const cryptoVisualKey = await pbkdf2DeriveKey(visualKeySecret, visualKeySalt); 
-            
+            const cryptoVisualKey = await pbkdf2DeriveKey(visualKeySecret, visualKeySalt);
             const masterPrivateKeyBytes = await crypto.subtle.decrypt({ name: AES_ALGO, iv: visualKeyIV }, cryptoVisualKey, visualCipherText);
             return new Uint8Array(masterPrivateKeyBytes);
         }
@@ -349,20 +351,10 @@ const UIHandlers = (() => {
             reader.onload = async (e) => {
                 try {
                     const dataUrl = e.target.result;
-                    const decodedTextArray = await jabcode.decode_message(dataUrl);
-
-                    if (decodedTextArray && decodedTextArray.length > 0) {
-                        const decodedText = decodedTextArray[0];
-
-                        // INNOVATION: Add a check to prevent users from uploading a banknote instead of their visual key.
-                        if (decodedText.startsWith('{') || decodedText.startsWith(Constants.VERIFICATION_PAYLOAD_PREFIX)) {
-                            Utils.log('User uploaded a banknote image instead of the Visual Key.', 'error');
-                            Utils.updateStatus(DOMElements.keyReconstructionStatus, '❌ <strong>Incorrect Image:</strong> You have uploaded a banknote, not your private Visual Key. Please upload the separate JAB Code image that was saved during key generation.', 'error');
-                            state.puzzlePieces.visualKey = null; // Ensure the piece is not set
-                        } else {
-                            state.puzzlePieces.visualKey = decodedText;
-                            Utils.log("Visual Key loaded from file.", 'success');
-                        }
+                    const decodedText = await jabcode.decode_message(dataUrl);
+                    if (decodedText) {
+                        state.puzzlePieces.visualKey = decodedText[0];
+                        Utils.log("Visual Key loaded from file.", 'success');
                     } else {
                          state.puzzlePieces.visualKey = null;
                          Utils.log("Failed to find a JAB code in the image.", 'error');
@@ -385,62 +377,20 @@ const UIHandlers = (() => {
 
         handleReconstructKey: async () => { 
             const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
-            if (!fileKey || !passwordKey || !visualKey) { 
-                Utils.updateStatus(DOMElements.keyReconstructionStatus, "❌ All three puzzle pieces are required.", 'error'); 
-                return; 
-            }
-            Utils.updateStatus(DOMElements.keyReconstructionStatus, "⏳ Decrypting and reconstructing Master Private Key...", 'info');
-            
+            if (!fileKey || !passwordKey || !visualKey) { Utils.updateStatus(DOMElements.keyReconstructionStatus, "❌ All three puzzle pieces are required.", 'error'); return; }
+            Utils.updateStatus(DOMElements.keyReconstructionStatus, "⏳ Reconstructing Master Private Key...", 'info');
             try {
-                // Attempt to reconstruct the key from the provided pieces
                 state.masterPrivateKey = await BankCrypto.reconstructMasterKey(fileKey, passwordKey, visualKey);
-
-                Utils.updateStatus(DOMElements.keyReconstructionStatus, "⏳ Key reconstructed. Performing self-verification signature...", 'info');
-                
-                // Perform a critical self-test to verify the key is correct against the loaded public key
-                const testData = new TextEncoder().encode("SADAT_SYSTEM_SELF_TEST");
+                const testData = new TextEncoder().encode("test");
                 const testSig = await BankCrypto.signData(testData, state.masterPrivateKey);
                 const isTestValid = await BankCrypto.verifySignature(testSig, testData, state.masterPublicKey);
-                
-                if (!isTestValid) {
-                    throw new Error("Key reconstruction failed self-test. The provided puzzle pieces do not correspond to the active Master Public Key.");
-                }
+                if (!isTestValid) throw new Error("Key reconstruction failed self-test. The provided pieces do not match the active public key.");
 
-                // If verification passes, the system is active
-                Utils.updateStatus(DOMElements.keyReconstructionStatus, "✅ <strong>Master Private Key ACTIVE.</strong> System unlocked. You can now create banknotes.", 'success');
-                DOMElements.createNoteButton.disabled = false; 
-                DOMElements.downloadBatchButton.disabled = false;
-
+                Utils.updateStatus(DOMElements.keyReconstructionStatus, "✅ Master Private Key ACTIVE. You can now create banknotes.", 'success');
+                DOMElements.createNoteButton.disabled = false; DOMElements.downloadBatchButton.disabled = false;
             } catch (error) {
-                // Log the technical error for debugging
-                console.error("Reconstruction failed:", error);
-
-                // Clear the potentially incorrect private key from memory
-                state.masterPrivateKey = null; 
-                DOMElements.createNoteButton.disabled = true; 
-                DOMElements.downloadBatchButton.disabled = true;
-
-                let errorMessage;
-                // Provide a much more user-friendly message for the most common failure mode.
-                if (error.message && error.message.includes("failed self-test")) {
-                    errorMessage = `❌ <strong>Key Verification Failed.</strong> The provided puzzle pieces are incorrect or do not match the public key loaded in Step 1.<br><br>Please meticulously check the following:
-                    <ol style="text-align:left; margin-left:20px;">
-                        <li><strong>Correct Public Key:</strong> Is the correct <code>Sadat-MASTER-PUBLIC-KEY.json</code> loaded?</li>
-                        <li><strong>Correct File Key:</strong> Did you upload the matching <code>Sadat-FILE-KEY.json</code>?</li>
-                        <li><strong>Correct Password:</strong> Is your password typed exactly as you created it?</li>
-                        <li><strong>Correct Visual Key:</strong> Did you upload the correct JAB Code image?</li>
-                    </ol>`;
-                } else {
-                     // Catch other potential decryption errors (e.g., malformed file or wrong password)
-                    errorMessage = `❌ <strong>Decryption Failed.</strong> Could not reconstruct the key. This is typically caused by:
-                    <ul style="text-align:left; margin-left:20px; list-style-type: '→ '; padding-left: 20px;">
-                        <li>An incorrect <strong>Password Key</strong> (Piece 2).</li>
-                        <li>A corrupted or incorrect <strong>File Key</strong> (Piece 1).</li>
-                    </ul>
-                    Please verify these two pieces and try again.`;
-                }
-                
-                Utils.updateStatus(DOMElements.keyReconstructionStatus, errorMessage, 'error');
+                console.error(error); Utils.updateStatus(DOMElements.keyReconstructionStatus, `❌ Failed to reconstruct key. ${error.message}`, 'error');
+                state.masterPrivateKey = null; DOMElements.createNoteButton.disabled = true; DOMElements.downloadBatchButton.disabled = true;
             } 
         },
     };
@@ -486,52 +436,38 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    const createVerificationPayload = (noteData) => {
-        const textEncoder = new TextEncoder();
-        const serialBytes = textEncoder.encode(noteData.serial);
-
-        // Calculate buffer size dynamically
-        const sigOneLen = noteData.signatureOne.length;
-        const sigTwoLen = noteData.signatureTwo.length;
-        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + sigOneLen + sigTwoLen;
+    const createJabPayloads = (noteData) => {
+        // Left JAB: Public Info and Ephemeral Public Key
+        const publicAndEphPubkeyPayload = JSON.stringify({
+            amount: noteData.amount,
+            serial: noteData.serial,
+            ephemeral_pubkey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey)
+        });
         
-        const buffer = new ArrayBuffer(bufferSize);
-        const view = new DataView(buffer);
-        let offset = 0;
+        // Center JAB: Master Signature
+        const masterSigPayload = JSON.stringify({
+            master_sig: Utils.arrayBufferToBase64(noteData.signatureTwo)
+        });
+        
+        // Right JAB: Signature One
+        const signatureOnePayload = JSON.stringify({
+            sig_one: Utils.arrayBufferToBase64(noteData.signatureOne)
+        });
 
-        view.setUint32(offset, noteData.timestamp, false); offset += 4;
-        new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
-        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
-        view.setUint16(offset, sigOneLen, false); offset += 2;
-        new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += sigOneLen;
-        new Uint8Array(buffer, offset).set(noteData.signatureTwo);
-
-        const payloadString = Utils.binaryToString(new Uint8Array(buffer));
-        return Constants.VERIFICATION_PAYLOAD_PREFIX + payloadString;
+        return {
+            publicAndEphPubkeyPayload: Constants.JAB_PREFIXES.PUBLIC_AND_EPH_PUBKEY + publicAndEphPubkeyPayload,
+            masterSigPayload: Constants.JAB_PREFIXES.MASTER_SIG + masterSigPayload,
+            signatureOnePayload: Constants.JAB_PREFIXES.SIGNATURE_ONE + signatureOnePayload
+        };
     };
 
-    const parseVerificationPayload = (payloadString) => {
-        const buffer = Utils.stringToBinary(payloadString);
-        const view = new DataView(buffer.buffer);
-        const textDecoder = new TextDecoder();
-        let offset = 0;
-
-        const timestamp = view.getUint32(offset, false); offset += 4;
-        const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
-        const sigOneLength = view.getUint16(offset, false); offset += 2;
-        const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
-        const signatureTwo = buffer.subarray(offset);
-        
-        return { timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
-    };
-    
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, 1200, 533);
+            const { publicAndEphPubkeyPayload, masterSigPayload, signatureOnePayload } = createJabPayloads(noteData);
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, { ...noteData, publicAndEphPubkeyPayload, masterSigPayload, signatureOnePayload }, 1200, 533);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready for download.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -558,11 +494,12 @@ const BanknoteLogic = (() => {
 
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, 1200, 533);
+                const { publicAndEphPubkeyPayload, masterSigPayload, signatureOnePayload } = createJabPayloads(noteData);
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, { ...noteData, publicAndEphPubkeyPayload, masterSigPayload, signatureOnePayload }, 1200, 533);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
                 if (i === quantity - 1) { 
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, 1200, 533);
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, { ...noteData, publicAndEphPubkeyPayload, masterSigPayload, signatureOnePayload }, 1200, 533);
                 }
             }
             
@@ -597,8 +534,30 @@ const BanknoteLogic = (() => {
         }
     };
 
+    const parseJabPayload = (payloadString) => {
+        try {
+            const prefixEndIndex = payloadString.indexOf(':') + 1;
+            const prefix = payloadString.substring(0, prefixEndIndex);
+            const dataString = payloadString.substring(prefixEndIndex);
+            const data = JSON.parse(dataString);
+            return { prefix, data };
+        } catch (e) {
+            console.error("Failed to parse JAB payload:", e);
+            return null;
+        }
+    };
+    
+    const findPayloadByPrefix = (decodedArray, prefix) => {
+        for (const decodedText of decodedArray) {
+            if (decodedText && decodedText.startsWith(prefix)) {
+                return parseJabPayload(decodedText);
+            }
+        }
+        return null;
+    };
+
     return {
-        createVerificationPayload,
+        createJabPayloads,
         handleCreateAndSignNotes,
         handleDownloadBatch,
         handleFileSelectForValidation: async (event) => {
@@ -610,44 +569,61 @@ const BanknoteLogic = (() => {
             const resultDiv = DOMElements.validationResult;
             Utils.updateStatus(resultDiv, '⏳ Validating banknote... Please wait.', 'info');
             try {
-                const decodedTextArray = await jabcode.decode_message(file);
-                if (!decodedTextArray || decodedTextArray.length === 0) {
-                    Utils.updateStatus(resultDiv, '❌ JAB Code not found or unreadable on the banknote.', 'error');
+                const decodedTexts = await jabcode.decode_message(file);
+                if (!decodedTexts || decodedTexts.length < 3) {
+                    Utils.updateStatus(resultDiv, '❌ Could not decode all three JAB Codes from the image. Please upload a clearer image of the entire banknote.', 'error');
                     return;
                 }
                 
-                const decodedText = decodedTextArray.find(text => text.startsWith(Constants.VERIFICATION_PAYLOAD_PREFIX));
+                const publicAndEphPubkeyPayload = findPayloadByPrefix(decodedTexts, Constants.JAB_PREFIXES.PUBLIC_AND_EPH_PUBKEY);
+                const masterSigPayload = findPayloadByPrefix(decodedTexts, Constants.JAB_PREFIXES.MASTER_SIG);
+                const signatureOnePayload = findPayloadByPrefix(decodedTexts, Constants.JAB_PREFIXES.SIGNATURE_ONE);
 
-                if (!decodedText) {
-                    Utils.updateStatus(resultDiv, '⚠️ The scanned code is not a Verification Seal. Please scan the JAB code on the RIGHT side of the banknote or upload a clearer image.', 'warning');
+                if (!publicAndEphPubkeyPayload || !masterSigPayload || !signatureOnePayload) {
+                    Utils.updateStatus(resultDiv, '❌ One or more required JAB Codes were missing or unreadable. Please check the banknote and try again.', 'error');
                     return;
                 }
-
-                let resultHTML = '<span class="valid">✅ Verification Seal Found. Verifying signatures...</span>\n';
+                
+                let resultHTML = '<span class="valid">✅ All required JAB Codes found. Verifying signatures...</span>\n';
                 resultDiv.innerHTML = resultHTML;
 
-                const payloadOnly = decodedText.substring(Constants.VERIFICATION_PAYLOAD_PREFIX.length);
-                const parsedData = parseVerificationPayload(payloadOnly);
+                // Step 1: Verify Ephemeral Signature (Signature One)
+                const ephemeralPublicKey = Utils.base64ToUint8Array(publicAndEphPubkeyPayload.data.ephemeral_pubkey);
+                const signatureOne = Utils.base64ToUint8Array(signatureOnePayload.data.sig_one);
                 
-                const dataForSigOne = getStandardizedDataForSigning(parsedData);
-                const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
+                const noteDataForSigOne = {
+                    timestamp: publicAndEphPubkeyPayload.data.timestamp,
+                    serial: publicAndEphPubkeyPayload.data.serial
+                };
+                const dataForSigOne = getStandardizedDataForSigning(noteDataForSigOne);
+                const isSigOneValid = await BankCrypto.verifySignature(signatureOne, dataForSigOne, ephemeralPublicKey);
+
                 if (!isSigOneValid) {
-                    resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID. Data may have been tampered with.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
+                    resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>';
                     resultDiv.innerHTML = resultHTML;
                     return;
                 }
                 resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
+                resultDiv.innerHTML = resultHTML;
 
-                const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
-                const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
+                // Step 2: Verify Master Signature (Signature Two)
+                const signatureTwo = Utils.base64ToUint8Array(masterSigPayload.data.master_sig);
+                const dataForSigTwo = JSON.stringify({
+                    ephemeralPublicKey: publicAndEphPubkeyPayload.data.ephemeral_pubkey,
+                    signatureOne: signatureOnePayload.data.sig_one
+                }, ['ephemeralPublicKey', 'signatureOne']);
+                const isSigTwoValid = await BankCrypto.verifySignature(signatureTwo, dataForSigTwo, state.masterPublicKey);
+                
                 if (!isSigTwoValid) {
                     resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY (Not issued by this Guardian)</span>';
                     resultDiv.innerHTML = resultHTML;
                     return;
                 }
-                resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+                resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n';
                 
+                resultHTML += '<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
                 resultDiv.innerHTML = resultHTML;
+
             } catch (e) {
                 Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}. The banknote data may be corrupt.`, 'error');
                 console.error(e);
@@ -663,7 +639,6 @@ const BanknoteLogic = (() => {
 // BANKNOTE DRAWER -- PROFESSIONAL APPEARANCE MODULE
 // ===================================================================================
 const BanknoteDrawer = (() => {
-    // These functions generate deterministic visual patterns from a hash string.
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
     function drawGuilloche(ctx, hash, w, h) {
         ctx.save();
@@ -699,22 +674,17 @@ const BanknoteDrawer = (() => {
     async function createJabImage(payload, size) {
         return new Promise((resolve, reject) => {
             try {
-                const rawBase64 = jabcode.encode_message(payload);
-
+                const rawBase64 = jabcode.encode_message(payload, { security_level: Constants.JAB_SECURITY_LEVEL });
                 if (!rawBase64 || typeof rawBase64 !== 'string' || rawBase64.length < 20) {
-                    throw new Error(`JAB code library returned invalid data for payload.`);
+                    throw new Error(`JAB code library returned invalid data for payload: ${JSON.stringify(payload)}`);
                 }
-                
                 const fullDataURL = rawBase64.startsWith('data:image') ? rawBase64 : `data:image/png;base64,${rawBase64}`;
-
                 const img = new Image(size, size);
                 img.onload = () => resolve(img);
-                
                 img.onerror = (errorEvent) => {
                     console.error("Image OnError Event:", errorEvent);
-                    reject(new Error("Browser failed to load the generated JAB Code. This may indicate a malformed Data URL."));
+                    reject(new Error("Browser failed to load the generated JAB Code. This may indicate a malformed Data URL or an issue with the JAB code library's output."));
                 };
-
                 img.src = fullDataURL;
             } catch (err) {
                  console.error("JAB Code Generation Error:", err);
@@ -727,11 +697,10 @@ const BanknoteDrawer = (() => {
         createJabImage,
         drawNoteOnCanvas: async (targetCanvas, noteData, width, height) => {
             const ctx = targetCanvas.getContext("2d");
-            const { amount, serial, signatureTwo } = noteData;
-            const scale = width / 1200; // Original design width
+            const { amount, serial, signatureTwo, publicAndEphPubkeyPayload, masterSigPayload, signatureOnePayload } = noteData;
+            const scale = width / 1200;
             const visualHash = shake256(Utils.arrayBufferToBase64(signatureTwo), 256);
 
-            // --- Draw Background and Effects ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
             const baseHue = H(visualHash, 0, 0, 360);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -741,42 +710,46 @@ const BanknoteDrawer = (() => {
             drawWatermark(ctx, visualHash, width, height);
             drawGuilloche(ctx, visualHash, width, height);
             
-            // --- Generate JAB Codes ---
-            // Left JAB: Public, human-readable data
-            const publicPayload = JSON.stringify({ type: "Public Info", amount, serial });
-            const publicJabImg = await createJabImage(publicPayload, 200 * scale);
-            // Right JAB: The critical verification data
-            const verificationPayload = BanknoteLogic.createVerificationPayload(noteData);
-            const verificationJabImg = await createJabImage(verificationPayload, 200 * scale);
+            const publicAndEphPubkeyJabImg = await createJabImage(publicAndEphPubkeyPayload, 150 * scale);
+            const masterSigJabImg = await createJabImage(masterSigPayload, 150 * scale);
+            const signatureOneJabImg = await createJabImage(signatureOnePayload, 150 * scale);
 
-            // --- Draw JAB Codes and Labels on Canvas ---
-            const jabSize = 200 * scale;
+            const jabSize = 150 * scale;
             const padding = 20 * scale;
             const boxSize = jabSize + (padding * 2);
             
-            // Draw Left JAB (Public)
             const leftX = 60 * scale;
+            const centerX = (width - boxSize) / 2;
+            const rightX = width - boxSize - (60 * scale);
             const yPos = (height - boxSize) / 2;
+            
+            // Draw Left JAB (Public Info & Eph. Public Key)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillRect(leftX, yPos, boxSize, boxSize);
-            ctx.drawImage(publicJabImg, leftX + padding, yPos + padding, jabSize, jabSize);
+            ctx.drawImage(publicAndEphPubkeyJabImg, leftX + padding, yPos + padding, jabSize, jabSize);
 
-            // Draw Right JAB (Verification)
-            const rightX = width - boxSize - (60 * scale);
+            // Draw Center JAB (Master Signature - Verification Seal)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillRect(centerX, yPos, boxSize, boxSize);
+            ctx.drawImage(masterSigJabImg, centerX + padding, yPos + padding, jabSize, jabSize);
+
+            // Draw Right JAB (Signature One)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillRect(rightX, yPos, boxSize, boxSize);
-            ctx.drawImage(verificationJabImg, rightX + padding, yPos + padding, jabSize, jabSize);
+            ctx.drawImage(signatureOneJabImg, rightX + padding, yPos + padding, jabSize, jabSize);
 
-            // --- Draw Text Elements ---
+            // Draw Text Elements
             ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
             ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
             
-            ctx.font = `bold ${32 * scale}px 'Roboto Mono'`;
+            ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
             ctx.textAlign = 'center';
             ctx.fillStyle = "rgba(255,255,255,0.7)";
-            ctx.fillText("Public Info", leftX + boxSize/2, yPos + boxSize + (30*scale));
-            ctx.fillStyle = "#00e676"; // Success Color
-            ctx.fillText("Verification Seal", rightX + boxSize/2, yPos + boxSize + (30*scale));
+            ctx.fillText("Public & Eph. Pubkey", leftX + boxSize/2, yPos + boxSize + (30*scale));
+            ctx.fillStyle = "#00e676";
+            ctx.fillText("Verification Seal", centerX + boxSize/2, yPos + boxSize + (30*scale));
+            ctx.fillStyle = "rgba(255,255,255,0.7)";
+            ctx.fillText("Signature One", rightX + boxSize/2, yPos + boxSize + (30*scale));
 
             ctx.fillStyle = "#EAEAEA"; ctx.textAlign = 'center';
             ctx.font = `bold ${50 * scale}px 'Roboto Mono'`;
@@ -825,7 +798,6 @@ async function main() {
         }
     });
 
-    // Initial drawing of an empty note
     const canvas = DOMElements.noteCanvas;
     const ctx = canvas.getContext('2d');
     const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
