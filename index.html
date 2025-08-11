@@ -122,13 +122,15 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/elliptic@6.5.4/dist/elliptic.min.js"></script>
+
 <script type="module">
 // --- DEPENDENCIES: Assumes jabcodeJSLib.min.js is in the same directory ---
 import JabcodeJSInterface from './jabcodeJSLib.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 const jabcode = new JabcodeJSInterface();
-const ec = new EC('secp256k1');
+// Initialize the elliptic curve library for secp256k1 (used by Bitcoin)
+const ec = new elliptic.ec('secp256k1');
 
 // --- Global State ---
 const state = {
@@ -139,10 +141,9 @@ const state = {
 
 // --- CONSTANTS ---
 const Constants = {
-    EC_PUBKEY_SIZE_COMPRESSED: 33,
-    EC_SIGNATURE_SIZE: 64, // r and s values, 32 bytes each
+    EC_PUBKEY_SIZE_COMPRESSED: 33, // secp256k1 compressed public key size
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    VERIFICATION_PAYLOAD_PREFIX: "SADAT_V1_EC:"
+    VERIFICATION_PAYLOAD_PREFIX: "SADAT_V1_EC:" // Prefix to identify ECDSA-based notes
 };
 
 // --- DOM Elements ---
@@ -223,9 +224,9 @@ const BankCrypto = (() => {
     }
     
     async function hashMessageForSigning(message) {
-        const encoder = new TextEncoder();
-        const data = typeof message === 'string' ? encoder.encode(message) : message;
-        return new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+       const encoder = new TextEncoder();
+       const data = typeof message === 'string' ? encoder.encode(message) : message;
+       return new Uint8Array(await crypto.subtle.digest('SHA-256', data));
     }
 
     return {
@@ -257,7 +258,7 @@ const BankCrypto = (() => {
                 const s = signature.slice(32, 64);
                 return key.verify(dataHash, { r, s });
             } catch (e) {
-                console.error("Verification failed:", e);
+                Utils.log(`Verification failed with an error: ${e.message}`, 'error');
                 return false;
             }
         },
@@ -329,7 +330,7 @@ const UIHandlers = (() => {
                 return;
             }
             
-            Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Generating new secp256k1 key pair...', 'info');
+            Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Generating new secp256k1 (ECDSA) key pair...', 'info');
             try {
                 const keyPair = await BankCrypto.generateNewKeyPair();
                 state.masterPublicKey = keyPair.publicKey;
@@ -343,9 +344,8 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
-                const img = new Image();
-                img.src = jabCodeBase64;
+                // This relies on the BanknoteDrawer's createJabImage function to create and return an <img> element
+                const img = await BanknoteDrawer.createJabImage(visualKeySecret, 256);
                 DOMElements.qrDisplay.appendChild(img);
                 DOMElements.qrModal.style.display = 'flex';
 
@@ -399,7 +399,7 @@ const UIHandlers = (() => {
             try {
                 state.masterPrivateKey = await BankCrypto.reconstructMasterKey(fileKey, passwordKey, visualKey);
                 // Perform a self-test to verify the key is likely correct
-                const testData = "self-test";
+                const testData = new TextEncoder().encode("self-test");
                 const testSig = await BankCrypto.signData(testData, state.masterPrivateKey);
                 const isTestValid = await BankCrypto.verifySignature(testSig, testData, state.masterPublicKey);
                 if (!isTestValid) throw new Error("Key reconstruction failed self-test. The provided pieces do not match the active public key.");
@@ -506,8 +506,8 @@ const BanknoteLogic = (() => {
     const handleDownloadBatch = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         const quantity = parseInt(DOMElements.quantityInput.value) || 1;
-        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and downloading ${quantity} banknote(s)...`, 'info');
-        
+        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Preparing to create ${quantity} banknote(s)...`, 'info');
+
         if (quantity > 1 && !window.showDirectoryPicker) {
             Utils.log("Directory Picker API not available. Falling back to individual downloads.", 'warning');
             alert("Your browser or security context does not support directory selection.\n\nThe banknotes will be downloaded individually to your default 'Downloads' folder.");
@@ -517,30 +517,38 @@ const BanknoteLogic = (() => {
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = 1200; offscreenCanvas.height = 533;
             const notesToDownload = [];
+            
+            Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Generating ${quantity} banknote(s) in memory...`, 'info');
+
             for (let i = 0; i < quantity; i++) {
                 const noteData = await createNoteData(DOMElements.amountInput.value);
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, 1200, 533);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
-                if (i === quantity - 1) {
+                if (i === quantity - 1) { 
                     await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, 1200, 533);
                 }
             }
             
-            if (quantity >= 1 && window.showDirectoryPicker) {
+            if (window.showDirectoryPicker) {
+                 Utils.updateStatus(DOMElements.banknoteStatus, `ℹ️ Please select a folder to save the banknotes.`, 'info');
                  const dirHandle = await window.showDirectoryPicker();
+                 Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Saving ${quantity} notes to your selected folder...`, 'info');
                  for (const note of notesToDownload) {
                     const fileHandle = await dirHandle.getFileHandle(note.filename, { create: true });
                     const writable = await fileHandle.createWritable();
-                    await writable.write(note.blob); await writable.close();
+                    await writable.write(note.blob);
+                    await writable.close();
                  }
                  Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
+                Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Downloading ${quantity} notes individually...`, 'info');
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
             }
+
         } catch (error) {
-            Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
+            Utils.updateStatus(DOMElements.banknoteStatus, `❌ Operation cancelled or failed: ${error.message}`, 'error');
             console.error(error);
         } finally {
             state.masterPrivateKey = null;
@@ -549,7 +557,6 @@ const BanknoteLogic = (() => {
             UIHandlers.handlePasswordKeyInput({target:{value:null}});
             DOMElements.passwordKeyInput.value = '';
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. For security, it has been cleared from memory. Solve the puzzle again to activate.", 'warning');
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch operation complete. For security, the Master Key has been cleared from memory. Please reactivate in Step 2 for more actions.`, 'success');
             Utils.log("Key cleared for security after batch operation.", 'warning');
         }
     };
@@ -654,19 +661,23 @@ const BanknoteDrawer = (() => {
     async function createJabImage(payload, size) {
         return new Promise((resolve, reject) => {
             try {
-                const jabCodeBase64 = jabcode.encode_message(payload);
+                const rawBase64 = jabcode.encode_message(payload);
+                if (!rawBase64 || typeof rawBase64 !== 'string' || !rawBase64.startsWith('data:image')) {
+                    throw new Error(`JAB code library returned invalid data.`);
+                }
                 const img = new Image(size, size);
                 img.onload = () => resolve(img);
-                img.onerror = (err) => reject(new Error("Failed to load generated JAB Code image from base64."));
-                img.src = jabCodeBase64;
+                img.onerror = () => reject(new Error("Browser failed to load the generated JAB Code Data URL."));
+                img.src = rawBase64;
             } catch (err) {
                  console.error("JAB Code Generation Error:", err);
-                 reject(err);
+                 reject(new Error(`The JAB code generation process failed. Details: ${err.message}`));
             }
         });
     }
     
     return {
+        createJabImage, // Expose for use in other modules
         drawNoteOnCanvas: async (targetCanvas, noteData, width, height) => {
             const ctx = targetCanvas.getContext("2d");
             const { amount, serial, signatureTwo } = noteData;
@@ -736,7 +747,7 @@ const BanknoteDrawer = (() => {
 // APPLICATION INITIALIZATION
 // ===================================================================================
 function main() {
-    Utils.log("All modules initialized successfully.", 'success');
+    Utils.log("Application initialized. ECDSA (secp256k1) crypto module is ready.", 'success');
     Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
     
     DOMElements.generateKeysButton.addEventListener('click', UIHandlers.handleGenerateAndExportKeys);
@@ -772,6 +783,7 @@ function main() {
     ctx.fillText("Banknote design will appear here after creation", canvas.width/2, canvas.height/2);
 }
 
+// Start the application
 main();
 </script>
 </body>
