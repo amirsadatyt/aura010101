@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote (JAB Code Security)</title>
+    <title>Sadat Digital Banknote (SuperSPHINCS+ Security)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -182,9 +182,12 @@
             transition: all 0.3s ease;
         }
 
-        .valid { color: var(--success-color); }
-        .invalid { color: var(--error-color); }
-        .info { color: var(--info-color); }
+        .valid { color: var(--success-color);
+        }
+        .invalid { color: var(--error-color);
+        }
+        .info { color: var(--info-color);
+        }
         
         .key-info {
             text-align: left;
@@ -221,7 +224,7 @@
 <div class="container">
     <div class="header">
         <h1>Sadat Digital Banknote</h1>
-        <p>A secure, verifiable digital currency concept using RSA-PSS and JAB Code.</p>
+        <p>A secure, verifiable digital currency concept using SuperSPHINCS+ and JAB Code.</p>
     </div>
 
     <canvas id="noteCanvas" width="1350" height="750"></canvas>
@@ -268,23 +271,23 @@
 </div>
 
 <script type="module">
-// Import the JAB Code library as a modern ES Module
+// Import the JAB Code and SuperSPHINCS+ libraries
 import JabcodeJSInterface from './jabcodeJSLib.min.js';
+import superSphincs from './superSphincs.js';
 
 const canvas = document.getElementById("noteCanvas");
 const ctx = canvas.getContext("2d");
 let currentNoteData = {};
 let activeKeys = { publicKey: null, privateKey: null };
 
-// Instantiate the JAB Code library once
 const jabcode = new JabcodeJSInterface();
 
 // ===================================================================================
-// Bank Key Management and Crypto Logic
+// Bank Key Management and Crypto Logic using SuperSPHINCS+
 // ===================================================================================
 
 const BankCrypto = (() => {
-    const HASH_ALGO = "SHA-256";
+    // These constants are now used for private key encryption, not the signature scheme.
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
     const PBKDF2_HASH_ALGO = "SHA-256";
@@ -292,11 +295,8 @@ const BankCrypto = (() => {
 
     async function generateNewKeyPair() {
         try {
-            const keyPair = await window.crypto.subtle.generateKey(
-                { name: "RSA-PSS", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: HASH_ALGO },
-                true, // is extractable
-                ["sign", "verify"]
-            );
+            // Use the SuperSPHINCS+ library to generate a key pair
+            const keyPair = await superSphincs.keyPair();
             return keyPair;
         } catch (e) {
             console.error("Crypto key generation failed:", e);
@@ -307,122 +307,49 @@ const BankCrypto = (() => {
 
     async function signData(data, privateKey) {
         if (!privateKey) throw new Error("Private key is not available for signing.");
-        const encodedData = new TextEncoder().encode(data);
-        const signature = await window.crypto.subtle.sign(
-            { name: "RSA-PSS", saltLength: 32 },
-            privateKey,
-            encodedData
-        );
+        // Use the SuperSPHINCS+ library to sign the data.
+        const signature = await superSphincs.signDetached(data, privateKey);
         return signature;
     }
 
     async function verifySignature(signature, data, publicKey) {
         if (!publicKey) throw new Error("Public key is not available for verification.");
-        const encodedData = new TextEncoder().encode(data);
-        return await window.crypto.subtle.verify(
-            { name: "RSA-PSS", saltLength: 32 },
-            publicKey,
-            signature,
-            encodedData
-        );
+        // Use the SuperSPHINCS+ library to verify the signature.
+        return await superSphincs.verifyDetached(signature, data, publicKey);
     }
     
-    async function exportKey(key) {
-        return await window.crypto.subtle.exportKey('jwk', key);
+    async function exportKey(key, password) {
+        // Use the SuperSPHINCS+ library's built-in export function.
+        // It handles the encryption of the private key if a password is provided.
+        return await superSphincs.exportKeys(key, password);
     }
     
-    async function importKey(jwk, usage) {
-        return await window.crypto.subtle.importKey(
-            'jwk',
-            jwk,
-            { name: 'RSA-PSS', hash: HASH_ALGO },
-            true,
-            [usage]
-        );
-    }
-    
-    async function encryptPrivateKey(privateKey, password) {
-        const passwordBuffer = new TextEncoder().encode(password);
-        const salt = window.crypto.getRandomValues(new Uint8Array(16));
-        const iv = window.crypto.getRandomValues(new Uint8Array(12));
-        
-        const keyMaterial = await window.crypto.subtle.importKey(
-            "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
-        );
-        
-        const derivedKey = await window.crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt: salt, iterations: PBKDF2_ITERATIONS, hash: PBKDF2_HASH_ALGO },
-            keyMaterial,
-            { name: AES_ALGO, length: AES_KEY_LENGTH },
-            true,
-            ["encrypt", "decrypt"]
-        );
-        
-        const exportedJwk = await exportKey(privateKey);
-        const encodedKey = new TextEncoder().encode(JSON.stringify(exportedJwk));
-        
-        const encryptedKey = await window.crypto.subtle.encrypt(
-            { name: AES_ALGO, iv: iv },
-            derivedKey,
-            encodedKey
-        );
-        
-        return {
-            cipherText: arrayBufferToBase64(encryptedKey),
-            salt: arrayBufferToBase64(salt),
-            iv: arrayBufferToBase64(iv),
-            algo: AES_ALGO,
-            hash: PBKDF2_HASH_ALGO,
-            iterations: PBKDF2_ITERATIONS
-        };
-    }
-    
-    async function decryptPrivateKey(encryptedData, password) {
-        const passwordBuffer = new TextEncoder().encode(password);
-        const salt = base64ToArrayBuffer(encryptedData.salt);
-        const iv = base64ToArrayBuffer(encryptedData.iv);
-        const cipherText = base64ToArrayBuffer(encryptedData.cipherText);
-        
-        const keyMaterial = await window.crypto.subtle.importKey(
-            "raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]
-        );
-        
-        const derivedKey = await window.crypto.subtle.deriveKey(
-            { name: "PBKDF2", salt: salt, iterations: encryptedData.iterations, hash: encryptedData.hash },
-            keyMaterial,
-            { name: AES_ALGO, length: AES_KEY_LENGTH },
-            true,
-            ["encrypt", "decrypt"]
-        );
-        
-        const decryptedKey = await window.crypto.subtle.decrypt(
-            { name: AES_ALGO, iv: iv },
-            derivedKey,
-            cipherText
-        );
-        
-        const jwk = JSON.parse(new TextDecoder().decode(decryptedKey));
-        return await importKey(jwk, 'sign');
+    async function importKeys(jwk, password) {
+        // Use the SuperSPHINCS+ library's built-in import function.
+        // It handles decryption of the private key if a password is provided.
+        return await superSphincs.importKeys(jwk, password);
     }
     
     async function hashMessage(message) {
+        // SuperSPHINCS+ uses SHA-512 for hashing.
         const encodedData = new TextEncoder().encode(message);
-        const hashBuffer = await window.crypto.subtle.digest(HASH_ALGO, encodedData);
+        const hashBuffer = await crypto.subtle.digest('SHA-512', encodedData);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-
-    return { generateNewKeyPair, signData, verifySignature, exportKey, importKey, encryptPrivateKey, decryptPrivateKey, hashMessage };
+    return { generateNewKeyPair, signData, verifySignature, exportKey, importKeys, hashMessage };
 })();
 
 function getStandardizedDataForSigning(noteData) {
+    // This is the data that must be consistently signed and verified.
     const dataToSign = {
         amount: noteData.amount,
         serial: noteData.serial,
         timestamp: noteData.timestamp,
         verificationKey: noteData.verificationKey
     };
+    // The keys must be sorted to ensure a consistent string representation.
     return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
 }
 
@@ -450,12 +377,15 @@ async function handleGenerateAndExportKeys() {
     if (keyPair) {
         activeKeys.publicKey = keyPair.publicKey;
         activeKeys.privateKey = keyPair.privateKey;
-
-        const exportedPublic = await BankCrypto.exportKey(keyPair.publicKey);
-        downloadFile(JSON.stringify(exportedPublic, null, 2), 'Sadat-public-key.json', 'application/json');
-
-        const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair.privateKey, password);
-        downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-private-key.json', 'application/json');
+        
+        // Exporting keys with password for private key encryption
+        const exportedKeys = await superSphincs.exportKeys(keyPair, password);
+        
+        // The public key is already formatted nicely for download.
+        downloadFile(JSON.stringify(exportedKeys.public, null, 2), 'Sadat-public-key.json', 'application/json');
+        
+        // The encrypted private key is also ready.
+        downloadFile(JSON.stringify(exportedKeys.private, null, 2), 'Sadat-private-key.json', 'application/json');
 
         updateKeyStatus('<span class="valid">✅ New key pair generated and exported! The new public key is now active for validation, and the encrypted private key is active for signing.</span>');
         updateControlsState(true);
@@ -472,8 +402,8 @@ document.getElementById('import-public-key').addEventListener('change', async (e
     reader.onload = async (e) => {
         try {
             const jwk = JSON.parse(e.target.result);
-            const publicKey = await BankCrypto.importKey(jwk, 'verify');
-            activeKeys.publicKey = publicKey;
+            const keyPair = await BankCrypto.importKeys({ public: jwk });
+            activeKeys.publicKey = keyPair.publicKey;
             updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>');
         } catch (error) {
             updateKeyStatus(`<span class="invalid">❌ Error importing public key: ${error.message}</span>`);
@@ -481,7 +411,6 @@ document.getElementById('import-public-key').addEventListener('change', async (e
     };
     reader.readAsText(file);
 });
-
 document.getElementById('import-private-key').addEventListener('change', async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -495,17 +424,17 @@ document.getElementById('import-private-key').addEventListener('change', async (
         try {
             const encryptedData = JSON.parse(e.target.result);
             updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>');
-            const privateKey = await BankCrypto.decryptPrivateKey(encryptedData, password);
-            activeKeys.privateKey = privateKey;
+            const keyPair = await BankCrypto.importKeys({ private: encryptedData }, password);
+            activeKeys.privateKey = keyPair.privateKey;
             updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>');
             updateControlsState(true);
         } catch (error) {
-            updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key. Check your password and file: ${error.message}</span>`);
+            updateKeyStatus(`<span class="invalid">❌ Error decrypting or importing private key.
+Check your password and file: ${error.message}</span>`);
         }
     };
     reader.readAsText(file);
 });
-
 function downloadFile(data, filename, type) {
     const blob = new Blob([data], { type: type });
     const url = URL.createObjectURL(blob);
@@ -536,7 +465,6 @@ function base64ToArrayBuffer(base64) {
 async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     if (!activeKeys.publicKey) {
         alert("Error: No public key is active for validation. Please generate or import one.");
         return;
@@ -544,7 +472,6 @@ async function handleFileSelect(event) {
 
     const resultDiv = document.getElementById('validation-result');
     resultDiv.innerHTML = `<span class="info">⏳ Preparing image for validation...</span>`;
-
     const fileUrl = URL.createObjectURL(file);
     const img = new Image();
 
@@ -554,31 +481,32 @@ async function handleFileSelect(event) {
         tempCanvas.height = 750;
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-
         // --- SIMPLIFIED VALIDATION PIPELINE ---
         
         // Step 1: Read JAB Code
-        resultDiv.innerHTML = `<span class="info">1. Reading digital data from JAB Code...</span>`;
+        resultDiv.innerHTML = `<span class="info">1.
+Reading digital data from JAB Code...</span>`;
         const barcodeData = await readBarcodeFromCanvas(tempCanvas);
-
         if (!barcodeData) {
-            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable. Validation stopped.</span>`;
+            resultDiv.innerHTML = `<span class="invalid">❌ FATAL ERROR: JAB Code not found or unreadable.
+Validation stopped.</span>`;
             return;
         }
         let resultHTML = `<span class="valid">✅ 1. JAB Code data successfully read.</span>`;
-        
         // Step 2: Verify Digital Signature
-        resultHTML += `\n\n<span class="info">2. Verifying digital signature (RSA-PSS)...</span>`;
+        resultHTML += `\n\n<span class="info">2.
+Verifying digital signature (SuperSPHINCS+)...</span>`;
         resultDiv.innerHTML = resultHTML;
         const isSignatureValid = await validateDigitalSignature(barcodeData);
-
         if (!isSignatureValid) {
-            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid. The banknote data is forged or has been tampered with.</span>`;
+            resultHTML += `\n<span class="invalid">❌ FATAL ERROR: Digital signature is invalid.
+The banknote data is forged or has been tampered with.</span>`;
             resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">❌ VERDICT: Forgery detected.</span>`;
             resultDiv.innerHTML = resultHTML;
             return;
         }
-        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed. Authenticity verified by the issuing bank's public key.</span>`;
+        resultHTML += `\n<span class="valid">✅ 2. Digital signature confirmed.
+Authenticity verified by the issuing bank's public key.</span>`;
 
         // --- FINAL VERDICT ---
         resultHTML += `\n<hr style="border-color: var(--border-color); border-style: dashed; margin: 15px 0 10px;">\n<span style="font-size: 14px; font-weight: 600;">✅ VERDICT: Banknote is authentic.</span>`;
@@ -603,32 +531,22 @@ async function validateDigitalSignature(barcodeData) {
 }
 
 async function readBarcodeFromCanvas(canvasToCheck) {
-    // ## FIX STARTS HERE ##
-    // The canvas being checked is the full banknote canvas (e.g., 1350x750).
-    // We must calculate the exact region of the barcode to avoid scanning the noisy background.
     const w = canvasToCheck.width;
     const h = canvasToCheck.height;
     const scale = w / 1350;
-
-    // These values MUST match the drawing logic in the 'drawNoteOnCanvas' function.
     const barcodeSize = 380 * scale;
     const barcodeX = w - (150 * scale) - barcodeSize;
     const barcodeY = h - (520 * scale);
-    
-    // Define the precise region to crop from the main canvas.
     const barcodeRegion = { x: barcodeX, y: barcodeY, width: barcodeSize, height: barcodeSize };
-    // ## FIX ENDS HERE ##
-
+    
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = barcodeRegion.width;
     tempCanvas.height = barcodeRegion.height;
     const tempCtx = tempCanvas.getContext('2d');
     
-    // Copy only the exact barcode area (which has a white background) to the temporary canvas for decoding.
     tempCtx.drawImage(canvasToCheck, barcodeRegion.x, barcodeRegion.y, barcodeRegion.width, barcodeRegion.height, 0, 0, barcodeRegion.width, barcodeRegion.height);
     
     const imageDataUrl = tempCanvas.toDataURL("image/png");
-
     try {
         const decodedString = await jabcode.decode_message(imageDataUrl);
         return JSON.parse(decodedString);
@@ -642,7 +560,6 @@ async function readBarcodeFromCanvas(canvasToCheck) {
 // Banknote Creation Logic
 // ===================================================================================
 const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
-
 async function createNoteData(amount, index = 0) {
     if (!activeKeys.privateKey) {
         alert("Error: No private key is active for signing banknotes. Please generate or import a private key.");
@@ -650,12 +567,12 @@ async function createNoteData(amount, index = 0) {
     }
     const now = Date.now();
     const noteData = {
-        amount: parseInt(amount) || 0,
+        amount: parseInt(amount) ||
+0,
         verificationKey: "SVK-" + Math.random().toString(16).substring(2, 10).toUpperCase(),
         serial: "SDT-" + (now + index).toString().slice(-8),
         timestamp: now
     };
-
     const stringToSign = getStandardizedDataForSigning(noteData);
     const signatureBuffer = await BankCrypto.signData(stringToSign, activeKeys.privateKey);
     noteData.signature = arrayBufferToBase64(signatureBuffer);
@@ -709,12 +626,12 @@ window.handleDownloadBatch = async function() {
         const offscreenCanvas = document.createElement('canvas');
         offscreenCanvas.width = canvas.width;
         offscreenCanvas.height = canvas.height;
-
         for (let i = 0; i < quantity; i++) {
             resultDiv.innerHTML = `<span class="info">Generating banknote ${i + 1} of ${quantity}...</span>`;
             const noteData = await createNoteData(amount, i);
             if (!noteData) {
-                resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped. No private key available.</span>`;
+                resultDiv.innerHTML = `<span class="invalid">❌ Batch download stopped.
+No private key available.</span>`;
                 return;
             }
             
@@ -774,7 +691,6 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
         const dataString = JSON.stringify(noteData);
         const jabCodeBase64 = jabcode.encode_message(dataString, 4, null); 
         const jabCodeImg = new Image();
-        
         jabCodeImg.onload = () => {
             const barcodeSize = 380 * scale;
             const barcodeX = w - (150 * scale) - barcodeSize;
@@ -787,7 +703,6 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
             ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
             ctx.textAlign = "center";
             ctx.fillText("Digitally Signed by Sadat Bank Authority", w / 2, h - 60 * scale);
-            
             resolve();
         };
         jabCodeImg.onerror = (err) => {
@@ -819,16 +734,12 @@ function drawKochGuilloche(g_ctx, hash, w, h) {
         const dist = Math.sqrt(dx * dx + dy * dy);
         const unitVecX = dx / dist;
         const unitVecY = dy / dist;
-
         const p1x = x1 + unitVecX * dist / 3;
         const p1y = y1 + unitVecY * dist / 3;
-
         const p2x = x1 + unitVecX * dist * 2 / 3;
         const p2y = y1 + unitVecY * dist * 2 / 3;
-
         const p3x = p1x + unitVecX * dist / 6 - unitVecY * dist * Math.sqrt(3) / 6;
         const p3y = p1y + unitVecY * dist / 6 + unitVecX * dist * Math.sqrt(3) / 6;
-
         drawKochSegment(x1, y1, p1x, p1y, level - 1);
         drawKochSegment(p1x, p1y, p3x, p3y, level - 1);
         drawKochSegment(p3x, p3y, p2x, p2y, level - 1);
@@ -838,7 +749,6 @@ function drawKochGuilloche(g_ctx, hash, w, h) {
     g_ctx.lineWidth = 1 * scale;
     g_ctx.lineJoin = 'bevel';
     g_ctx.lineCap = 'round';
-    
     for (let i = 0; i < numLines; i++) {
         const hue = (hueOffset + i * (360 / numLines)) % 360;
         g_ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.15)`;
@@ -867,12 +777,10 @@ function drawWatermark(g_ctx, hash, w, h) {
     const hue = H(hash, 20, 0, 360);
     g_ctx.strokeStyle = `hsla(${hue}, 50%, 80%, 0.05)`;
     g_ctx.lineWidth = 4 * scale;
-    
     for (let i = 0; i < numSpirals; i++) {
         g_ctx.beginPath();
         const startAngle = (i / numSpirals) * Math.PI * 2 + H(hash, 22, 0, 100) / 100;
         const endAngle = startAngle + H(hash, 24, 6, 12) * Math.PI;
-
         for (let t = startAngle; t < endAngle; t += 0.05) {
             const r = spiralRadius * (t - startAngle) / (endAngle - startAngle);
             const x = r * Math.cos(t);
@@ -885,7 +793,8 @@ function drawWatermark(g_ctx, hash, w, h) {
     g_ctx.restore();
 }
 
-function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`; g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
+function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save(); for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`;
+g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
 window.onload = async () => {
     updateControlsState(false);
@@ -893,6 +802,8 @@ window.onload = async () => {
 };
 // Make functions available in global scope for onclick handlers
 window.handleGenerateAndExportKeys = handleGenerateAndExportKeys;
+window.handleCreateNewNote = handleCreateNewNote;
+window.handleDownloadBatch = handleDownloadBatch;
 </script>
 </body>
 </html>
