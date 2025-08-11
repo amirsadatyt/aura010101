@@ -486,6 +486,14 @@ const BanknoteLogic = (() => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         const quantity = parseInt(DOMElements.quantityInput.value) || 1;
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and downloading ${quantity} banknote(s)...`, 'info');
+
+        // --- MODIFICATION: Check and warn user if Directory Picker is unavailable ---
+        if (quantity > 1 && !window.showDirectoryPicker) {
+            Utils.log("Directory Picker API not available. Falling back to individual downloads.", 'warning');
+            alert("Your browser or security context does not support directory selection.\n\nThe banknotes will be downloaded individually to your default 'Downloads' folder.");
+        }
+        // --- END MODIFICATION ---
+
         try {
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = 1200; offscreenCanvas.height = 533;
@@ -509,20 +517,22 @@ const BanknoteLogic = (() => {
                  }
                  Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
+                // This is the fallback that will run if the API is not available
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
-                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder. Your browser may not support directory selection.`, 'success');
+                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
             }
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
         } finally {
+            // This part correctly clears the key for security after the operation
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
             UIHandlers.handlePasswordKeyInput({target:{value:null}});
             DOMElements.passwordKeyInput.value = '';
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. For security, it has been cleared from memory. Solve the puzzle again to activate.", 'warning');
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch download complete. For security, the Master Key has been cleared from memory. Please reactivate in Step 2 for more actions.`, 'success');
+            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Batch operation complete. For security, the Master Key has been cleared from memory. Please reactivate in Step 2 for more actions.`, 'success');
             Utils.log("Key cleared for security after batch operation.", 'warning');
         }
     };
