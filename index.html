@@ -266,10 +266,8 @@ const BankCrypto = (() => {
     const PBKDF2_HASH_ALGO = "SHA-256";
     const AES_KEY_LENGTH = 256;
 
-    // For simplicity, we use SHAKE256 to generate the message hash.
-    // The elliptic library's `sign` function can take this hash directly.
     function hashMessageForSigning(message) {
-        return shake256(message, 512); // Use a sufficient hash length for secp256k1
+        return shake256(message, 512);
     }
 
     function hashMessageForVisual(message) {
@@ -285,7 +283,7 @@ const BankCrypto = (() => {
         if (!keyPair) throw new Error("Key pair is not available for signing.");
         const dataHash = hashMessageForSigning(data);
         const signature = keyPair.sign(dataHash, { canonical: true });
-        return signature.toDER(); // Returns a Uint8Array
+        return signature.toDER();
     }
 
     async function verifySignature(signature, data, keyPair) {
@@ -336,7 +334,7 @@ const BankCrypto = (() => {
 })();
 
 function getStandardizedDataForSigning(noteData) {
-    const dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.verificationKey };
+    const dataToSign = { amount: noteData.amount, serial: noteData.serial, timestamp: noteData.timestamp, verificationKey: noteData.publicKey };
     return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
 }
 
@@ -371,8 +369,8 @@ async function handleGenerateAndExportKeys() {
         const keyPair = await BankCrypto.generateNewKeyPair();
         activeKeys.keyPair = keyPair;
         
-        const publicKeyB64 = keyPair.getPublic('hex');
-        downloadFile(JSON.stringify({ keyData: publicKeyB64 }, null, 2), 'Sadat-EC-public-key.json', 'application/json');
+        const publicKeyHex = keyPair.getPublic('hex');
+        downloadFile(JSON.stringify({ keyData: publicKeyHex }, null, 2), 'Sadat-EC-public-key.json', 'application/json');
 
         const encryptedPrivate = await BankCrypto.encryptPrivateKey(keyPair, password);
         downloadFile(JSON.stringify(encryptedPrivate, null, 2), 'Sadat-EC-private-key.json', 'application/json');
@@ -395,7 +393,6 @@ async function handleImportPublicKey(event) {
             const data = JSON.parse(e.target.result);
             if (!data.keyData) throw new Error("Invalid public key file format.");
             
-            // Reconstruct the key pair object from the public key
             activeKeys.keyPair = ec.keyFromPublic(data.keyData, 'hex');
             
             updateKeyStatus('<span class="valid">✅ Public key imported successfully. It is now active for banknote validation.</span>');
@@ -421,7 +418,6 @@ async function handleImportPrivateKey(event) {
             const encryptedData = JSON.parse(e.target.result);
             updateKeyStatus('<span class="info">⏳ Decrypting and importing private key...</span>');
             
-            // Decrypts the private key and creates a key pair object
             activeKeys.keyPair = await BankCrypto.decryptPrivateKey(encryptedData, password);
             
             updateKeyStatus('<span class="valid">✅ Private key imported successfully. It is now active for banknote signing.</span>');
@@ -499,13 +495,11 @@ async function validateDigitalSignature(qrData) {
         const { signature, publicKey } = qrData;
         if (!signature || !publicKey) return false;
         
-        // Reconstruct key pair from public key for verification
         const keyPair = ec.keyFromPublic(publicKey, 'hex');
 
         const stringToVerify = getStandardizedDataForSigning(qrData);
         const signatureBytes = base64ToUint8Array(signature);
         
-        // `elliptic.js` requires the hash as a hex string or an array of numbers, not a Uint8Array
         const dataHash = BankCrypto.hashMessageForSigning(stringToVerify);
 
         return await BankCrypto.verifySignature(signatureBytes, dataHash, keyPair);
@@ -524,7 +518,7 @@ function readQRCodeFromCanvas(canvasToCheck) {
     if (code && code.data) {
         try {
             const parts = code.data.split('|');
-            if (parts.length !== 5) return null; // Verify correct format
+            if (parts.length !== 5) return null;
 
             return {
                 amount: parseInt(parts[0], 10),
@@ -672,7 +666,7 @@ async function drawNoteOnCanvas(targetCanvas, noteData, width, height) {
     });
 }
 
-function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,p2y,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
+function drawKochGuilloche(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,it=H(hash,2,2,4),sz=w*(H(hash,4,10,20)/100),aO=(H(hash,6,0,360)/360)*Math.PI*2,nL=H(hash,8,3,6),hO=H(hash,10,0,360);function d(x1,y1,x2,y2,l){if(l===0){g_ctx.lineTo(x2,y2);return}const dx=x2-x1,dy=y2-y1,di=Math.sqrt(dx*dx+dy*dy),ux=dx/di,uy=dy/di,p1x=x1+ux*di/3,p1y=y1+uy*di/3,p2x=x1+ux*di*2/3,p2y=y1+uy*di*2/3,p3x=p1x+ux*di/6-uy*di*Math.sqrt(3)/6,p3y=p1y+uy*di/6+ux*di*Math.sqrt(3)/6;d(x1,y1,p1x,p1y,l-1);d(p1x,p1y,p3x,p3y,l-1);d(p3x,p3y,p2x,p2y,l-1);d(p2x,y2,x2,y2,l-1)}g_ctx.lineWidth=1*s;g_ctx.lineJoin='bevel';g_ctx.lineCap='round';for(let i=0;i<nL;i++){const hu=(hO+i*(360/nL))%360;g_ctx.strokeStyle=`hsla(${hu},70%,60%,0.15)`;const lA=(i/nL)*Math.PI*2+aO,x1=Math.cos(lA)*sz,y1=Math.sin(lA)*sz,x2=Math.cos(lA+Math.PI)*sz,y2=Math.sin(lA+Math.PI)*sz;g_ctx.beginPath();g_ctx.moveTo(x1,y1);d(x1,y1,x2,y2,it);g_ctx.stroke()}g_ctx.restore() }
 function drawWatermark(g_ctx, hash, w, h) { g_ctx.save();g_ctx.translate(w/2,h/2);const s=w/1350,nS=H(hash,16,3,6),sR=w*(H(hash,18,10,25)/100)*s,hu=H(hash,20,0,360);g_ctx.strokeStyle=`hsla(${hu},50%,80%,0.05)`;g_ctx.lineWidth=4*s;for(let i=0;i<nS;i++){g_ctx.beginPath();const sA=(i/nS)*Math.PI*2+H(hash,22,0,100)/100,eA=sA+H(hash,24,6,12)*Math.PI;for(let t=sA;t<eA;t+=0.05){const r=sR*(t-sA)/(eA-sA),x=r*Math.cos(t),y=r*Math.sin(t);if(t===sA)g_ctx.moveTo(x,y);else g_ctx.lineTo(x,y)}g_ctx.stroke()}g_ctx.restore() }
 function drawNoisePattern(g_ctx, hash, w, h) { g_ctx.save();for (let i=0; i<20000; i++) { const x=Math.random()*w, y=Math.random()*h, o=Math.random()*0.15, hue=H(hash,(i%30)+4,0,360); g_ctx.fillStyle=`hsla(${hue},50%,80%,${o})`;g_ctx.fillRect(x,y,1,1) } g_ctx.restore() }
 
@@ -703,7 +697,6 @@ async function main() {
 
 // Start the application
 main();
-
 </script>
 </body>
 </html>
