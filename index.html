@@ -322,9 +322,8 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const jabCodeBase64 = jabcode.encode_message(visualKeySecret);
-                const img = new Image();
-                img.src = jabCodeBase64;
+                // This now relies on the fixed BanknoteDrawer's createJabImage function
+                const img = await BanknoteDrawer.createJabImage(visualKeySecret, 256);
                 DOMElements.qrDisplay.appendChild(img);
                 DOMElements.qrModal.style.display = 'flex';
 
@@ -487,12 +486,10 @@ const BanknoteLogic = (() => {
         const quantity = parseInt(DOMElements.quantityInput.value) || 1;
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Preparing to create ${quantity} banknote(s)...`, 'info');
 
-        // --- MODIFICATION: Check and warn user if Directory Picker is unavailable ---
         if (quantity > 1 && !window.showDirectoryPicker) {
             Utils.log("Directory Picker API not available. Falling back to individual downloads.", 'warning');
             alert("Your browser or security context does not support directory selection.\n\nThe banknotes will be downloaded individually to your default 'Downloads' folder.");
         }
-        // --- END MODIFICATION ---
 
         try {
             const offscreenCanvas = document.createElement('canvas');
@@ -506,12 +503,11 @@ const BanknoteLogic = (() => {
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, 1200, 533);
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
-                if (i === quantity - 1) { // Show the last created note on the main canvas
+                if (i === quantity - 1) { 
                     await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, 1200, 533);
                 }
             }
             
-            // --- MODIFICATION: Use Directory Picker API if available ---
             if (window.showDirectoryPicker) {
                  Utils.updateStatus(DOMElements.banknoteStatus, `ℹ️ Please select a folder to save the banknotes.`, 'info');
                  const dirHandle = await window.showDirectoryPicker();
@@ -524,24 +520,20 @@ const BanknoteLogic = (() => {
                  }
                  Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
-                // This is the fallback that will run if the API is not available
                 Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Downloading ${quantity} notes individually...`, 'info');
                 notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
             }
-            // --- END MODIFICATION ---
 
         } catch (error) {
-            // This will catch errors from both generation and the directory picker (e.g., user cancels)
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Operation cancelled or failed: ${error.message}`, 'error');
             console.error(error);
         } finally {
-            // This critical security step runs regardless of success or failure
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
-            UIHandlers.handlePasswordKeyInput({target:{value:null}}); // Clear password piece state
-            DOMElements.passwordKeyInput.value = ''; // Clear password field
+            UIHandlers.handlePasswordKeyInput({target:{value:null}});
+            DOMElements.passwordKeyInput.value = '';
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. For security, it has been cleared from memory. Solve the puzzle again to activate.", 'warning');
             Utils.log("Key cleared for security after batch operation.", 'warning');
         }
@@ -647,19 +639,33 @@ const BanknoteDrawer = (() => {
     async function createJabImage(payload, size) {
         return new Promise((resolve, reject) => {
             try {
-                const jabCodeBase64 = jabcode.encode_message(payload);
+                const rawBase64 = jabcode.encode_message(payload);
+
+                if (!rawBase64 || typeof rawBase64 !== 'string' || rawBase64.length < 20) {
+                    throw new Error(`JAB code library returned invalid data for payload: ${JSON.stringify(payload)}`);
+                }
+
+                const fullDataURL = rawBase64.startsWith('data:image') ? rawBase64 : `data:image/png;base64,${rawBase64}`;
+
                 const img = new Image(size, size);
                 img.onload = () => resolve(img);
-                img.onerror = (err) => reject(new Error("Failed to load generated JAB Code image from base64."));
-                img.src = jabCodeBase64;
+                
+                img.onerror = (errorEvent) => {
+                    console.error("Image OnError Event:", errorEvent);
+                    reject(new Error("Browser failed to load the generated JAB Code. This may indicate a malformed Data URL or an issue with the JAB code library's output."));
+                };
+
+                img.src = fullDataURL;
             } catch (err) {
                  console.error("JAB Code Generation Error:", err);
-                 reject(err);
+                 reject(new Error(`The JAB code generation process failed internally. Details: ${err.message}`));
             }
         });
     }
     
     return {
+        // Expose createJabImage for use in other modules like UIHandlers
+        createJabImage,
         drawNoteOnCanvas: async (targetCanvas, noteData, width, height) => {
             const ctx = targetCanvas.getContext("2d");
             const { amount, serial, signatureTwo } = noteData;
