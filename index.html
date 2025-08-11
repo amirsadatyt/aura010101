@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote [Quantum-Forged v2.0]</title>
+    <title>Sadat Digital Banknote [Quantum-Forged v2.1]</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -379,7 +379,10 @@ const UIHandlers = (() => {
             reader.onload = async (e) => {
                 const dataUrl = e.target.result;
                 try {
-                    const decodedText = await jabcode.decode_message(dataUrl);
+                    // JAB-JS can return a string (one code) or an array (multiple codes)
+                    const decoded = await jabcode.decode_message(dataUrl);
+                    const decodedText = Array.isArray(decoded) ? decoded[0] : decoded; // Use the first code found
+                    
                     if (decodedText) {
                         state.puzzlePieces.visualKey = decodedText;
                         Utils.log("Visual Key loaded from file.", 'success');
@@ -440,6 +443,8 @@ const BanknoteLogic = (() => {
 
     const getStandardizedDataForMasterSig = (noteData) => {
         const tempNoteData = {
+            // The ephemeral public key is now part of the master signature's data.
+            // This binds the master signature to the ephemeral key, which is stored separately.
             ephemeralPublicKey: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
             signatureOne: Utils.arrayBufferToBase64(noteData.signatureOne)
         };
@@ -455,7 +460,7 @@ const BanknoteLogic = (() => {
             serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
             timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
             verificationKey: Math.random().toString(36).substring(2, 10).toUpperCase(),
-            ephemeralPublicKey: ephemeralKeyPair.publicKey,
+            ephemeralPublicKey: ephemeralKeyPair.publicKey, // Still generated and held here
             signatureOne: null,
             signatureTwo: null
         };
@@ -469,34 +474,38 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    const createBinaryPayload = (noteData) => {
+    // Payload for the MAIN (right-side) JAB Code
+    const createMainBinaryPayload = (noteData) => {
         const textEncoder = new TextEncoder();
         const serialBytes = textEncoder.encode(noteData.serial);
-        const bufferSize = 4 + 8 + Constants.FALCON_PUBKEY_SIZE + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
+        // Buffer size no longer includes ephemeralPublicKey
+        const bufferSize = 4 + 8 + 2 + noteData.signatureOne.length + noteData.signatureTwo.length;
         const buffer = new ArrayBuffer(bufferSize);
         const view = new DataView(buffer);
         let offset = 0;
         view.setUint32(offset, noteData.timestamp, false); offset += 4;
         new Uint8Array(buffer, offset).set(serialBytes); offset += 8;
-        new Uint8Array(buffer, offset).set(noteData.ephemeralPublicKey); offset += Constants.FALCON_PUBKEY_SIZE;
+        // ephemeralPublicKey is REMOVED from this payload
         view.setUint16(offset, noteData.signatureOne.length, false); offset += 2;
         new Uint8Array(buffer, offset).set(noteData.signatureOne); offset += noteData.signatureOne.length;
         new Uint8Array(buffer, offset).set(noteData.signatureTwo);
         return Utils.binaryToString(new Uint8Array(buffer));
     };
 
-    const parseBinaryPayload = (binaryString) => {
+    // Parses the MAIN (right-side) JAB Code's payload
+    const parseMainBinaryPayload = (binaryString) => {
         const buffer = Utils.stringToBinary(binaryString);
         const view = new DataView(buffer.buffer);
         const textDecoder = new TextDecoder();
         let offset = 0;
         const timestamp = view.getUint32(offset, false); offset += 4;
         const serial = textDecoder.decode(buffer.subarray(offset, offset + 8)); offset += 8;
-        const ephemeralPublicKey = buffer.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
+        // ephemeralPublicKey is no longer here to parse
         const sigOneLength = view.getUint16(offset, false); offset += 2;
         const signatureOne = buffer.subarray(offset, offset + sigOneLength); offset += sigOneLength;
         const signatureTwo = buffer.subarray(offset);
-        return { timestamp, serial, ephemeralPublicKey, signatureOne, signatureTwo };
+        // Return without ephemeralPublicKey
+        return { timestamp, serial, signatureOne, signatureTwo };
     };
     
     const handleCreateAndSignNotes = async () => {
@@ -504,8 +513,11 @@ const BanknoteLogic = (() => {
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and redesigning banknote...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
-            const jabPayload = createBinaryPayload(noteData);
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload);
+            const jabPayloadMain = createMainBinaryPayload(noteData);
+            // The ephemeral public key is now its own payload
+            const jabPayloadKey = Utils.binaryToString(noteData.ephemeralPublicKey);
+            
+            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayloadMain, jabPayloadKey);
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed and ready.`, 'success');
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
@@ -525,21 +537,25 @@ const BanknoteLogic = (() => {
             for (let i = 0; i < quantity; i++) {
                 Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Signing banknote ${i + 1} of ${quantity}...`, 'info');
                 const noteData = await createNoteData(DOMElements.amountInput.value);
-                const jabPayload = createBinaryPayload(noteData);
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayload);
+                const jabPayloadMain = createMainBinaryPayload(noteData);
+                const jabPayloadKey = Utils.binaryToString(noteData.ephemeralPublicKey);
+                
+                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, jabPayloadMain, jabPayloadKey);
+                
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
-                if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayload);
+                
+                if (i === quantity - 1) { // Show the last note on the main canvas
+                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, jabPayloadMain, jabPayloadKey);
                 }
             }
             
             if (quantity >= 1 && window.showDirectoryPicker) {
                  const dirHandle = await window.showDirectoryPicker();
                  for (const note of notesToDownload) {
-                    const fileHandle = await dirHandle.getFileHandle(note.filename, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(note.blob); await writable.close();
+                   const fileHandle = await dirHandle.getFileHandle(note.filename, { create: true });
+                   const writable = await fileHandle.createWritable();
+                   await writable.write(note.blob); await writable.close();
                  }
                  Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
             } else {
@@ -571,34 +587,34 @@ const BanknoteLogic = (() => {
                 const img = new Image();
                 img.onload = async () => {
                     Utils.updateStatus(resultDiv, '⏳ Preparing and scanning banknote...', 'info');
-
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const MAX_WIDTH = 1280; // A reasonable size to ensure detail is preserved
-
-                    // Resize image to a standard, high-quality size for reliable scanning
-                    if (img.naturalWidth > MAX_WIDTH) {
-                        canvas.width = MAX_WIDTH;
-                        canvas.height = img.naturalHeight * (MAX_WIDTH / img.naturalWidth);
-                    } else {
-                        canvas.width = img.naturalWidth;
-                        canvas.height = img.naturalHeight;
-                    }
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
-                    const imageDataUrl = canvas.toDataURL('image/png');
+                    const imageDataUrl = img.src; // Use original image data URL
 
                     try {
-                        const decodedText = await jabcode.decode_message(imageDataUrl);
-                        if (!decodedText) {
-                            Utils.updateStatus(resultDiv, '❌ JAB Code could not be decoded. The banknote may be damaged, altered, or not a valid note.', 'error');
+                        // JAB-JS `decode_message` can return an array if multiple codes are found.
+                        const decodedData = await jabcode.decode_message(imageDataUrl);
+                        
+                        if (!decodedData || (Array.isArray(decodedData) && decodedData.length < 2)) {
+                            Utils.updateStatus(resultDiv, '❌ Required JAB Codes (2) not found. The banknote may be damaged, altered, or invalid.', 'error');
                             return;
                         }
 
-                        let resultHTML = '<span class="valid">✅ JAB Code Found & Read. Verifying signatures...</span>\n';
+                        // We have an array of decoded strings. Identify which is the key and which is the main data.
+                        // The key has a fixed length defined by Constants.FALCON_PUBKEY_SIZE.
+                        const keyPayload = decodedData.find(p => p.length === Constants.FALCON_PUBKEY_SIZE);
+                        const mainPayload = decodedData.find(p => p.length !== Constants.FALCON_PUBKEY_SIZE);
+
+                        if (!keyPayload || !mainPayload) {
+                             Utils.updateStatus(resultDiv, '❌ Payload mismatch. Could not identify key and data payloads.', 'error');
+                             return;
+                        }
+                        
+                        let resultHTML = '<span class="valid">✅ JAB Codes (2) Found & Read. Verifying signatures...</span>\n';
                         resultDiv.innerHTML = resultHTML;
 
-                        const parsedData = parseBinaryPayload(decodedText);
+                        const parsedData = parseMainBinaryPayload(mainPayload);
+                        // Convert the key payload string back to a Uint8Array and add it to the parsed data object.
+                        parsedData.ephemeralPublicKey = Utils.stringToBinary(keyPayload);
+                        
                         const dataForSigOne = getStandardizedDataForSigning(parsedData);
                         const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
                         if (!isSigOneValid) { resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; }
@@ -632,81 +648,102 @@ const BanknoteLogic = (() => {
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
     
+    // Helper to load an image from a base64 string
+    const loadImage = (src) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = (err) => reject(new Error("Failed to load a generated JAB Code image.", { cause: err }));
+        img.src = src;
+    });
+
     return {
-        drawNoteOnCanvas: async (targetCanvas, noteData, jabPayload) => {
-            return new Promise((resolve, reject) => {
-                const { CANVAS_WIDTH, CANVAS_HEIGHT } = Constants;
-                targetCanvas.width = CANVAS_WIDTH;
-                targetCanvas.height = CANVAS_HEIGHT;
-                const ctx = targetCanvas.getContext("2d");
-                const { amount, serial, verificationKey, signatureTwo } = noteData;
-                const scale = CANVAS_WIDTH / 1350;
-                const visualHash = shake256(signatureTwo, 256);
-                const baseHue = H(visualHash, 0, 0, 360);
+        drawNoteOnCanvas: async (targetCanvas, noteData, jabPayloadMain, jabPayloadKey) => {
+            const { CANVAS_WIDTH, CANVAS_HEIGHT } = Constants;
+            targetCanvas.width = CANVAS_WIDTH;
+            targetCanvas.height = CANVAS_HEIGHT;
+            const ctx = targetCanvas.getContext("2d");
+            const { amount, serial, verificationKey, signatureTwo } = noteData;
+            const scale = CANVAS_WIDTH / 1350;
+            const visualHash = shake256(signatureTwo, 256);
+            const baseHue = H(visualHash, 0, 0, 360);
 
-                const bgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-                bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
-                bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
-                ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            const bgGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
+            bgGradient.addColorStop(1, `hsl(${baseHue}, 40%, 4%)`);
+            ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            ctx.globalAlpha = 0.08;
+            for (let i = 0; i < 24; i++) {
+                ctx.beginPath();
+                const x1 = H(visualHash, i * 3, 0, CANVAS_WIDTH);
+                const y1 = H(visualHash, i * 3 + 1, 0, CANVAS_HEIGHT);
+                const x2 = H(visualHash, i * 3 + 2, 0, CANVAS_WIDTH);
+                const y2 = H(visualHash, i * 3 + 3, 0, CANVAS_HEIGHT);
+                const hue = H(visualHash, i + 10, baseHue - 40, baseHue + 40);
+                ctx.strokeStyle = `hsl(${hue}, 70%, 50%)`;
+                ctx.lineWidth = H(visualHash, i + 20, 1, 4) * scale;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            try {
+                // Generate both JAB codes
+                const jabCodeMainB64 = jabcode.encode_message(jabPayloadMain, { version: 'M8', securityLevel: 1 });
+                const jabCodeKeyB64 = jabcode.encode_message(jabPayloadKey, { version: 'M8', securityLevel: 1 });
+
+                // Load both images concurrently
+                const [mainImg, keyImg] = await Promise.all([
+                    loadImage(jabCodeMainB64),
+                    loadImage(jabCodeKeyB64)
+                ]);
+
+                // --- Draw right-side (main) JAB code ---
+                const qrSizeMain = 380 * scale;
+                const qrXMain = CANVAS_WIDTH - (150 * scale) - qrSizeMain;
+                const qrYMain = CANVAS_HEIGHT / 2 - qrSizeMain / 2; // Centered vertically
+                ctx.fillStyle = 'white';
+                ctx.fillRect(qrXMain - (20 * scale), qrYMain - (20 * scale), qrSizeMain + (40 * scale), qrSizeMain + (40 * scale));
+                ctx.drawImage(mainImg, qrXMain, qrYMain, qrSizeMain, qrSizeMain);
                 
-                ctx.save();
-                ctx.globalCompositeOperation = 'lighter';
-                ctx.globalAlpha = 0.08;
-                for (let i = 0; i < 24; i++) {
-                    ctx.beginPath();
-                    const x1 = H(visualHash, i * 3, 0, CANVAS_WIDTH);
-                    const y1 = H(visualHash, i * 3 + 1, 0, CANVAS_HEIGHT);
-                    const x2 = H(visualHash, i * 3 + 2, 0, CANVAS_WIDTH);
-                    const y2 = H(visualHash, i * 3 + 3, 0, CANVAS_HEIGHT);
-                    const hue = H(visualHash, i + 10, baseHue - 40, baseHue + 40);
-                    ctx.strokeStyle = `hsl(${hue}, 70%, 50%)`;
-                    ctx.lineWidth = H(visualHash, i + 20, 1, 4) * scale;
-                    ctx.moveTo(x1, y1);
-                    ctx.lineTo(x2, y2);
-                    ctx.stroke();
-                }
-                ctx.restore();
-
+                // --- Draw left-side (key) JAB code ---
+                const qrSizeKey = 250 * scale; // Make it a bit smaller
+                const qrXKey = 150 * scale;
+                const qrYKey = CANVAS_HEIGHT - qrSizeKey - (150 * scale);
+                ctx.fillStyle = 'white';
+                ctx.fillRect(qrXKey - (15 * scale), qrYKey - (15 * scale), qrSizeKey + (30 * scale), qrSizeKey + (30 * scale));
+                ctx.drawImage(keyImg, qrXKey, qrYKey, qrSizeKey, qrSizeKey);
+                
+                // --- Draw Text Elements (after JABs to be on top) ---
                 ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
                 ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
                 ctx.fillStyle = "#EAEAEA"; ctx.textAlign = 'left';
+                
                 ctx.font = `bold ${80 * scale}px 'Roboto Mono'`;
                 ctx.fillText(serial, 150 * scale, 160 * scale);
-                ctx.fillText(verificationKey, 150 * scale, 280 * scale);
+                
+                ctx.font = `bold ${40 * scale}px 'Roboto Mono'`;
+                ctx.fillText(verificationKey, 150 * scale, 240 * scale);
                 
                 ctx.font = `bold ${150 * scale}px 'Roboto Mono'`; ctx.textAlign = "right";
                 ctx.shadowBlur = 12 * scale; ctx.shadowOffsetX = 4 * scale; ctx.shadowOffsetY = 4 * scale;
                 ctx.fillText(amount.toString(), CANVAS_WIDTH - (120 * scale), 190 * scale);
                 ctx.shadowColor = "transparent";
+                
+                ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
+                ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60 * scale);
 
-                try {
-                    const jabCodeBase64 = jabcode.encode_message(jabPayload, { version: 'M8', securityLevel: 1 });
-                    const img = new Image();
-                    img.onload = () => {
-                        const qrSize = 380 * scale;
-                        const qrX = CANVAS_WIDTH - (150 * scale) - qrSize;
-                        const qrY = CANVAS_HEIGHT - (520 * scale);
-                        ctx.fillStyle = 'white';
-                        ctx.fillRect(qrX - (20 * scale), qrY - (20 * scale), qrSize + (40 * scale), qrSize + (40 * scale));
-                        ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
-                        
-                        ctx.font = `${30 * scale}px 'Roboto Mono'`; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "center";
-                        ctx.fillText("Dual-Signed by Sadat Guardian Authority (Falcon-1024)", CANVAS_WIDTH / 2, CANVAS_HEIGHT - 60 * scale);
-                        resolve();
-                    };
-                    img.onerror = (err) => reject(new Error("Failed to load generated JAB Code image."));
-                    img.src = jabCodeBase64;
-                } catch (err) {
-                     console.error("JAB Code Generation Error:", err);
-                     ctx.fillStyle = 'red';
-                     ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
-                     ctx.textAlign = 'center';
-                     const centerX = CANVAS_WIDTH - (150 * scale) - (190 * scale);
-                     const centerY = CANVAS_HEIGHT - (330 * scale);
-                     ctx.fillText("JAB CODE ERROR", centerX, centerY);
-                     reject(err);
-                }
-            });
+            } catch (err) {
+                 console.error("JAB Code Generation or Drawing Error:", err);
+                 ctx.fillStyle = 'red';
+                 ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
+                 ctx.textAlign = 'center';
+                 ctx.fillText("JAB CODE ERROR", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+                 throw err; // Propagate the error
+            }
         }
     };
 })();
