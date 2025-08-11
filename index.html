@@ -401,14 +401,23 @@ const UIHandlers = (() => {
                         console.error(error);
                     } finally {
                         updatePuzzleStatus();
-                        event.target.value = '';
                     }
                 };
-                img.onerror = () => { Utils.log("Could not load visual key image data from file.", 'error'); updatePuzzleStatus(); };
+                img.onerror = () => { 
+                    Utils.log("Could not load visual key image data from file.", 'error'); 
+                    state.puzzlePieces.visualKey = null;
+                    updatePuzzleStatus(); 
+                };
                 img.src = e.target.result;
             };
-            reader.onerror = () => { Utils.log("Failed to read the visual key file.", 'error'); updatePuzzleStatus(); };
+            reader.onerror = () => { 
+                Utils.log("Failed to read the visual key file.", 'error'); 
+                state.puzzlePieces.visualKey = null;
+                updatePuzzleStatus(); 
+            };
             reader.readAsDataURL(file);
+            // Reset the file input so the same file can be selected again
+            event.target.value = '';
         },
 
         handleReconstructKey: async () => { 
