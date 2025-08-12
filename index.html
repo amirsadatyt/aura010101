@@ -145,6 +145,23 @@ const Utils = {
         const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
         console.log(`[Sadat System] ${icon} ${message}`);
     },
+    // NEW: Function to apply grayscale and contrast filters for better scanning
+    async preprocessImage(dataUrl) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                // Apply filters to make codes stand out
+                ctx.filter = 'grayscale(1) contrast(2)';
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/jpeg'));
+            };
+            img.src = dataUrl;
+        });
+    },
     async resizeImage(file, maxSize) {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -454,27 +471,68 @@ const BanknoteLogic = (() => {
         }
     };
     
+    // NEW: Rewritten for maximum precision using pre-processing and targeted scanning
     async function decodeAllJabsFromImage(file) {
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
+        const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
         
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = async () => {
-                let allDecoded = [];
-                try {
-                    allDecoded = await state.jabInterface.decode_message(resizedDataUrl, { findAll: true });
-                } catch(e) {
-                    console.warn("JAB code decoding failed.", e);
+                const mainCanvas = document.createElement('canvas');
+                mainCanvas.width = img.width;
+                mainCanvas.height = img.height;
+                const mainCtx = mainCanvas.getContext('2d');
+                mainCtx.drawImage(img, 0, 0);
+
+                const layout = BanknoteDrawer.getLayout(img.width, img.height);
+                const decodePromises = [];
+
+                for (let i = 0; i < Constants.NUM_JABS; i++) {
+                    const row = Math.floor(i / 3);
+                    const col = i % 3;
+                    const regionX = layout.startX + col * (layout.jabSize + layout.xSpacing);
+                    const regionY = layout.startY + row * (layout.jabSize + layout.ySpacing);
+                    
+                    const regionCanvas = document.createElement('canvas');
+                    const slicePadding = layout.jabSize * 0.1; // Grab 10% extra area
+                    regionCanvas.width = layout.jabSize + slicePadding * 2;
+                    regionCanvas.height = layout.jabSize + slicePadding * 2;
+                    const regionCtx = regionCanvas.getContext('2d');
+
+                    regionCtx.fillStyle = 'white';
+                    regionCtx.fillRect(0, 0, regionCanvas.width, regionCanvas.height);
+                    
+                    regionCtx.drawImage(
+                        mainCanvas,
+                        regionX - slicePadding, regionY - slicePadding,
+                        layout.jabSize + slicePadding * 2, layout.jabSize + slicePadding * 2,
+                        0, 0,
+                        regionCanvas.width, regionCanvas.height
+                    );
+                    
+                    const regionDataUrl = regionCanvas.toDataURL();
+                    
+                    decodePromises.push(
+                        state.jabInterface.decode_message(regionDataUrl).catch(err => {
+                            console.warn(`Could not decode JAB in region ${i+1}.`);
+                            return null;
+                        })
+                    );
                 }
 
-                if (allDecoded.length > 0) {
-                     resolve(allDecoded);
+                const results = (await Promise.all(decodePromises))
+                    .filter(Boolean)
+                    .map(data => ({ data }));
+
+                if (results.length > 0) {
+                    resolve(results);
                 } else {
-                    reject(new Error("No JAB codes found. Please use a clear, uncropped image of the banknote."));
+                    reject(new Error("No readable JAB codes found. Please use a clearer, flatter image of the banknote."));
                 }
             };
             img.onerror = () => reject(new Error("Could not load banknote image file."));
-            img.src = resizedDataUrl;
+            img.src = processedDataUrl;
         });
     }
 
@@ -485,7 +543,7 @@ const BanknoteLogic = (() => {
             const file = event.target.files[0];
             if (!file || !state.masterPublicKey) { Utils.updateStatus(DOMElements.validationResult, '❌ Load a Master Public Key in Step 1 before validating.', 'error'); return; }
             const resultDiv = DOMElements.validationResult;
-            Utils.updateStatus(resultDiv, '⏳ Resizing and reading banknote image... Please wait.', 'info');
+            Utils.updateStatus(resultDiv, '⏳ Pre-processing and scanning banknote image...', 'info');
             try {
                 const decodedCodes = await decodeAllJabsFromImage(file);
                 let resultHTML = `Found ${decodedCodes.length} JAB code(s) on the image. Assembling payload...\n`;
@@ -502,7 +560,9 @@ const BanknoteLogic = (() => {
                             const partNum = parseInt(match[1], 10);
                             const totalParts = parseInt(match[2], 10);
                             if (!expectedTotalParts) expectedTotalParts = totalParts;
-                            receivedParts[partNum] = match[3];
+                            if (!receivedParts[partNum]) { // Avoid duplicates
+                                receivedParts[partNum] = match[3];
+                            }
                         }
                     }
                 }
@@ -570,11 +630,24 @@ const BanknoteDrawer = (() => {
         ctx.closePath();
     }
     
+    // NEW: Centralized layout logic to be shared with the validator
+    const getLayout = (width, height) => {
+        const scale = width / 1200;
+        const jabSize = 220 * scale;
+        const xSpacing = 10 * scale;
+        const ySpacing = 10 * scale;
+        const totalGridWidth = (jabSize * 3) + (xSpacing * 2);
+        const totalGridHeight = (jabSize * 2) + ySpacing;
+        const startX = (width - totalGridWidth) / 2;
+        const startY = (height - totalGridHeight) / 2;
+        return { scale, jabSize, xSpacing, ySpacing, totalGridWidth, totalGridHeight, startX, startY };
+    };
+    
     return {
+        getLayout, // Expose for the validator
         drawNoteOnCanvas: async (targetCanvas, noteData, fullPayload, width, height) => {
             const ctx = targetCanvas.getContext("2d");
             const { amount, serial } = noteData;
-            const scale = width / 1200; 
 
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, width, height);
@@ -589,50 +662,36 @@ const BanknoteDrawer = (() => {
             const jabOptions = { securityLevel: 1 };
             const jabImages = await Promise.all(jabPayloads.map(payload => Utils.createJabImage(payload, jabOptions)));
 
-            // --- NEW LAYOUT LOGIC ---
+            const layout = getLayout(width, height);
 
-            // 1. Define sizing for the larger, repositioned JAB block
-            const jabSize = 220 * scale;
-            const xSpacing = 2 * scale;
-            const ySpacing = 2 * scale;
-            const totalGridWidth = (jabSize * 3) + (xSpacing * 2);
-            const totalGridHeight = (jabSize * 2) + ySpacing;
-            
-            // 2. Center the JAB block vertically and horizontally
-            const startX = (width - totalGridWidth) / 2;
-            const startY = (height - totalGridHeight) / 2;
-
-            // 3. Draw the background for the JAB block
-            const padding = 20 * scale;
+            const padding = 20 * layout.scale;
             ctx.fillStyle = '#FFFFFF';
             ctx.shadowColor = "rgba(0,0,0,0.2)";
-            ctx.shadowBlur = 15 * scale;
+            ctx.shadowBlur = 15 * layout.scale;
             ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 5 * scale;
-            roundRect(ctx, startX - padding, startY - padding, totalGridWidth + padding*2, totalGridHeight + padding*2, 15*scale);
+            ctx.shadowOffsetY = 5 * layout.scale;
+            roundRect(ctx, layout.startX - padding, layout.startY - padding, layout.totalGridWidth + padding*2, layout.totalGridHeight + padding*2, 15*layout.scale);
             ctx.fill();
             ctx.shadowColor = "transparent";
 
-            // 4. Draw the JAB codes onto the canvas
             jabImages.forEach((img, index) => {
                 const row = Math.floor(index / 3);
                 const col = index % 3;
-                const x = startX + col * (jabSize + xSpacing);
-                const y = startY + row * (jabSize + ySpacing);
-                ctx.drawImage(img, x, y, jabSize, jabSize);
+                const x = layout.startX + col * (layout.jabSize + layout.xSpacing);
+                const y = layout.startY + row * (layout.jabSize + layout.ySpacing);
+                ctx.drawImage(img, x, y, layout.jabSize, layout.jabSize);
             });
 
-            // 5. Draw the text, vertically centered relative to the canvas height
             ctx.fillStyle = `#000000`;
-            ctx.textBaseline = 'middle'; // Align text vertically to the center
+            ctx.textBaseline = 'middle';
 
-            ctx.font = `bold ${48 * scale}px 'Roboto Mono'`;
+            ctx.font = `bold ${48 * layout.scale}px 'Roboto Mono'`;
             ctx.textAlign = 'left';
-            ctx.fillText(amount.toLocaleString('en-US'), 40 * scale, height / 2);
+            ctx.fillText(amount.toLocaleString('en-US'), 40 * layout.scale, height / 2);
             
-            ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
+            ctx.font = `bold ${24 * layout.scale}px 'Roboto Mono'`;
             ctx.textAlign = 'right';
-            ctx.fillText(serial, width - 40 * scale, height / 2);
+            ctx.fillText(serial, width - 40 * layout.scale, height / 2);
         }
     };
 })();
