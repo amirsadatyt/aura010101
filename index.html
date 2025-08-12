@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -133,8 +135,8 @@ const Utils = {
         const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
         console.log(`[Sadat System] ${icon} ${message}`);
     },
-    async createJabImage(payload) {
-        const dataUrl = state.jabInterface.encode_message(payload);
+    async createJabImage(payload, options = {}) {
+        const dataUrl = state.jabInterface.encode_message(payload, options);
         const img = new Image();
         img.src = dataUrl;
         await new Promise((resolve, reject) => {
@@ -144,35 +146,23 @@ const Utils = {
         return img;
     },
     async decodeJabFromImage(file) {
-      // We wrap the entire operation in a new Promise.
       return new Promise((resolve, reject) => {
-        // Check if a file was even passed.
         if (!file) {
           return reject(new Error("No file provided for decoding."));
         }
-
         const reader = new FileReader();
-
-        // This event fires when the file has been successfully read.
         reader.onload = async (event) => {
           try {
-            // The result is the dataURL (a base64 string).
             const dataUrl = event.target.result;
-            // Now we call the decoder with the correct data type.
             const decodedText = await state.jabInterface.decode_message(dataUrl);
-            resolve(decodedText); // Resolve the promise with the result.
+            resolve(decodedText);
           } catch (error) {
-            // If the library fails even with a dataURL, reject with its error.
             reject(error);
           }
         };
-
-        // This event fires if the file cannot be read.
         reader.onerror = () => {
           reject(new Error("FileReader failed to read the file."));
         };
-
-        // Start the process.
         reader.readAsDataURL(file);
       });
     }
@@ -267,7 +257,11 @@ const UIHandlers = (() => {
                 Utils.downloadFile(JSON.stringify(fileKey, null, 2), 'Sadat-FILE-KEY.json', 'application/json');
                 DOMElements.jabModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.jabDisplay.innerHTML = '';
-                const jabImage = await Utils.createJabImage(visualKeySecret);
+                
+                // Define JAB options for the visual key.
+                const jabOptions = { securityLevel: 1 };
+                const jabImage = await Utils.createJabImage(visualKeySecret, jabOptions); // Pass options
+                
                 DOMElements.jabDisplay.appendChild(jabImage);
                 DOMElements.jabModal.style.display = 'flex';
                 Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key JAB Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
@@ -331,14 +325,23 @@ const BanknoteLogic = (() => {
         noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
         return noteData;
     };
+    
+    // MODIFIED: Compresses data before returning Base64
     const createUnifiedVerificationPayload = (noteData) => {
         const payload = { a: noteData.amount, s: noteData.serial, t: noteData.timestamp, epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne), s2: Utils.arrayBufferToBase64(noteData.signatureTwo) };
-        return JSON.stringify(payload);
+        const jsonString = JSON.stringify(payload);
+        const compressedData = pako.deflate(jsonString);
+        return Utils.arrayBufferToBase64(compressedData);
     };
-    const parseUnifiedVerificationPayload = (jsonString) => {
+
+    // MODIFIED: Decompresses data after Base64 decoding
+    const parseUnifiedVerificationPayload = (base64CompressedString) => {
+        const compressedData = Utils.base64ToUint8Array(base64CompressedString);
+        const jsonString = pako.inflate(compressedData, { to: 'string' });
         const p = JSON.parse(jsonString);
         return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), signatureOne: Utils.base64ToUint8Array(p.s1), signatureTwo: Utils.base64ToUint8Array(p.s2) };
     };
+    
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and displaying banknote...`, 'info');
@@ -509,7 +512,12 @@ const BanknoteLogic = (() => {
                 resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
                 resultDiv.innerHTML = resultHTML;
             } catch (e) {
-                Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}.`, 'error');
+                // Add a more helpful error message for decompression failures
+                if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The JAB code data is corrupt or invalid.`, 'error');
+                } else {
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}.`, 'error');
+                }
                 console.error(e);
             } finally {
                 event.target.value = '';
@@ -550,7 +558,7 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, width, height);
             
-            // Prepare JAB code data
+            // Prepare JAB code data by splitting the compressed, Base64 payload
             const totalLength = fullPayload.length;
             const part1Length = Math.ceil(totalLength / 3);
             const part2Length = Math.ceil(totalLength / 3);
@@ -562,9 +570,16 @@ const BanknoteDrawer = (() => {
             const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
             
             const jabSize = 350 * scale;
-            const jabLeft = await Utils.createJabImage(qrPayload1);
-            const jabCenter = await Utils.createJabImage(qrPayload2);
-            const jabRight = await Utils.createJabImage(qrPayload3);
+
+            // Define JAB options. securityLevel: 1 is the lowest.
+            // The error correction level is not set explicitly. By compressing the data,
+            // we ensure the library auto-selects the smallest possible symbol (version),
+            // which effectively uses the lowest necessary error correction for the data size.
+            const jabOptions = { securityLevel: 1 };
+            
+            const jabLeft = await Utils.createJabImage(qrPayload1, jabOptions);
+            const jabCenter = await Utils.createJabImage(qrPayload2, jabOptions);
+            const jabRight = await Utils.createJabImage(qrPayload3, jabOptions);
             
             // Draw serial number and amount in BLACK
             ctx.shadowColor = "rgba(0,0,0,0.3)";
@@ -573,12 +588,12 @@ const BanknoteDrawer = (() => {
             ctx.shadowOffsetY = 2 * scale;
             ctx.textAlign = 'left';
             ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
-            ctx.fillStyle = `#000000`; // Set serial text to black
+            ctx.fillStyle = `#000000`;
             ctx.fillText(serial, 40 * scale, 50 * scale);
             
             ctx.textAlign = 'right';
             ctx.font = `bold ${48 * scale}px 'Roboto Mono'`;
-            ctx.fillStyle = "#000000"; // Set amount text to black
+            ctx.fillStyle = "#000000";
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
             
@@ -591,7 +606,6 @@ const BanknoteDrawer = (() => {
             const qr2X = startX + jabSize + qrSpacing;
             const qr3X = startX + jabSize * 2 + qrSpacing * 2;
             
-            // This white rounded rectangle now blends into the background, but still defines the area
             ctx.fillStyle = 'white';
             const padding = 20 * scale;
             roundRect(
