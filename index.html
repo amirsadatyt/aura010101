@@ -211,9 +211,10 @@ const UIHandlers = (() => {
         let statusHtml = '';
         statusHtml += fileKey ? '<span class="valid">✅ File Key loaded.</span>\n' : '<span class="invalid">❌ File Key NOT loaded.</span>\n';
         statusHtml += passwordKey ? '<span class="valid">✅ Password Key entered.</span>\n' : '<span class="invalid">❌ Password Key NOT entered.</span>\n';
-        statusHtml += visualKey ? '<span class="valid">✅ Visual Key scanned.</span>\n' : '<span class="invalid">❌ Visual Key NOT scanned.</span>\n';
+        // *** FIX: Check against null instead of truthiness to correctly handle empty strings ***
+        statusHtml += visualKey !== null ? '<span class="valid">✅ Visual Key scanned.</span>\n' : '<span class="invalid">❌ Visual Key NOT scanned.</span>\n';
         DOMElements.keyReconstructionStatus.innerHTML = statusHtml;
-        const allPiecesProvided = fileKey && passwordKey && visualKey;
+        const allPiecesProvided = fileKey && passwordKey && visualKey !== null;
         DOMElements.reconstructKeyButton.disabled = !allPiecesProvided;
         if (allPiecesProvided) {
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ All puzzle pieces provided. Click 'Activate' to unlock your private key.", 'warning');
@@ -266,7 +267,7 @@ const UIHandlers = (() => {
         },
         handleReconstructKey: async () => {
             const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
-            if (!fileKey || !passwordKey || !visualKey) { Utils.updateStatus(DOMElements.keyReconstructionStatus, "❌ All three puzzle pieces are required.", 'error'); return; }
+            if (!fileKey || !passwordKey || visualKey === null) { Utils.updateStatus(DOMElements.keyReconstructionStatus, "❌ All three puzzle pieces are required.", 'error'); return; }
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⏳ Reconstructing Master Private Key...", 'info');
             try {
                 state.masterPrivateKey = await BankCrypto.reconstructMasterKey(fileKey, passwordKey, visualKey);
@@ -547,14 +548,14 @@ const BanknoteDrawer = (() => {
             const part1 = fullPayload.substring(0, part1Length);
             const part2 = fullPayload.substring(part1Length, part1Length + part2Length);
             const part3 = fullPayload.substring(part1Length + part2Length);
-            const qrPayload1 = `${Constants.VALIDATION_PREFIX}1/3:${part1}`;
-            const qrPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
-            const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
+            const jabPayload1 = `${Constants.VALIDATION_PREFIX}1/3:${part1}`;
+            const jabPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
+            const jabPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
             
             const jabSize = 350 * scale;
-            const jabLeft = await Utils.createJabImage(qrPayload1);
-            const jabCenter = await Utils.createJabImage(qrPayload2);
-            const jabRight = await Utils.createJabImage(qrPayload3);
+            const jabLeft = await Utils.createJabImage(jabPayload1);
+            const jabCenter = await Utils.createJabImage(jabPayload2);
+            const jabRight = await Utils.createJabImage(jabPayload3);
             
             ctx.shadowColor = "rgba(0,0,0,0.7)";
             ctx.shadowBlur = 8 * scale;
@@ -570,38 +571,38 @@ const BanknoteDrawer = (() => {
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
             
-            const qrY = height * 0.22;
-            const qrSpacing = 40 * scale;
-            const totalQrWidth = jabSize * 3 + qrSpacing * 2;
-            const startX = (width - totalQrWidth) / 2;
-            const qr1X = startX;
-            const qr2X = startX + jabSize + qrSpacing;
-            const qr3X = startX + jabSize * 2 + qrSpacing * 2;
+            const jabY = height * 0.22;
+            const jabSpacing = 40 * scale;
+            const totalJabWidth = jabSize * 3 + jabSpacing * 2;
+            const startX = (width - totalJabWidth) / 2;
+            const jab1X = startX;
+            const jab2X = startX + jabSize + jabSpacing;
+            const jab3X = startX + jabSize * 2 + jabSpacing * 2;
             
             ctx.fillStyle = 'white';
             const padding = 20 * scale;
             roundRect(
                 ctx,
                 startX - padding,
-                qrY - padding,
-                totalQrWidth + (padding * 2),
+                jabY - padding,
+                totalJabWidth + (padding * 2),
                 jabSize + (padding * 2),
                 15 * scale
             );
             ctx.fill();
 
-            ctx.drawImage(jabLeft, qr1X, qrY, jabSize, jabSize);
-            ctx.drawImage(jabCenter, qr2X, qrY, jabSize, jabSize);
-            ctx.drawImage(jabRight, qr3X, qrY, jabSize, jabSize);
+            ctx.drawImage(jabLeft, jab1X, jabY, jabSize, jabSize);
+            ctx.drawImage(jabCenter, jab2X, jabY, jabSize, jabSize);
+            ctx.drawImage(jabRight, jab3X, jabY, jabSize, jabSize);
 
             ctx.strokeStyle = `hsla(${baseHue}, 50%, 30%, 0.8)`;
             ctx.lineWidth = 2 * scale;
-            const lineY = qrY + jabSize / 2;
+            const lineY = jabY + jabSize / 2;
             ctx.beginPath();
-            ctx.moveTo(qr1X + jabSize, lineY);
-            ctx.lineTo(qr2X, lineY);
-            ctx.moveTo(qr2X + jabSize, lineY);
-            ctx.lineTo(qr3X, lineY);
+            ctx.moveTo(jab1X + jabSize, lineY);
+            ctx.lineTo(jab2X, lineY);
+            ctx.moveTo(jab2X + jabSize, lineY);
+            ctx.lineTo(jab3X, lineY);
             ctx.stroke();
         }
     };
