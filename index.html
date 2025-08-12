@@ -203,8 +203,8 @@ const Utils = {
             value: payload,
             size: size,
             level: 'L', // 7% error correction
-            padding: 0, // FIXED: Set to 0 to remove extra white space
-            background: 'white',
+            padding: 0, 
+            background: 'transparent', // MODIFIED: Removed white background
             foreground: 'black'
         });
         return canvas;
@@ -352,7 +352,9 @@ const UIHandlers = (() => {
                 
                 DOMElements.qrModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.qrDisplay.innerHTML = '';
-                const qrCanvas = await Utils.createQrCanvas(visualKeySecret, 256);
+                // For the pop-up, we still want a white background for visibility
+                const qrCanvas = document.createElement('canvas');
+                new Qrious({ element: qrCanvas, value: visualKeySecret, size: 256, background: 'white' });
                 DOMElements.qrDisplay.appendChild(qrCanvas);
                 DOMElements.qrModal.style.display = 'flex';
 
@@ -470,7 +472,6 @@ const BanknoteLogic = (() => {
         };
     };
     
-    // FIXED: This function now includes a `finally` block to clear the key after use.
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) {
             alert("Master Private Key is not active. Please activate it in Step 2.");
@@ -597,7 +598,6 @@ const BanknoteLogic = (() => {
         });
     }
 
-    // FIXED: This is the main fix. The required functions are now returned (exposed) by the module.
     return {
         handleCreateAndSignNotes,
         handleDownloadBatch,
@@ -728,23 +728,58 @@ const BanknoteDrawer = (() => {
             const qrPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
             const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
 
-            const qrSize = 350 * scale; // MODIFIED: Increased QR code size
+            const qrSize = 350 * scale;
             const qrLeft = await Utils.createQrCanvas(qrPayload1, qrSize);
             const qrCenter = await Utils.createQrCanvas(qrPayload2, qrSize);
             const qrRight = await Utils.createQrCanvas(qrPayload3, qrSize);
 
+            // --- Draw Text Elements ---
+            ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
+            ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
+            
+            // MODIFIED: Draw Serial Number (Top Left)
+            ctx.textAlign = 'left';
+            ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
+            ctx.fillStyle = `hsla(${baseHue}, 100%, 80%, 0.9)`;
+            ctx.fillText(serial, 40 * scale, 50 * scale);
+
+            // Draw Main Title
+            ctx.textAlign = 'center';
+            ctx.font = `bold ${32 * scale}px 'Roboto Mono'`;
+            ctx.fillStyle = "rgba(255,255,255,0.7)";
+            ctx.fillText("SADAT DIGITAL RESERVE NOTE", width / 2, height * 0.15);
+            
+            // Draw Amount
+            ctx.font = `bold ${90 * scale}px 'Roboto Mono'`;
+            ctx.fillStyle = "#EAEAEA";
+            ctx.fillText(amount.toLocaleString('en-US'), width / 2, height * 0.35);
+
+            ctx.shadowColor = "transparent"; // Reset shadow after all text is drawn
+
+
             // --- Draw QR Codes with Professional Connectors ---
-            // MODIFIED: Entire block updated for new size and spacing
-            const qrY = height * 0.42;
+            const qrY = height * 0.38; // MODIFIED: Moved QR codes up
             const qrSpacing = 40 * scale;
             const totalQrWidth = qrSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
             const qr1X = startX;
             const qr2X = startX + qrSize + qrSpacing;
             const qr3X = startX + qrSize * 2 + qrSpacing * 2;
+            
+            // The QR code canvas has a transparent background, but we can draw a solid one behind it if desired.
+            // For a seamless look, we will draw the QR codes directly.
+            // A subtle glow effect can make them pop.
+            ctx.shadowColor = `hsla(0, 0%, 0%, 0.5)`;
+            ctx.shadowBlur = 15 * scale;
 
-            ctx.shadowColor = `hsla(${baseHue}, 100%, 70%, 0.5)`;
-            ctx.shadowBlur = 25 * scale;
+            // To make the QR scannable on a dark BG, we draw a white base first
+            ctx.fillStyle = 'white';
+            ctx.globalAlpha = 0.95;
+            ctx.fillRect(qr1X, qrY, qrSize, qrSize);
+            ctx.fillRect(qr2X, qrY, qrSize, qrSize);
+            ctx.fillRect(qr3X, qrY, qrSize, qrSize);
+            ctx.globalAlpha = 1.0;
+
 
             ctx.drawImage(qrLeft, qr1X, qrY);
             ctx.drawImage(qrCenter, qr2X, qrY);
@@ -762,25 +797,6 @@ const BanknoteDrawer = (() => {
             ctx.moveTo(qr2X + qrSize, lineY);
             ctx.lineTo(qr3X, lineY);
             ctx.stroke();
-
-            // --- Draw Text Elements ---
-            ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
-            ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
-            
-            ctx.font = `bold ${32 * scale}px 'Roboto Mono'`;
-            ctx.textAlign = 'center';
-            ctx.fillStyle = "rgba(255,255,255,0.7)";
-            ctx.fillText("SADAT DIGITAL RESERVE NOTE", width / 2, height * 0.15);
-            
-            ctx.font = `bold ${90 * scale}px 'Roboto Mono'`;
-            ctx.fillStyle = "#EAEAEA";
-            ctx.fillText(amount.toLocaleString('en-US'), width / 2, height * 0.35);
-
-            ctx.font = `bold ${30 * scale}px 'Roboto Mono'`;
-            ctx.fillStyle = `hsla(${baseHue}, 100%, 80%, 0.9)`;
-            ctx.fillText(serial, width/2, height * 0.9);
-
-            ctx.shadowColor = "transparent";
         }
     };
 })();
