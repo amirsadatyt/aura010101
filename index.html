@@ -203,7 +203,7 @@ const Utils = {
             value: payload,
             size: size,
             level: 'L', // 7% error correction
-            padding: 5,
+            padding: 0, // FIXED: Set to 0 to remove extra white space
             background: 'white',
             foreground: 'black'
         });
@@ -629,10 +629,10 @@ const BanknoteLogic = (() => {
                 }
 
                 if(partCount < 3) {
-                     Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${partCount}/3 essential QR codes. The banknote may be damaged or fake.`, 'error');
-                     return;
+                       Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${partCount}/3 essential QR codes. The banknote may be damaged or fake.`, 'error');
+                       return;
                 }
-                 
+                
                 resultHTML += `<span class="valid">✅ Found all 3 parts. Reconstructing payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
 
@@ -728,22 +728,27 @@ const BanknoteDrawer = (() => {
             const qrPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
             const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
 
-            const qrSize = 190 * scale;
+            const qrSize = 350 * scale; // MODIFIED: Increased QR code size
             const qrLeft = await Utils.createQrCanvas(qrPayload1, qrSize);
             const qrCenter = await Utils.createQrCanvas(qrPayload2, qrSize);
             const qrRight = await Utils.createQrCanvas(qrPayload3, qrSize);
 
             // --- Draw QR Codes with Professional Connectors ---
-            const qrY = height * 0.45;
-            const totalQrWidth = qrSize * 3 + (80 * scale * 2);
+            // MODIFIED: Entire block updated for new size and spacing
+            const qrY = height * 0.42;
+            const qrSpacing = 40 * scale;
+            const totalQrWidth = qrSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
+            const qr1X = startX;
+            const qr2X = startX + qrSize + qrSpacing;
+            const qr3X = startX + qrSize * 2 + qrSpacing * 2;
 
             ctx.shadowColor = `hsla(${baseHue}, 100%, 70%, 0.5)`;
             ctx.shadowBlur = 25 * scale;
 
-            ctx.drawImage(qrLeft, startX, qrY);
-            ctx.drawImage(qrCenter, startX + qrSize + 80 * scale, qrY);
-            ctx.drawImage(qrRight, startX + qrSize * 2 + 160 * scale, qrY);
+            ctx.drawImage(qrLeft, qr1X, qrY);
+            ctx.drawImage(qrCenter, qr2X, qrY);
+            ctx.drawImage(qrRight, qr3X, qrY);
             
             ctx.shadowColor = "transparent";
 
@@ -752,10 +757,10 @@ const BanknoteDrawer = (() => {
             ctx.lineWidth = 2 * scale;
             const lineY = qrY + qrSize / 2;
             ctx.beginPath();
-            ctx.moveTo(startX + qrSize, lineY);
-            ctx.lineTo(startX + qrSize + 80 * scale, lineY);
-            ctx.moveTo(startX + qrSize * 2 + 80 * scale, lineY);
-            ctx.lineTo(startX + qrSize * 2 + 160 * scale, lineY);
+            ctx.moveTo(qr1X + qrSize, lineY);
+            ctx.lineTo(qr2X, lineY);
+            ctx.moveTo(qr2X + qrSize, lineY);
+            ctx.lineTo(qr3X, lineY);
             ctx.stroke();
 
             // --- Draw Text Elements ---
