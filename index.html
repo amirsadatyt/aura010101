@@ -137,7 +137,6 @@ const Utils = {
         const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
         console.log(`[Sadat System] ${icon} ${message}`);
     },
-    // NEW: Function to resize image before validation
     async resizeImage(file, maxSize) {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -448,30 +447,23 @@ const BanknoteLogic = (() => {
     };
     
     async function decodeAllJabsFromImage(file) {
-        // NEW: Resize image before attempting to decode
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
         
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = async () => {
-                const mainCanvas = document.createElement('canvas');
-                mainCanvas.width = img.width;
-                mainCanvas.height = img.height;
-                const mainCtx = mainCanvas.getContext('2d');
-                mainCtx.drawImage(img, 0, 0);
-
-                // Try to find codes in the whole image first
                 let allDecoded = [];
                 try {
-                    allDecoded = await state.jabInterface.decode_message(resizedDataUrl, {findAll: true});
+                    // Ask the library to find all codes in the image at once
+                    allDecoded = await state.jabInterface.decode_message(resizedDataUrl, { findAll: true });
                 } catch(e) {
-                    console.warn("Could not find JAB codes on full image, will try splitting.", e);
+                    console.warn("JAB code decoding failed.", e);
                 }
 
                 if (allDecoded.length > 0) {
                      resolve(allDecoded);
                 } else {
-                    reject(new Error("No JAB codes found on the banknote image. Please use a clear, uncropped image."));
+                    reject(new Error("No JAB codes found. Please use a clear, uncropped image of the banknote."));
                 }
             };
             img.onerror = () => reject(new Error("Could not load banknote image file."));
@@ -489,7 +481,8 @@ const BanknoteLogic = (() => {
             Utils.updateStatus(resultDiv, '⏳ Resizing and reading banknote image... Please wait.', 'info');
             try {
                 const decodedCodes = await decodeAllJabsFromImage(file);
-                Utils.updateStatus(resultDiv, `ℹ️ Found ${decodedCodes.length} JAB code(s). Assembling payload...`, 'info');
+                let resultHTML = `Found ${decodedCodes.length} JAB code(s) on the image. Assembling payload...\n`;
+                resultDiv.innerHTML = `<span class="info">${resultHTML}</span>`;
 
                 let expectedTotalParts = 0;
                 const receivedParts = {};
@@ -508,7 +501,7 @@ const BanknoteLogic = (() => {
                 }
                 
                 if (Object.keys(receivedParts).length < expectedTotalParts) {
-                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${Object.keys(receivedParts).length}/${expectedTotalParts} JAB codes. The banknote may be damaged or fake.`, 'error');
+                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${Object.keys(receivedParts).length}/${expectedTotalParts} required JAB codes. The banknote may be damaged or fake.`, 'error');
                     return;
                 }
 
@@ -521,19 +514,23 @@ const BanknoteLogic = (() => {
                     fullPayloadString += receivedParts[i];
                 }
 
-                resultDiv.innerHTML += `\n<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>`;
+                resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
                 
                 const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
-                resultDiv.innerHTML += `\n<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>`;
+                resultHTML += `<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
                 const dataForSigOne = getStandardizedDataForSigning(parsedData);
                 const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                if (!isSigOneValid) { resultDiv.innerHTML += '\n<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; return; }
-                resultDiv.innerHTML += '\n<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>';
-                resultDiv.innerHTML += `\n<span class="info">ℹ️ Verifying Master Signature (Sig 2)...</span>`;
+                if (!isSigOneValid) { resultDiv.innerHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; return; }
+                resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
+                resultHTML += `<span class="info">ℹ️ Verifying Master Signature (Sig 2)...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
                 const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
                 const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                if (!isSigTwoValid) { resultDiv.innerHTML += '\n<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY (Not issued by this Guardian)</span>'; return; }
-                resultDiv.innerHTML += '\n<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+                if (!isSigTwoValid) { resultDiv.innerHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY (Not issued by this Guardian)</span>'; return; }
+                resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+                resultDiv.innerHTML = resultHTML;
             } catch (e) {
                 if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
                      Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The JAB code data is corrupt or invalid.`, 'error');
@@ -549,10 +546,9 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER -- THIS SECTION CONTAINS THE DESIGN CHANGES
+// BANKNOTE DRAWER -- THIS SECTION CONTAINS THE LAYOUT FIX
 // ===================================================================================
 const BanknoteDrawer = (() => {
-    // ... roundRect function is unchanged ...
     function roundRect(ctx, x, y, width, height, radius) {
         ctx.beginPath();
         ctx.moveTo(x + radius, y);
@@ -576,7 +572,6 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, width, height);
             
-            // NEW: Split the payload into 6 parts
             const partLength = Math.ceil(fullPayload.length / Constants.NUM_JABS);
             const jabPayloads = [];
             for (let i = 0; i < Constants.NUM_JABS; i++) {
@@ -584,11 +579,9 @@ const BanknoteDrawer = (() => {
                 jabPayloads.push(`${Constants.VALIDATION_PREFIX}${i + 1}/${Constants.NUM_JABS}:${partData}`);
             }
 
-            // Generate all 6 JAB code images
             const jabOptions = { securityLevel: 1 };
             const jabImages = await Promise.all(jabPayloads.map(payload => Utils.createJabImage(payload, jabOptions)));
 
-            // Draw serial and amount
             ctx.shadowColor = "rgba(0,0,0,0.3)";
             ctx.shadowBlur = 8 * scale;
             ctx.shadowOffsetX = 2 * scale;
@@ -603,15 +596,19 @@ const BanknoteDrawer = (() => {
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
             
-            // NEW: Draw the 6 JAB codes in a 2x3 grid
-            const jabSize = 250 * scale;
-            const xSpacing = 40 * scale;
-            const ySpacing = 30 * scale;
+            // CORRECTED: Sizing and positioning logic for the 2x3 grid
+            const jabSize = 180 * scale;
+            const xSpacing = 30 * scale;
+            const ySpacing = 20 * scale;
             const totalGridWidth = (jabSize * 3) + (xSpacing * 2);
             const totalGridHeight = (jabSize * 2) + ySpacing;
-            const startX = (width - totalGridWidth) / 2;
-            const startY = (height - totalGridHeight) / 2 + 20 * scale;
             
+            const startX = (width - totalGridWidth) / 2;
+            
+            // Center the grid in the space below the top text
+            const topTextAreaHeight = 85 * scale;
+            const startY = topTextAreaHeight + ((height - topTextAreaHeight - totalGridHeight) / 2);
+
             const padding = 20 * scale;
             ctx.fillStyle = '#F4F4F4';
             roundRect(ctx, startX - padding, startY - padding, totalGridWidth + padding*2, totalGridHeight + padding*2, 15*scale);
