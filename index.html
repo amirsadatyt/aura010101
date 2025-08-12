@@ -516,8 +516,9 @@ const BanknoteLogic = (() => {
     };
 })();
 
-// --- BANKNOTE DRAWER ---
-// THIS SECTION HAS BEEN REPLACED WITH A CLEAN, READABLE VERSION TO FIX THE ERROR
+// ===================================================================================
+// BANKNOTE DRAWER -- THIS SECTION CONTAINS THE DESIGN CHANGES
+// ===================================================================================
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
     function drawGuilloche(ctx, hash, w, h) {
@@ -577,35 +578,42 @@ const BanknoteDrawer = (() => {
             ctx.shadowBlur = 8 * scale;
             ctx.shadowOffsetX = 2 * scale;
             ctx.shadowOffsetY = 2 * scale;
+
+            // Draw Serial Number (Top Left)
             ctx.textAlign = 'left';
             ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
             ctx.fillStyle = `hsla(${baseHue}, 100%, 80%, 0.9)`;
             ctx.fillText(serial, 40 * scale, 50 * scale);
-            ctx.textAlign = 'center';
-            ctx.font = `bold ${32 * scale}px 'Roboto Mono'`;
-            ctx.fillStyle = "rgba(255,255,255,0.7)";
-            ctx.fillText("SADAT DIGITAL RESERVE NOTE", width / 2, height * 0.15);
-            ctx.font = `bold ${90 * scale}px 'Roboto Mono'`;
+            
+            // Draw Amount (Top Right)
+            ctx.textAlign = 'right';
+            ctx.font = `bold ${48 * scale}px 'Roboto Mono'`;
             ctx.fillStyle = "#EAEAEA";
-            ctx.fillText(amount.toLocaleString('en-US'), width / 2, height * 0.35);
+            ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
+
+            // "SADAT DIGITAL RESERVE NOTE" text has been REMOVED
+
             ctx.shadowColor = "transparent";
 
             // --- Draw QR Codes ---
-            const qrY = height * 0.38;
+            const qrY = height * 0.22; // MOVED UP: Was 0.38
             const qrSpacing = 40 * scale;
             const totalQrWidth = qrSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
             const qr1X = startX;
             const qr2X = startX + qrSize + qrSpacing;
             const qr3X = startX + qrSize * 2 + qrSpacing * 2;
+            
             ctx.shadowColor = `hsla(0, 0%, 0%, 0.5)`;
             ctx.shadowBlur = 15 * scale;
+            
             ctx.fillStyle = 'white';
             ctx.globalAlpha = 0.95;
             ctx.fillRect(qr1X, qrY, qrSize, qrSize);
             ctx.fillRect(qr2X, qrY, qrSize, qrSize);
             ctx.fillRect(qr3X, qrY, qrSize, qrSize);
             ctx.globalAlpha = 1.0;
+            
             ctx.drawImage(qrLeft, qr1X, qrY);
             ctx.drawImage(qrCenter, qr2X, qrY);
             ctx.drawImage(qrRight, qr3X, qrY);
