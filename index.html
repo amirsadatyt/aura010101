@@ -604,17 +604,18 @@ const BanknoteDrawer = (() => {
             ctx.fillText(amount.toLocaleString('fa-IR'), 40 * scale, 65 * scale);
             ctx.shadowColor = "transparent";
             
-            // CORRECTED: Sizing and positioning for a visually merged 3x2 grid
-            const jabSize = 160 * scale;
-            const xSpacing = 0; // No horizontal space
-            const ySpacing = 0; // No vertical space
-            const totalGridWidth = jabSize * 3;
-            const totalGridHeight = jabSize * 2;
+            // CORRECTED: Increased jabSize and added minimal spacing for validation precision
+            const jabSize = 190 * scale;
+            const xSpacing = 2 * scale;
+            const ySpacing = 2 * scale;
+            const totalGridWidth = (jabSize * 3) + (xSpacing * 2);
+            const totalGridHeight = (jabSize * 2) + ySpacing;
             
             const startX = (width - totalGridWidth) / 2;
             
-            const topTextAreaHeight = 85 * scale;
-            const startY = topTextAreaHeight + ((height - topTextAreaHeight - totalGridHeight) / 2);
+            const topTextBottomY = 70 * scale;
+            const remainingHeight = height - topTextBottomY;
+            const startY = topTextBottomY + (remainingHeight - totalGridHeight) / 2;
 
             const padding = 20 * scale;
             ctx.fillStyle = '#FFFFFF';
@@ -629,8 +630,8 @@ const BanknoteDrawer = (() => {
             jabImages.forEach((img, index) => {
                 const row = Math.floor(index / 3);
                 const col = index % 3;
-                const x = startX + col * jabSize;
-                const y = startY + row * jabSize;
+                const x = startX + col * (jabSize + xSpacing);
+                const y = startY + row * (jabSize + ySpacing);
                 ctx.drawImage(img, x, y, jabSize, jabSize);
             });
         }
