@@ -145,7 +145,7 @@ const Utils = {
             height: size,
             colorDark: foregroundColor,
             colorLight: backgroundColor,
-            correctLevel: QRCode.CorrectLevel.L
+            correctLevel: QRCode.CorrectLevel.L // This is Level L (~7%), the lowest possible setting.
         });
         return new Promise((resolve) => {
             setTimeout(() => {
@@ -425,40 +425,41 @@ const BanknoteLogic = (() => {
             Utils.log("Key cleared for security after batch operation.", 'warning');
         }
     };
+    
     async function decodeAllQrsFromImage(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const naturalWidth = img.naturalWidth;
-                    const naturalHeight = img.naturalHeight;
-                    const MAX_DIM = 1500;
-                    const scale = Math.min(MAX_DIM / naturalWidth, MAX_DIM / naturalHeight, 1);
-                    canvas.width = naturalWidth * scale;
-                    canvas.height = naturalHeight * scale;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    let currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                img.onload = async () => {
                     const foundCodes = [];
-                    while (true) {
-                        const code = jsQR(currentImageData.data, currentImageData.width, currentImageData.height, { inversionAttempts: "dontInvert", });
-                        if (code) {
-                            foundCodes.push(code);
-                            const loc = code.location;
-                            ctx.beginPath();
-                            ctx.moveTo(loc.topLeftCorner.x, loc.topLeftCorner.y);
-                            ctx.lineTo(loc.topRightCorner.x, loc.topRightCorner.y);
-                            ctx.lineTo(loc.bottomRightCorner.x, loc.bottomRightCorner.y);
-                            ctx.lineTo(loc.bottomLeftCorner.x, loc.bottomLeftCorner.y);
-                            ctx.closePath();
-                            ctx.fillStyle = "black";
-                            ctx.fill();
-                            currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        } else { break; }
+                    const mainCanvas = document.createElement('canvas');
+                    mainCanvas.width = img.naturalWidth;
+                    mainCanvas.height = img.naturalHeight;
+                    const mainCtx = mainCanvas.getContext('2d');
+                    mainCtx.drawImage(img, 0, 0);
+                    const regionWidth = mainCanvas.width / 3;
+                    const regions = [
+                        { x: 0, y: 0, width: regionWidth, height: mainCanvas.height },
+                        { x: regionWidth, y: 0, width: regionWidth, height: mainCanvas.height },
+                        { x: regionWidth * 2, y: 0, width: regionWidth, height: mainCanvas.height },
+                    ];
+                    for (const region of regions) {
+                        try {
+                            const imageData = mainCtx.getImageData(region.x, region.y, region.width, region.height);
+                            const code = jsQR(imageData.data, imageData.width, imageData.height);
+                            if (code) {
+                                foundCodes.push(code);
+                            }
+                        } catch (err) {
+                            console.warn("Could not process a region of the image:", err);
+                        }
                     }
-                    if (foundCodes.length > 0) { resolve(foundCodes); } else { reject(new Error("No QR codes found on the banknote image.")); }
+                    if (foundCodes.length > 0) {
+                        resolve(foundCodes);
+                    } else {
+                        reject(new Error("No QR codes found on the banknote image. Please use a clear, uncropped image."));
+                    }
                 };
                 img.onerror = () => reject(new Error("Could not load banknote image file."));
                 img.src = e.target.result;
@@ -467,6 +468,7 @@ const BanknoteLogic = (() => {
             reader.readAsDataURL(file);
         });
     }
+
     return {
         handleCreateAndSignNotes,
         handleDownloadBatch,
@@ -517,7 +519,7 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER -- THIS SECTION CONTAINS THE DESIGN CHANGES
+// BANKNOTE DRAWER
 // ===================================================================================
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
@@ -548,8 +550,6 @@ const BanknoteDrawer = (() => {
             const { amount, serial, signatureTwo } = noteData;
             const scale = width / 1200; 
             const visualHash = shake256(Utils.arrayBufferToBase64(signatureTwo), 256);
-
-            // --- Draw Background and Effects ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
             const baseHue = H(visualHash, 0, 0, 360);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -557,8 +557,6 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = bgGradient;
             ctx.fillRect(0, 0, width, height);
             drawGuilloche(ctx, visualHash, width, height);
-            
-            // --- Split payload and Generate QR Codes ---
             const totalLength = fullPayload.length;
             const part1Length = Math.ceil(totalLength / 3);
             const part2Length = Math.ceil(totalLength / 3);
@@ -572,54 +570,38 @@ const BanknoteDrawer = (() => {
             const qrLeft = await Utils.createQrCanvas(qrPayload1, qrSize, 'transparent');
             const qrCenter = await Utils.createQrCanvas(qrPayload2, qrSize, 'transparent');
             const qrRight = await Utils.createQrCanvas(qrPayload3, qrSize, 'transparent');
-
-            // --- Draw Text Elements ---
             ctx.shadowColor = "rgba(0,0,0,0.7)";
             ctx.shadowBlur = 8 * scale;
             ctx.shadowOffsetX = 2 * scale;
             ctx.shadowOffsetY = 2 * scale;
-
-            // Draw Serial Number (Top Left)
             ctx.textAlign = 'left';
             ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
             ctx.fillStyle = `hsla(${baseHue}, 100%, 80%, 0.9)`;
             ctx.fillText(serial, 40 * scale, 50 * scale);
-            
-            // Draw Amount (Top Right)
             ctx.textAlign = 'right';
             ctx.font = `bold ${48 * scale}px 'Roboto Mono'`;
             ctx.fillStyle = "#EAEAEA";
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
-
-            // "SADAT DIGITAL RESERVE NOTE" text has been REMOVED
-
             ctx.shadowColor = "transparent";
-
-            // --- Draw QR Codes ---
-            const qrY = height * 0.22; // MOVED UP: Was 0.38
+            const qrY = height * 0.22;
             const qrSpacing = 40 * scale;
             const totalQrWidth = qrSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
             const qr1X = startX;
             const qr2X = startX + qrSize + qrSpacing;
             const qr3X = startX + qrSize * 2 + qrSpacing * 2;
-            
             ctx.shadowColor = `hsla(0, 0%, 0%, 0.5)`;
             ctx.shadowBlur = 15 * scale;
-            
             ctx.fillStyle = 'white';
             ctx.globalAlpha = 0.95;
             ctx.fillRect(qr1X, qrY, qrSize, qrSize);
             ctx.fillRect(qr2X, qrY, qrSize, qrSize);
             ctx.fillRect(qr3X, qrY, qrSize, qrSize);
             ctx.globalAlpha = 1.0;
-            
             ctx.drawImage(qrLeft, qr1X, qrY);
             ctx.drawImage(qrCenter, qr2X, qrY);
             ctx.drawImage(qrRight, qr3X, qrY);
             ctx.shadowColor = "transparent";
-
-            // --- Connecting Lines ---
             ctx.strokeStyle = `hsla(${baseHue}, 50%, 30%, 0.8)`;
             ctx.lineWidth = 2 * scale;
             const lineY = qrY + qrSize / 2;
