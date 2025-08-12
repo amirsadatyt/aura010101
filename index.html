@@ -145,7 +145,7 @@ const Utils = {
             height: size,
             colorDark: foregroundColor,
             colorLight: backgroundColor,
-            correctLevel: QRCode.CorrectLevel.L // This is Level L (~7%), the lowest possible setting.
+            correctLevel: QRCode.CorrectLevel.L
         });
         return new Promise((resolve) => {
             setTimeout(() => {
@@ -519,7 +519,7 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER
+// BANKNOTE DRAWER -- THIS SECTION CONTAINS THE DESIGN CHANGES
 // ===================================================================================
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
@@ -542,6 +542,21 @@ const BanknoteDrawer = (() => {
             ctx.stroke();
         }
         ctx.restore();
+    }
+
+    // Helper to draw a rounded rectangle
+    function roundRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
     }
     
     return {
@@ -583,6 +598,7 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = "#EAEAEA";
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
+            
             const qrY = height * 0.22;
             const qrSpacing = 40 * scale;
             const totalQrWidth = qrSize * 3 + qrSpacing * 2;
@@ -590,18 +606,26 @@ const BanknoteDrawer = (() => {
             const qr1X = startX;
             const qr2X = startX + qrSize + qrSpacing;
             const qr3X = startX + qrSize * 2 + qrSpacing * 2;
-            ctx.shadowColor = `hsla(0, 0%, 0%, 0.5)`;
-            ctx.shadowBlur = 15 * scale;
+            
+            // --- NEW: Draw a single white background for all QR codes ---
             ctx.fillStyle = 'white';
-            ctx.globalAlpha = 0.95;
-            ctx.fillRect(qr1X, qrY, qrSize, qrSize);
-            ctx.fillRect(qr2X, qrY, qrSize, qrSize);
-            ctx.fillRect(qr3X, qrY, qrSize, qrSize);
-            ctx.globalAlpha = 1.0;
+            const padding = 20 * scale;
+            roundRect(
+                ctx,
+                startX - padding,
+                qrY - padding,
+                totalQrWidth + (padding * 2),
+                qrSize + (padding * 2),
+                15 * scale // corner radius
+            );
+            ctx.fill();
+
+            // Draw the QR codes on top of the new white background
             ctx.drawImage(qrLeft, qr1X, qrY);
             ctx.drawImage(qrCenter, qr2X, qrY);
             ctx.drawImage(qrRight, qr3X, qrY);
-            ctx.shadowColor = "transparent";
+
+            // --- Connecting Lines ---
             ctx.strokeStyle = `hsla(${baseHue}, 50%, 30%, 0.8)`;
             ctx.lineWidth = 2 * scale;
             const lineY = qrY + qrSize / 2;
