@@ -124,9 +124,9 @@
 <script type="module">
 // --- DEPENDENCIES ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-import jsQR from 'https://cdn.skypack.dev/jsqr';
-import Qrious from 'https://cdn.skypack.dev/qrious';
+import { shake256 } from './js-sha3.js';
+import jsQR from './jsqr.js';
+import Qrious from './qrious.js';
 
 
 // --- Global State ---
@@ -204,7 +204,7 @@ const Utils = {
             size: size,
             level: 'L', // 7% error correction
             padding: 0, 
-            background: 'transparent', // MODIFIED: Removed white background
+            background: 'transparent',
             foreground: 'black'
         });
         return canvas;
@@ -758,7 +758,7 @@ const BanknoteDrawer = (() => {
 
 
             // --- Draw QR Codes with Professional Connectors ---
-            const qrY = height * 0.38; // MODIFIED: Moved QR codes up
+            const qrY = height * 0.38;
             const qrSpacing = 40 * scale;
             const totalQrWidth = qrSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
@@ -766,9 +766,6 @@ const BanknoteDrawer = (() => {
             const qr2X = startX + qrSize + qrSpacing;
             const qr3X = startX + qrSize * 2 + qrSpacing * 2;
             
-            // The QR code canvas has a transparent background, but we can draw a solid one behind it if desired.
-            // For a seamless look, we will draw the QR codes directly.
-            // A subtle glow effect can make them pop.
             ctx.shadowColor = `hsla(0, 0%, 0%, 0.5)`;
             ctx.shadowBlur = 15 * scale;
 
@@ -805,15 +802,15 @@ const BanknoteDrawer = (() => {
 // APPLICATION INITIALIZATION
 // ===================================================================================
 async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 & QR Modules...', 'info');
+    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Local Modules...', 'info');
     try {
         state.falconApi = await pqcSignFalcon1024();
         Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
         Utils.log("All cryptographic and QR modules initialized successfully.", 'success');
     } catch (e) {
         Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
-        Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
-        alert("Error: Failed to load a required cryptographic module. The application cannot run.");
+        Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. Check they are in the same folder as the HTML file. See console for details.`, 'error');
+        alert("Error: Failed to load a required module. The application cannot run.");
         return;
     }
     
