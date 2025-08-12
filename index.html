@@ -222,8 +222,15 @@ const UIHandlers = (() => {
     
     return {
         handleGenerateAndExportKeys: async () => {
-            const password = prompt("Enter a strong password. This will be your 'Password Key' (Piece 2/3).");
-            if (!password) { Utils.updateStatus(DOMElements.keyGenStatus, '❌ Key generation cancelled. Password is required.', 'error'); return; }
+            let password = prompt("Enter a strong password. This will be your 'Password Key' (Piece 2/3).");
+            // *** FIX: Trim password on creation to match reconstruction behavior ***
+            if (password) {
+                password = password.trim();
+            }
+            if (!password) { 
+                Utils.updateStatus(DOMElements.keyGenStatus, '❌ Key generation cancelled. Password is required.', 'error'); 
+                return; 
+            }
             Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Generating new Falcon-1024 key pair...', 'info');
             try {
                 const keyPair = await BankCrypto.generateNewKeyPair();
@@ -249,7 +256,6 @@ const UIHandlers = (() => {
         handleImportPublicKey: async (event) => { const file = event.target.files[0]; if (!file) return; try { const data = JSON.parse(await file.text()); if (!data.masterPublicKey) throw new Error("Invalid public key file format."); state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey); Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported. Ready to validate banknotes.', 'success'); DOMElements.validatorInput.disabled = false; } catch (error) { Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error importing public key: ${error.message}`, 'error'); } event.target.value = ''; },
         handleFileKeyInput: async (event) => { const file = event.target.files[0]; if (!file) return; try { state.puzzlePieces.fileKey = JSON.parse(await file.text()); Utils.log("File Key loaded.", 'success'); } catch(e) { state.puzzlePieces.fileKey = null; Utils.log(`Failed to load File Key: ${e.message}`, 'error'); } updatePuzzleStatus(); event.target.value = ''; },
         handlePasswordKeyInput: (event) => {
-            // *** FIX: Trim whitespace from password input to prevent decryption errors ***
             state.puzzlePieces.passwordKey = event.target.value.trim() || null;
             updatePuzzleStatus();
         },
