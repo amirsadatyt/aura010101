@@ -2,12 +2,14 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote - 3-JAB System</title>
+    <title>Sadat Digital Banknote - QR Code System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
     <style>
         :root {
@@ -63,24 +65,22 @@
 </head>
 <body>
 <div class="container">
-    <div class="header"><h1>Sadat Digital Banknote</h1><p>A Quantum-Resistant, Offline, Dual-Signature & <strong>Multi-JAB-Code</strong> Digital Currency System.</p></div>
+    <div class="header"><h1>Sadat Digital Banknote</h1><p>A Quantum-Resistant, Offline, Dual-Signature & <strong>Multi-QR-Code</strong> Digital Currency System.</p></div>
     <div class="section"><h2><span class="pill">Step 1</span> Guardian Setup: Create Master Keys</h2><div class="controls-grid"><button id="generate-keys-button">🔑 Generate Master Key Pair</button><label for="import-public-key" class="button sub-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Load Public Key</label><input type="file" id="import-public-key" accept=".json" style="display: none;"></div><div id="key-gen-status" class="status-box"><span class="info">ℹ️ Welcome, Guardian. Generate a new Master Key Pair to begin your financial ecosystem. This process is fully offline and secure.</span></div></div>
-    <div class="section"><h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p><div class="controls-grid"><label for="file-key-input" class="button sub-button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key"><label for="visual-key-input" class="button sub-button">3. Upload Visual Key (JAB)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box"><span class="warning">⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.</span></div></div>
+    <div class="section"><h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p><div class="controls-grid"><label for="file-key-input" class="button sub-button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key"><label for="visual-key-input" class="button sub-button">3. Upload Visual Key (QR)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box"><span class="warning">⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.</span></div></div>
     <div class="section"><h2><span class="pill">Step 3</span> Create Wealth: Generate Banknotes</h2><div class="controls-grid"><span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000"><span class="input-label">Quantity:</span><input type="number" id="quantity-input" value="1" min="1" max="100"><button id="create-note-button" disabled>🎨 Create & Display Banknote</button><button id="download-batch-button" disabled>📥 Download Batch</button></div><div id="banknote-status" class="status-box">Use the controls above to create and sign new banknotes.</div><canvas id="noteCanvas" width="1200" height="1000"></canvas></div>
-    <div class="section" id="validator-section"><h2><span class="pill">Step 4</span> Verify Authenticity</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all JAB Codes.</p><label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
+    <div class="section" id="validator-section"><h2><span class="pill">Step 4</span> Verify Authenticity</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all QR Codes.</p><label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
 </div>
-<div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this JAB Code or save the image file and store it in a secure physical location. It is the third piece of your Master Key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download JAB Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
+<div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this QR Code or save the image file and store it in a secure physical location. It is the third piece of your Master Key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download QR Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
 
 <script type="module">
 // --- DEPENDENCIES ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import JabcodeJSInterface from './jabcodeJSLib.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
 const state = {
     falconApi: null,
-    jabInterface: null,
     masterPublicKey: null,
     masterPrivateKey: null,
     puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null }
@@ -91,7 +91,7 @@ const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
     VALIDATION_PREFIX: "SADAT_V2_PART",
-    NUM_JABS: 6, 
+    NUM_QR_CODES: 6, 
     MAX_IMAGE_DIMENSION: 2000
 };
 
@@ -193,8 +193,11 @@ const Utils = {
             reader.readAsDataURL(file);
         });
     },
-    async createJabImage(payload, options = {}) {
-        const dataUrl = state.jabInterface.encode_message(payload, options);
+    async createQrCodeImage(payload) {
+        const qr = qrcode(0, 'L'); // Auto-detect typeNumber, set Error Correction to Low
+        qr.addData(payload);
+        qr.make();
+        const dataUrl = qr.createDataURL(10, 5); // 10px modules, 5-module margin
         const img = new Image();
         img.src = dataUrl;
         await new Promise((resolve, reject) => {
@@ -203,24 +206,28 @@ const Utils = {
         });
         return img;
     },
-    async decodeJabFromImage(file) {
+    async decodeQrCodeFromImage(file) {
       return new Promise((resolve, reject) => {
-        if (!file) {
-          return reject(new Error("No file provided for decoding."));
-        }
         const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataUrl = event.target.result;
-            const decodedText = await state.jabInterface.decode_message(dataUrl);
-            resolve(decodedText);
-          } catch (error) {
-            reject(error);
-          }
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                if (code) {
+                    resolve(code.data);
+                } else {
+                    reject(new Error("QR Code not found."));
+                }
+            };
+            img.src = event.target.result;
         };
-        reader.onerror = () => {
-          reject(new Error("FileReader failed to read the file."));
-        };
+        reader.onerror = () => reject(new Error("FileReader failed."));
         reader.readAsDataURL(file);
       });
     }
@@ -315,11 +322,10 @@ const UIHandlers = (() => {
                 Utils.downloadFile(JSON.stringify(fileKey, null, 2), 'Sadat-FILE-KEY.json', 'application/json');
                 DOMElements.jabModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.jabDisplay.innerHTML = '';
-                const jabOptions = { securityLevel: 1 };
-                const jabImage = await Utils.createJabImage(visualKeySecret, jabOptions);
-                DOMElements.jabDisplay.appendChild(jabImage);
+                const qrImage = await Utils.createQrCodeImage(visualKeySecret);
+                DOMElements.jabDisplay.appendChild(qrImage);
                 DOMElements.jabModal.style.display = 'flex';
-                Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key JAB Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
+                Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key QR Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
             } catch (e) {
                 Utils.log(`Key generation failed: ${e.message}`, 'error');
                 Utils.updateStatus(DOMElements.keyGenStatus, `❌ Failed to generate keys: ${e.message}`, 'error');
@@ -332,12 +338,12 @@ const UIHandlers = (() => {
             const file = event.target.files[0];
             if (!file) return;
             try {
-                const decodedText = await Utils.decodeJabFromImage(file);
+                const decodedText = await Utils.decodeQrCodeFromImage(file);
                 state.puzzlePieces.visualKey = decodedText;
-                Utils.log("Visual Key loaded from JAB code.", 'success');
+                Utils.log("Visual Key loaded from QR Code.", 'success');
             } catch (error) {
                 state.puzzlePieces.visualKey = null;
-                Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
+                Utils.log(`Error decoding QR Code: ${error.message}`, 'error');
             } finally {
                 updatePuzzleStatus();
                 event.target.value = '';
@@ -472,29 +478,12 @@ const BanknoteLogic = (() => {
         }
     };
     
-    // REWRITTEN with Failsafe "Scan-then-Slice" logic
-    async function decodeAllJabsFromImage(file) {
+    // REWRITTEN for QR Codes using Targeted Slicing
+    async function decodeAllQrCodesFromImage(file) {
         Utils.updateStatus(DOMElements.validationResult, '⏳ Resizing and enhancing image...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
         const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
     
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Performing fast scan on entire image...', 'info');
-        let allDecodedData = [];
-        try {
-            const results = await state.jabInterface.decode_message(processedDataUrl, { findAll: true });
-            if (results && results.length > 0) {
-                allDecodedData = results.map(data => ({ data }));
-            }
-        } catch(e) {
-            console.warn("Fast scan failed, will attempt targeted scan.", e);
-        }
-
-        if (allDecodedData.length >= Constants.NUM_JABS) {
-            Utils.log("Fast scan successful.", 'success');
-            return allDecodedData;
-        }
-
-        Utils.updateStatus(DOMElements.validationResult, '⚠️ Fast scan incomplete. Switching to high-precision zone scan...', 'warning');
         const img = new Image();
         img.src = processedDataUrl;
         await new Promise(resolve => img.onload = resolve);
@@ -504,39 +493,41 @@ const BanknoteLogic = (() => {
         mainCanvas.height = img.height;
         const mainCtx = mainCanvas.getContext('2d');
         mainCtx.drawImage(img, 0, 0);
+        const mainImageData = mainCtx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
 
-        const layout = BanknoteDrawer.getLayout(img.width, img.height);
-        const decodedInSlices = [];
+        const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
+        const allDecodedData = [];
 
-        for (let i = 0; i < Constants.NUM_JABS; i++) {
+        for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
+            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Zone ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
             const row = Math.floor(i / 3);
             const col = i % 3;
-            const regionX = layout.grid.startX + col * (layout.jabSize + layout.xSpacing);
-            const regionY = layout.grid.startY + row * (layout.jabSize + layout.ySpacing);
+            const regionX = layout.grid.startX + col * (layout.qrSize + layout.xSpacing);
+            const regionY = layout.grid.startY + row * (layout.qrSize + layout.ySpacing);
             
-            const regionCanvas = document.createElement('canvas');
-            const slicePadding = layout.jabSize * 0.15;
-            regionCanvas.width = layout.jabSize + slicePadding * 2;
-            regionCanvas.height = layout.jabSize + slicePadding * 2;
-            const regionCtx = regionCanvas.getContext('2d');
-            
-            regionCtx.fillStyle = 'white';
-            regionCtx.fillRect(0, 0, regionCanvas.width, regionCanvas.height);
-            regionCtx.drawImage(mainCanvas, regionX - slicePadding, regionY - slicePadding, layout.jabSize + slicePadding * 2, layout.jabSize + slicePadding * 2, 0, 0, regionCanvas.width, regionCanvas.height);
-            
-            try {
-                const decodedText = await state.jabInterface.decode_message(regionCanvas.toDataURL());
-                if(decodedText) decodedInSlices.push({ data: decodedText });
-            } catch (err) {
-                console.warn(`Could not decode JAB in zone ${i + 1}.`);
+            // The jsQR library works directly on ImageData, no need to create sub-canvases
+            const code = jsQR(mainImageData.data, mainImageData.width, mainImageData.height, {
+                inversionAttempts: "dontInvert",
+                // Provide a smaller rectangle to search in for precision
+                scanRegion: { 
+                    x: regionX, 
+                    y: regionY, 
+                    width: layout.qrSize, 
+                    height: layout.qrSize 
+                }
+            });
+
+            if (code) {
+                allDecodedData.push({ data: code.data });
+            } else {
+                 console.warn(`Could not decode QR in zone ${i + 1}.`);
             }
         }
 
-        if (decodedInSlices.length > 0) {
-            Utils.log("Targeted scan successful.", 'success');
-            return decodedInSlices;
+        if (allDecodedData.length > 0) {
+            return allDecodedData;
         } else {
-            throw new Error("Validation Failed. Image is likely too blurry, skewed, or poorly lit. Please retake the photo, ensuring it is flat and in focus.");
+            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
         }
     }
 
@@ -549,11 +540,11 @@ const BanknoteLogic = (() => {
             const resultDiv = DOMElements.validationResult;
             Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
             try {
-                const decodedCodes = await decodeAllJabsFromImage(file);
-                let resultHTML = `<span class="info">Found ${decodedCodes.length} JAB code(s) on the image. Assembling payload...</span>\n`;
+                const decodedCodes = await decodeAllQrCodesFromImage(file);
+                let resultHTML = `<span class="info">Found ${decodedCodes.length} QR code(s). Assembling payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
 
-                let expectedTotalParts = Constants.NUM_JABS;
+                let expectedTotalParts = Constants.NUM_QR_CODES;
                 const receivedParts = {};
                 let uniqueCodes = 0;
                 
@@ -572,7 +563,7 @@ const BanknoteLogic = (() => {
                 }
                 
                 if (uniqueCodes < expectedTotalParts) {
-                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required JAB codes. The banknote may be damaged or fake.`, 'error');
+                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required QR codes. The banknote may be damaged or fake.`, 'error');
                     return;
                 }
 
@@ -600,7 +591,7 @@ const BanknoteLogic = (() => {
                 resultDiv.innerHTML = resultHTML;
             } catch (e) {
                 if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
-                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The JAB code data is corrupt or invalid.`, 'error');
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The QR code data is corrupt or invalid.`, 'error');
                 } else {
                      Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}`, 'error');
                 }
@@ -632,11 +623,11 @@ const BanknoteDrawer = (() => {
     
     // NEW layout logic for 1200x1000 canvas
     const getLayout = (width, height) => {
-        const jabSize = 315;
+        const qrSize = 300;
         const xSpacing = 20;
         const ySpacing = 20;
-        const totalGridWidth = (jabSize * 3) + (xSpacing * 2);
-        const totalGridHeight = (jabSize * 2) + ySpacing;
+        const totalGridWidth = (qrSize * 3) + (xSpacing * 2);
+        const totalGridHeight = (qrSize * 2) + ySpacing;
         const grid = {
             startX: (width - totalGridWidth) / 2,
             startY: (height - totalGridHeight) / 2,
@@ -645,13 +636,13 @@ const BanknoteDrawer = (() => {
         };
         const amount = {
             y: grid.startY / 2,
-            fontSize: 80
+            fontSize: 72
         };
         const serial = {
             y: grid.startY + totalGridHeight + ((height - (grid.startY + totalGridHeight)) / 2),
-            fontSize: 40
+            fontSize: 36
         };
-        return { jabSize, xSpacing, ySpacing, grid, amount, serial };
+        return { qrSize, xSpacing, ySpacing, grid, amount, serial };
     };
     
     return {
@@ -665,15 +656,14 @@ const BanknoteDrawer = (() => {
             
             ctx.imageSmoothingEnabled = false;
             
-            const partLength = Math.ceil(fullPayload.length / Constants.NUM_JABS);
-            const jabPayloads = [];
-            for (let i = 0; i < Constants.NUM_JABS; i++) {
+            const partLength = Math.ceil(fullPayload.length / Constants.NUM_QR_CODES);
+            const qrPayloads = [];
+            for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
                 const partData = fullPayload.substring(i * partLength, (i + 1) * partLength);
-                jabPayloads.push(`${Constants.VALIDATION_PREFIX}${i + 1}/${Constants.NUM_JABS}:${partData}`);
+                qrPayloads.push(`${Constants.VALIDATION_PREFIX}${i + 1}/${Constants.NUM_QR_CODES}:${partData}`);
             }
 
-            const jabOptions = { securityLevel: 1 };
-            const jabImages = await Promise.all(jabPayloads.map(payload => Utils.createJabImage(payload, jabOptions)));
+            const qrImages = await Promise.all(qrPayloads.map(payload => Utils.createQrCodeImage(payload)));
 
             const layout = getLayout(width, height);
 
@@ -687,12 +677,12 @@ const BanknoteDrawer = (() => {
             ctx.fill();
             ctx.shadowColor = "transparent";
 
-            jabImages.forEach((img, index) => {
+            qrImages.forEach((img, index) => {
                 const row = Math.floor(index / 3);
                 const col = index % 3;
-                const x = Math.round(layout.grid.startX + col * (layout.jabSize + layout.xSpacing));
-                const y = Math.round(layout.grid.startY + row * (layout.jabSize + layout.ySpacing));
-                ctx.drawImage(img, x, y, Math.round(layout.jabSize), Math.round(layout.jabSize));
+                const x = Math.round(layout.grid.startX + col * (layout.qrSize + layout.xSpacing));
+                const y = Math.round(layout.grid.startY + row * (layout.qrSize + layout.ySpacing));
+                ctx.drawImage(img, x, y, Math.round(layout.qrSize), Math.round(layout.qrSize));
             });
 
             ctx.fillStyle = `#000000`;
@@ -712,12 +702,11 @@ const BanknoteDrawer = (() => {
 // APPLICATION INITIALIZATION
 // ===================================================================================
 async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 & JAB Code Modules...', 'info');
+    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Module...', 'info');
     try {
         state.falconApi = await pqcSignFalcon1024();
-        state.jabInterface = new JabcodeJSInterface();
         Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
-        Utils.log("All cryptographic and JAB code modules initialized successfully.", 'success');
+        Utils.log("All cryptographic and QR code modules initialized successfully.", 'success');
     } catch (e) {
         Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
         Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
