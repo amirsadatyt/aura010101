@@ -56,7 +56,20 @@
     <div class="header"><h1>Sadat Digital Banknote</h1><p>A Quantum-Resistant, Offline, Dual-Signature & <strong>3-JAB-Code</strong> Digital Currency System.</p></div>
     <div class="section"><h2><span class="pill">Step 1</span> Guardian Setup: Create Master Keys</h2><div class="controls-grid"><button id="generate-keys-button">🔑 Generate Master Key Pair</button><label for="import-public-key" class="button sub-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Load Public Key</label><input type="file" id="import-public-key" accept=".json" style="display: none;"></div><div id="key-gen-status" class="status-box"><span class="info">ℹ️ Welcome, Guardian. Generate a new Master Key Pair to begin your financial ecosystem. This process is fully offline and secure.</span></div></div>
     <div class="section"><h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p><div class="controls-grid"><label for="file-key-input" class="button sub-button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key"><label for="visual-key-input" class="button sub-button">3. Upload Visual Key (JAB)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box"><span class="warning">⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.</span></div></div>
-    <div class="section"><h2><span class="pill">Step 3</span> Create Wealth: Generate Banknotes</h2><div class="controls-grid"><span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000"><span class="input-label">Quantity:</span><input type="number" id="quantity-input" value="1" min="1" max="100"><button id="create-note-button" disabled>🎨 Create & Display Banknote</button><button id="download-batch-button" disabled>📥 Download Batch</button></div><div id="banknote-status" class="status-box">Use the controls above to create and sign new banknotes.</div><canvas id="noteCanvas" width="1200" height="533"></canvas></div>
+    <div class="section"><h2><span class="pill">Step 3</span> Create Wealth: Generate Banknotes</h2>
+        <div class="controls-grid">
+            <span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000">
+            <span class="input-label">Quantity:</span><input type="number" id="quantity-input" value="1" min="1" max="100">
+            <button id="create-note-button" disabled>🎨 Create & Display Banknote</button>
+            <button id="download-batch-button" disabled>📥 Download Batch</button>
+        </div>
+        <div id="manual-render-controls" style="display:none; margin-top:15px;" class="controls-grid">
+            <button id="render-jab2-button">Render JAB 2</button>
+            <button id="render-jab3-button" style="display:none;">Render JAB 3</button>
+        </div>
+        <div id="banknote-status" class="status-box">Use the controls above to create and sign new banknotes.</div>
+        <canvas id="noteCanvas" width="1200" height="533"></canvas>
+    </div>
     <div class="section" id="validator-section"><h2><span class="pill">Step 4</span> Verify Authenticity</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all three JAB Codes.</p><label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
 </div>
 <div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this JAB Code or save the image file and store it in a secure physical location. It is the third piece of your Master Key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download JAB Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
@@ -73,7 +86,8 @@ const state = {
     jabInterface: null,
     masterPublicKey: null,
     masterPrivateKey: null,
-    puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null }
+    puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null },
+    pendingNoteRender: null // <-- NEW: To hold data for manual rendering
 };
 
 // --- CONSTANTS ---
@@ -104,7 +118,10 @@ const DOMElements = {
     jabModal: document.getElementById('jab-modal'),
     jabDisplay: document.getElementById('jab-display'),
     jabModalTitle: document.getElementById('jab-modal-title'),
-    downloadJabButton: document.getElementById('download-jab-button')
+    downloadJabButton: document.getElementById('download-jab-button'),
+    manualRenderControls: document.getElementById('manual-render-controls'), // <-- NEW
+    renderJab2Button: document.getElementById('render-jab2-button'),       // <-- NEW
+    renderJab3Button: document.getElementById('render-jab3-button')        // <-- NEW
 };
 
 // --- Utility Functions ---
@@ -134,17 +151,12 @@ const Utils = {
         console.log(`[Sadat System] ${icon} ${message}`);
     },
     async createJabImage(payload) {
-        // This function is now more robust, validating the library's output.
         const dataUrl = state.jabInterface.encode_message(payload);
-        
-        // Defensive check: Ensure the library returned a valid dataURL string.
         if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
             throw new Error('JAB library failed to produce a valid dataURL.');
         }
-
         const img = new Image();
         img.src = dataUrl;
-        
         await new Promise((resolve, reject) => {
             img.onload = resolve;
             img.onerror = () => reject(new Error('The generated JAB code dataURL failed to load as an image.'));
@@ -153,9 +165,7 @@ const Utils = {
     },
     async decodeJabFromImage(file) {
       return new Promise((resolve, reject) => {
-        if (!file) {
-          return reject(new Error("No file provided for decoding."));
-        }
+        if (!file) { return reject(new Error("No file provided for decoding.")); }
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
@@ -166,9 +176,7 @@ const Utils = {
             reject(error);
           }
         };
-        reader.onerror = () => {
-          reject(new Error("FileReader failed to read the file."));
-        };
+        reader.onerror = () => { reject(new Error("FileReader failed to read the file.")); };
         reader.readAsDataURL(file);
       });
     }
@@ -337,12 +345,17 @@ const BanknoteLogic = (() => {
     };
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
+        
+        // Hide manual controls from any previous run
+        DOMElements.manualRenderControls.style.display = 'none';
+        DOMElements.renderJab2Button.style.display = 'none';
+        DOMElements.renderJab3Button.style.display = 'none';
+        
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating banknote data...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const fullPayload = createUnifiedVerificationPayload(noteData);
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, fullPayload, 1200, 533);
-            // Final status message is now set inside BanknoteDrawer for better feedback
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
@@ -359,60 +372,9 @@ const BanknoteLogic = (() => {
         }
     };
     const handleDownloadBatch = async () => {
-        if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
-        const quantity = parseInt(DOMElements.quantityInput.value) || 1;
-        const amount = DOMElements.amountInput.value;
-        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Preparing to create ${quantity} banknote(s)...`, 'info');
-
-        try {
-            const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = 1200;
-            offscreenCanvas.height = 533;
-            
-            let dirHandle = null;
-            if (window.showDirectoryPicker && quantity > 1) {
-                Utils.updateStatus(DOMElements.banknoteStatus, `ℹ️ Please select a folder to save the banknotes.`, 'info');
-                dirHandle = await window.showDirectoryPicker();
-            }
-
-            Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Processing batch: 0/${quantity}...`, 'info');
-
-            for (let i = 0; i < quantity; i++) {
-                const noteData = await createNoteData(amount);
-                const fullPayload = createUnifiedVerificationPayload(noteData);
-                await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, fullPayload, 1200, 533);
-                const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-                const filename = `SADAT-NOTE-${noteData.serial}.png`;
-
-                if (dirHandle) {
-                    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                } else {
-                    Utils.downloadFile(blob, filename, 'image/png');
-                }
-                
-                Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Processing batch: ${i + 1}/${quantity}...`, 'info');
-
-                if (i === quantity - 1) {
-                    await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, fullPayload, 1200, 533);
-                }
-            }
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). For security, the key has been cleared.`, 'success');
-
-        } catch (error) {
-            Utils.updateStatus(DOMElements.banknoteStatus, `❌ Operation cancelled or failed: ${error.message}`, 'error');
-            console.error(error);
-        } finally {
-            state.masterPrivateKey = null;
-            DOMElements.createNoteButton.disabled = true;
-            DOMElements.downloadBatchButton.disabled = true;
-            UIHandlers.handlePasswordKeyInput({ target: { value: null } });
-            DOMElements.passwordKeyInput.value = '';
-            Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. For security, it has been cleared from memory. Solve the puzzle again to activate.", 'warning');
-            Utils.log("Key cleared for security after batch operation.", 'warning');
-        }
+        // Batch download is complex with manual rendering, so we focus on single note creation.
+        // This function can be reimplemented if needed. For now, it's safer to disable or simplify.
+        alert("Batch download is not supported in this version.");
     };
     
     async function decodeAllJabsFromImage(file) {
@@ -519,7 +481,7 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER -- REWRITTEN FOR MEMORY EFFICIENCY AND RESILIENCE
+// BANKNOTE DRAWER -- REWRITTEN FOR MANUAL, USER-DRIVEN RENDERING
 // ===================================================================================
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
@@ -584,6 +546,7 @@ const BanknoteDrawer = (() => {
             const scale = width / 1200; 
             const visualHash = shake256(Utils.arrayBufferToBase64(signatureTwo), 256);
 
+            // --- Draw Background and Text ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
             const baseHue = H(visualHash, 0, 0, 360);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -606,6 +569,7 @@ const BanknoteDrawer = (() => {
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
 
+            // --- Prepare Payloads and Geometry ---
             const totalLength = fullPayload.length;
             const part1Length = Math.ceil(totalLength / 3);
             const part2Length = Math.ceil(totalLength / 3);
@@ -613,60 +577,53 @@ const BanknoteDrawer = (() => {
             const part2 = fullPayload.substring(part1Length, part1Length + part2Length);
             const part3 = fullPayload.substring(part1Length + part2Length);
             
-            const payloads = [
-                `${Constants.VALIDATION_PREFIX}1/3:${part1}`,
-                `${Constants.VALIDATION_PREFIX}2/3:${part2}`,
-                `${Constants.VALIDATION_PREFIX}3/3:${part3}`
-            ];
-            
             const jabSize = 350 * scale;
             const qrY = height * 0.22;
             const qrSpacing = 40 * scale;
             const totalQrWidth = jabSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
             
-            const positions = [
-                startX,
-                startX + jabSize + qrSpacing,
-                startX + jabSize * 2 + qrSpacing * 2
-            ];
-            
+            // --- Store pending render data in global state ---
+            state.pendingNoteRender = {
+                payloads: [
+                    `${Constants.VALIDATION_PREFIX}1/3:${part1}`,
+                    `${Constants.VALIDATION_PREFIX}2/3:${part2}`,
+                    `${Constants.VALIDATION_PREFIX}3/3:${part3}`
+                ],
+                positions: [
+                    startX,
+                    startX + jabSize + qrSpacing,
+                    startX + jabSize * 2 + qrSpacing * 2
+                ],
+                jabSize: jabSize,
+                y: qrY,
+                hue: baseHue
+            };
+
+            // --- Draw QR Background ---
             ctx.fillStyle = 'white';
             const padding = 20 * scale;
             roundRect(ctx, startX - padding, qrY - padding, totalQrWidth + (padding * 2), jabSize + (padding * 2), 15 * scale);
             ctx.fill();
 
-            let allJabsRendered = true;
-            for (let i = 0; i < 3; i++) {
-                try {
-                    Utils.updateStatus(DOMElements.banknoteStatus, `🎨 Rendering JAB Code ${i + 1}/3...`, 'info');
-                    let jabImage = await Utils.createJabImage(payloads[i]);
-                    ctx.drawImage(jabImage, positions[i], qrY, jabSize, jabSize);
-                    jabImage = null; // Release reference
-                } catch (e) {
-                    allJabsRendered = false;
-                    const errorMessage = `Failed to render JAB Code ${i + 1}. The data payload may be too large for the JAB library.`;
-                    Utils.updateStatus(DOMElements.banknoteStatus, `❌ ${errorMessage}`, 'error');
-                    console.error(errorMessage, e);
-                    drawErrorPlaceholder(ctx, positions[i], qrY, jabSize);
-                }
-                // Pause regardless of success or failure to allow UI to update and memory to settle
-                await new Promise(resolve => setTimeout(resolve, 50));
+            // --- Draw ONLY the first JAB code ---
+            try {
+                Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 1/3...', 'info');
+                let jabImage = await Utils.createJabImage(state.pendingNoteRender.payloads[0]);
+                ctx.drawImage(jabImage, state.pendingNoteRender.positions[0], qrY, jabSize, jabSize);
+                jabImage = null;
+            } catch (e) {
+                const errorMessage = `Failed to render JAB Code 1.`;
+                Utils.updateStatus(DOMElements.banknoteStatus, `❌ ${errorMessage}`, 'error');
+                console.error(errorMessage, e);
+                drawErrorPlaceholder(ctx, state.pendingNoteRender.positions[0], qrY, jabSize);
             }
             
-            if (allJabsRendered) {
-                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Banknote designed successfully. Key has been cleared for security.`, 'success');
-            }
-
-            ctx.strokeStyle = `hsla(${baseHue}, 50%, 30%, 0.8)`;
-            ctx.lineWidth = 2 * scale;
-            const lineY = qrY + jabSize / 2;
-            ctx.beginPath();
-            ctx.moveTo(positions[0] + jabSize, lineY);
-            ctx.lineTo(positions[1], lineY);
-            ctx.moveTo(positions[1] + jabSize, lineY);
-            ctx.lineTo(positions[2], lineY);
-            ctx.stroke();
+            // --- Show manual controls for the next steps ---
+            Utils.updateStatus(DOMElements.banknoteStatus, `✅ JAB Code 1 Rendered. Please render the remaining codes manually.`, 'success');
+            DOMElements.manualRenderControls.style.display = 'flex';
+            DOMElements.renderJab2Button.style.display = 'inline-flex';
+            DOMElements.renderJab3Button.style.display = 'none';
         }
     };
 })();
@@ -688,6 +645,7 @@ async function main() {
         return;
     }
     
+    // --- Main Event Listeners ---
     DOMElements.generateKeysButton.addEventListener('click', UIHandlers.handleGenerateAndExportKeys);
     DOMElements.importPublicKey.addEventListener('change', UIHandlers.handleImportPublicKey);
     DOMElements.fileKeyInput.addEventListener('change', UIHandlers.handleFileKeyInput);
@@ -698,6 +656,58 @@ async function main() {
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
     DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
     
+    // --- Manual JAB Render Listeners ---
+    DOMElements.renderJab2Button.addEventListener('click', async () => {
+        if (!state.pendingNoteRender) return;
+        const { payloads, positions, y, jabSize } = state.pendingNoteRender;
+        const ctx = DOMElements.noteCanvas.getContext('2d');
+        try {
+            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 2/3...', 'info');
+            let jabImage = await Utils.createJabImage(payloads[1]);
+            ctx.drawImage(jabImage, positions[1], y, jabSize, jabSize);
+            jabImage = null;
+        } catch(e) {
+            const errorMessage = `Failed to render JAB Code 2.`;
+            Utils.updateStatus(DOMElements.banknoteStatus, `❌ ${errorMessage}`, 'error');
+            console.error(errorMessage, e);
+            BanknoteDrawer.drawErrorPlaceholder(ctx, positions[1], y, jabSize);
+        }
+        DOMElements.renderJab2Button.style.display = 'none';
+        DOMElements.renderJab3Button.style.display = 'inline-flex';
+    });
+    
+    DOMElements.renderJab3Button.addEventListener('click', async () => {
+        if (!state.pendingNoteRender) return;
+        const { payloads, positions, y, jabSize, hue } = state.pendingNoteRender;
+        const ctx = DOMElements.noteCanvas.getContext('2d');
+        try {
+            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 3/3...', 'info');
+            let jabImage = await Utils.createJabImage(payloads[2]);
+            ctx.drawImage(jabImage, positions[2], y, jabSize, jabSize);
+            jabImage = null;
+        } catch(e) {
+            const errorMessage = `Failed to render JAB Code 3.`;
+            Utils.updateStatus(DOMElements.banknoteStatus, `❌ ${errorMessage}`, 'error');
+            console.error(errorMessage, e);
+            BanknoteDrawer.drawErrorPlaceholder(ctx, positions[2], y, jabSize);
+        }
+        
+        // Draw final decorative lines
+        ctx.strokeStyle = `hsla(${hue}, 50%, 30%, 0.8)`;
+        ctx.lineWidth = 2;
+        const lineY = y + jabSize / 2;
+        ctx.beginPath();
+        ctx.moveTo(positions[0] + jabSize, lineY);
+        ctx.lineTo(positions[1], lineY);
+        ctx.moveTo(positions[1] + jabSize, lineY);
+        ctx.lineTo(positions[2], lineY);
+        ctx.stroke();
+
+        DOMElements.manualRenderControls.style.display = 'none';
+        state.pendingNoteRender = null; // Clean up state
+        Utils.updateStatus(DOMElements.banknoteStatus, `✅ Banknote design complete.`, 'success');
+    });
+
     DOMElements.downloadJabButton.addEventListener('click', () => {
         const img = DOMElements.jabDisplay.querySelector('img');
         if (img) {
