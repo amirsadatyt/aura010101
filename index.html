@@ -144,35 +144,23 @@ const Utils = {
         return img;
     },
     async decodeJabFromImage(file) {
-      // We wrap the entire operation in a new Promise.
       return new Promise((resolve, reject) => {
-        // Check if a file was even passed.
         if (!file) {
           return reject(new Error("No file provided for decoding."));
         }
-
         const reader = new FileReader();
-
-        // This event fires when the file has been successfully read.
         reader.onload = async (event) => {
           try {
-            // The result is the dataURL (a base64 string).
             const dataUrl = event.target.result;
-            // Now we call the decoder with the correct data type.
             const decodedText = await state.jabInterface.decode_message(dataUrl);
-            resolve(decodedText); // Resolve the promise with the result.
+            resolve(decodedText);
           } catch (error) {
-            // If the library fails even with a dataURL, reject with its error.
             reject(error);
           }
         };
-
-        // This event fires if the file cannot be read.
         reader.onerror = () => {
           reject(new Error("FileReader failed to read the file."));
         };
-
-        // Start the process.
         reader.readAsDataURL(file);
       });
     }
@@ -323,41 +311,12 @@ const BanknoteLogic = (() => {
     };
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
-
-        // This helper is needed because the original is scoped inside the BankCrypto IIFE.
-        const hashMessageForSigning = (message) => Utils.hexToUint8Array(shake256(message, 1536));
-
-        // --- STEP 1: Generate Ephemeral Key with a fresh Wasm instance ---
-        let falconApi = await pqcSignFalcon1024();
-        const ephemeralKeyPair = await falconApi.keypair();
-        falconApi = null; // Release the instance for garbage collection.
-        
-        // Create the note object with the key we just made.
-        const noteData = {
-            amount: parseInt(amount) || 0,
-            serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
-            timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
-            ephemeralPublicKey: ephemeralKeyPair.publicKey,
-            signatureOne: null,
-            signatureTwo: null
-        };
-        
-        // --- STEP 2: Create Signature One with a new Wasm instance ---
-        falconApi = await pqcSignFalcon1024();
+        const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
+        const noteData = { amount: parseInt(amount) || 0, serial: Math.random().toString(36).substring(2, 10).toUpperCase(), timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000), ephemeralPublicKey: ephemeralKeyPair.publicKey, signatureOne: null, signatureTwo: null };
         const dataForSigOne = getStandardizedDataForSigning(noteData);
-        const dataHash1 = hashMessageForSigning(dataForSigOne);
-        const { signature: sig1 } = await falconApi.sign(dataHash1, ephemeralKeyPair.privateKey);
-        noteData.signatureOne = sig1;
-        falconApi = null; // Release the instance.
-
-        // --- STEP 3: Create Signature Two with a final Wasm instance ---
-        falconApi = await pqcSignFalcon1024();
+        noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
         const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
-        const dataHash2 = hashMessageForSigning(dataForSigTwo);
-        const { signature: sig2 } = await falconApi.sign(dataHash2, state.masterPrivateKey);
-        noteData.signatureTwo = sig2;
-        falconApi = null; // Release the final instance.
-
+        noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
         return noteData;
     };
     const createUnifiedVerificationPayload = (noteData) => {
@@ -370,7 +329,7 @@ const BanknoteLogic = (() => {
     };
     const handleCreateAndSignNotes = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
-        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating and displaying banknote...`, 'info');
+        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating banknote data...`, 'info');
         try {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const fullPayload = createUnifiedVerificationPayload(noteData);
@@ -403,7 +362,6 @@ const BanknoteLogic = (() => {
             offscreenCanvas.height = 533;
             
             let dirHandle = null;
-            // Ask for directory access only once if needed.
             if (window.showDirectoryPicker && quantity > 1) {
                 Utils.updateStatus(DOMElements.banknoteStatus, `ℹ️ Please select a folder to save the banknotes.`, 'info');
                 dirHandle = await window.showDirectoryPicker();
@@ -411,20 +369,13 @@ const BanknoteLogic = (() => {
 
             Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Processing batch: 0/${quantity}...`, 'info');
 
-            // Process notes one by one to keep memory usage low (O(1) instead of O(n)).
             for (let i = 0; i < quantity; i++) {
-                // 1. Create a single note's data and signatures.
                 const noteData = await createNoteData(amount);
                 const fullPayload = createUnifiedVerificationPayload(noteData);
-
-                // 2. Draw it to the offscreen canvas.
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, fullPayload, 1200, 533);
-                
-                // 3. Get the blob for the completed note.
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
                 const filename = `SADAT-NOTE-${noteData.serial}.png`;
 
-                // 4. Save the file immediately.
                 if (dirHandle) {
                     const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
                     const writable = await fileHandle.createWritable();
@@ -436,11 +387,9 @@ const BanknoteLogic = (() => {
                 
                 Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Processing batch: ${i + 1}/${quantity}...`, 'info');
 
-                // If it's the last note, also display it on the main canvas.
                 if (i === quantity - 1) {
                     await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, fullPayload, 1200, 533);
                 }
-                // The memory for this note (keys, signatures, blob) is now free for the next iteration.
             }
             Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). For security, the key has been cleared.`, 'success');
 
@@ -448,7 +397,6 @@ const BanknoteLogic = (() => {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Operation cancelled or failed: ${error.message}`, 'error');
             console.error(error);
         } finally {
-            // This security cleanup should always happen.
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
@@ -563,10 +511,11 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER -- THIS SECTION CONTAINS THE DESIGN CHANGES
+// BANKNOTE DRAWER -- REWRITTEN FOR MEMORY EFFICIENCY
 // ===================================================================================
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
+    
     function drawGuilloche(ctx, hash, w, h) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -602,12 +551,29 @@ const BanknoteDrawer = (() => {
         ctx.closePath();
     }
     
+    // Helper function for the new serialized drawing process
+    async function drawSingleJab(ctx, payload, x, y, size) {
+        // 1. Generate the image object
+        let jabImage = await Utils.createJabImage(payload);
+        
+        // 2. Draw it to the canvas IMMEDIATELY
+        ctx.drawImage(jabImage, x, y, size, size);
+        
+        // 3. Nullify the reference to mark the object and its large dataURL for garbage collection
+        jabImage = null;
+        
+        // 4. Yield to the event loop with a short pause
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
     return {
         drawNoteOnCanvas: async (targetCanvas, noteData, fullPayload, width, height) => {
             const ctx = targetCanvas.getContext("2d");
             const { amount, serial, signatureTwo } = noteData;
             const scale = width / 1200; 
             const visualHash = shake256(Utils.arrayBufferToBase64(signatureTwo), 256);
+
+            // --- Draw Background and Text (Low memory usage) ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
             const baseHue = H(visualHash, 0, 0, 360);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -615,20 +581,6 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = bgGradient;
             ctx.fillRect(0, 0, width, height);
             drawGuilloche(ctx, visualHash, width, height);
-            const totalLength = fullPayload.length;
-            const part1Length = Math.ceil(totalLength / 3);
-            const part2Length = Math.ceil(totalLength / 3);
-            const part1 = fullPayload.substring(0, part1Length);
-            const part2 = fullPayload.substring(part1Length, part1Length + part2Length);
-            const part3 = fullPayload.substring(part1Length + part2Length);
-            const qrPayload1 = `${Constants.VALIDATION_PREFIX}1/3:${part1}`;
-            const qrPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
-            const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
-            
-            const jabSize = 350 * scale;
-            const jabLeft = await Utils.createJabImage(qrPayload1);
-            const jabCenter = await Utils.createJabImage(qrPayload2);
-            const jabRight = await Utils.createJabImage(qrPayload3);
             
             ctx.shadowColor = "rgba(0,0,0,0.7)";
             ctx.shadowBlur = 8 * scale;
@@ -643,7 +595,20 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = "#EAEAEA";
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
+
+            // --- Split payload ---
+            const totalLength = fullPayload.length;
+            const part1Length = Math.ceil(totalLength / 3);
+            const part2Length = Math.ceil(totalLength / 3);
+            const part1 = fullPayload.substring(0, part1Length);
+            const part2 = fullPayload.substring(part1Length, part1Length + part2Length);
+            const part3 = fullPayload.substring(part1Length + part2Length);
+            const qrPayload1 = `${Constants.VALIDATION_PREFIX}1/3:${part1}`;
+            const qrPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
+            const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
             
+            // --- Calculate geometry ---
+            const jabSize = 350 * scale;
             const qrY = height * 0.22;
             const qrSpacing = 40 * scale;
             const totalQrWidth = jabSize * 3 + qrSpacing * 2;
@@ -652,22 +617,23 @@ const BanknoteDrawer = (() => {
             const qr2X = startX + jabSize + qrSpacing;
             const qr3X = startX + jabSize * 2 + qrSpacing * 2;
             
+            // --- Draw QR Background ---
             ctx.fillStyle = 'white';
             const padding = 20 * scale;
-            roundRect(
-                ctx,
-                startX - padding,
-                qrY - padding,
-                totalQrWidth + (padding * 2),
-                jabSize + (padding * 2),
-                15 * scale
-            );
+            roundRect(ctx, startX - padding, qrY - padding, totalQrWidth + (padding * 2), jabSize + (padding * 2), 15 * scale);
             ctx.fill();
 
-            ctx.drawImage(jabLeft, qr1X, qrY, jabSize, jabSize);
-            ctx.drawImage(jabCenter, qr2X, qrY, jabSize, jabSize);
-            ctx.drawImage(jabRight, qr3X, qrY, jabSize, jabSize);
+            // --- SERIALIZED JAB CODE RENDERING (High memory usage handled here) ---
+            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 1/3...', 'info');
+            await drawSingleJab(ctx, qrPayload1, qr1X, qrY, jabSize);
 
+            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 2/3...', 'info');
+            await drawSingleJab(ctx, qrPayload2, qr2X, qrY, jabSize);
+
+            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 3/3...', 'info');
+            await drawSingleJab(ctx, qrPayload3, qr3X, qrY, jabSize);
+            
+            // --- Final decorative lines ---
             ctx.strokeStyle = `hsla(${baseHue}, 50%, 30%, 0.8)`;
             ctx.lineWidth = 2 * scale;
             const lineY = qrY + jabSize / 2;
