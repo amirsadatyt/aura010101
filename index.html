@@ -7,9 +7,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
-    <script src="./qrcode.mini.js" defer></script>
-    <script src="./jsQR.js" defer></script>
-    
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -124,9 +121,12 @@
   </div>
 </div>
 
+<script src="./qrcode.mini.js"></script>
+<script src="./jsQR.js"></script>
+
 <script type="module">
 // --- DEPENDENCIES ---
-// NOTE: We now use global objects `QRCode` and `jsQR` loaded from local scripts in the <head>
+// NOTE: We now use global objects `QRCode` and `jsQR` loaded from local scripts above.
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3'; // This CDN link remains as requested
 
@@ -602,33 +602,31 @@ const BanknoteLogic = (() => {
 
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    let currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    // jsQR can find multiple QR codes, but it returns a single object if only one is found.
-                    // The {inversionAttempts: "dontInvert"} is a performance optimization.
-                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: "dontInvert",
-                    });
-
-                    // THIS IS THE KEY CHANGE for multi-QR decoding with jsQR
-                    // jsQR does NOT return an array natively. We need to implement a search loop.
                     const foundCodes = [];
-                    let currentImageData = imageData;
+                    // Loop to find all QR codes. After finding one, we "erase" it and search again.
+                    while (true) {
+                        const code = jsQR(currentImageData.data, currentImageData.width, currentImageData.height, {
+                            inversionAttempts: "dontInvert",
+                        });
 
-                    while(true) {
-                        const result = jsQR(currentImageData.data, currentImageData.width, currentImageData.height);
-                        if (result) {
-                            foundCodes.push(result);
-                            // To find the next QR code, we "erase" the one we just found
-                            const loc = result.location;
-                            const ctx = canvas.getContext('2d');
-                            ctx.fillStyle = 'white'; // or any color that is not part of a QR code
-                            ctx.fillRect(loc.topLeftCorner.x, loc.topLeftCorner.y, 
-                                         loc.topRightCorner.x - loc.topLeftCorner.x, 
-                                         loc.bottomLeftCorner.y - loc.topLeftCorner.y);
+                        if (code) {
+                            foundCodes.push(code);
+                            // Erase the found QR code to prevent it from being found again
+                            const loc = code.location;
+                            ctx.beginPath();
+                            ctx.moveTo(loc.topLeftCorner.x, loc.topLeftCorner.y);
+                            ctx.lineTo(loc.topRightCorner.x, loc.topRightCorner.y);
+                            ctx.lineTo(loc.bottomRightCorner.x, loc.bottomRightCorner.y);
+                            ctx.lineTo(loc.bottomLeftCorner.x, loc.bottomLeftCorner.y);
+                            ctx.closePath();
+                            ctx.fillStyle = "black"; // Erase with a non-QR color
+                            ctx.fill();
                             currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         } else {
-                            break; // No more QR codes found
+                            // No more QR codes found in the image
+                            break;
                         }
                     }
 
@@ -786,7 +784,6 @@ const BanknoteDrawer = (() => {
             ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8 * scale;
             ctx.shadowOffsetX = 2 * scale; ctx.shadowOffsetY = 2 * scale;
             
-            // MODIFIED: Draw Serial Number (Top Left)
             ctx.textAlign = 'left';
             ctx.font = `bold ${24 * scale}px 'Roboto Mono'`;
             ctx.fillStyle = `hsla(${baseHue}, 100%, 80%, 0.9)`;
@@ -807,7 +804,7 @@ const BanknoteDrawer = (() => {
 
 
             // --- Draw QR Codes with Professional Connectors ---
-            const qrY = height * 0.38; // MODIFIED: Moved QR codes up
+            const qrY = height * 0.38;
             const qrSpacing = 40 * scale;
             const totalQrWidth = qrSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
