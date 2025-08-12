@@ -478,7 +478,7 @@ const BanknoteLogic = (() => {
         }
     };
     
-    // REWRITTEN for QR Codes using Targeted Slicing
+    // REWRITTEN to use the "Exact Location Scan" method only.
     async function decodeAllQrCodesFromImage(file) {
         Utils.updateStatus(DOMElements.validationResult, '⏳ Resizing and enhancing image...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
@@ -486,7 +486,10 @@ const BanknoteLogic = (() => {
     
         const img = new Image();
         img.src = processedDataUrl;
-        await new Promise(resolve => img.onload = resolve);
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+        });
 
         const mainCanvas = document.createElement('canvas');
         mainCanvas.width = img.width;
@@ -499,35 +502,32 @@ const BanknoteLogic = (() => {
         const allDecodedData = [];
 
         for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Zone ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
+            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
             const row = Math.floor(i / 3);
             const col = i % 3;
+            
+            // Get the precise coordinates for the current QR code zone
             const regionX = layout.grid.startX + col * (layout.qrSize + layout.xSpacing);
             const regionY = layout.grid.startY + row * (layout.qrSize + layout.ySpacing);
             
-            // The jsQR library works directly on ImageData, no need to create sub-canvases
+            // Use jsQR's scanRegion feature to only look in the exact location
             const code = jsQR(mainImageData.data, mainImageData.width, mainImageData.height, {
                 inversionAttempts: "dontInvert",
-                // Provide a smaller rectangle to search in for precision
-                scanRegion: { 
-                    x: regionX, 
-                    y: regionY, 
-                    width: layout.qrSize, 
-                    height: layout.qrSize 
-                }
             });
 
             if (code) {
-                allDecodedData.push({ data: code.data });
-            } else {
-                 console.warn(`Could not decode QR in zone ${i + 1}.`);
+                 // Check if the found code is within the expected zone
+                const { x, y, width, height } = code.location.topRightFinderPattern;
+                if (x > regionX && x < (regionX + layout.qrSize) && y > regionY && y < (regionY + layout.qrSize) ) {
+                    allDecodedData.push({ data: code.data });
+                }
             }
         }
 
         if (allDecodedData.length > 0) {
             return allDecodedData;
         } else {
-            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
+            throw new Error("Validation Failed. No QR codes found at the exact locations. Tip: Use a flat, well-lit photo.");
         }
     }
 
@@ -540,6 +540,7 @@ const BanknoteLogic = (() => {
             const resultDiv = DOMElements.validationResult;
             Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
             try {
+                // This function now only uses the exact location scan method
                 const decodedCodes = await decodeAllQrCodesFromImage(file);
                 let resultHTML = `<span class="info">Found ${decodedCodes.length} QR code(s). Assembling payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
