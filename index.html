@@ -91,7 +91,7 @@ const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
     VALIDATION_PREFIX: "SADAT_V2_PART",
-    NUM_QR_CODES: 6, 
+    NUM_QR_CODES: 9, // Use 9 QR codes
     MAX_IMAGE_DIMENSION: 2000
 };
 
@@ -506,20 +506,19 @@ const BanknoteLogic = (() => {
             const row = Math.floor(i / 3);
             const col = i % 3;
             
-            // Get the precise coordinates for the current QR code zone
             const regionX = layout.grid.startX + col * (layout.qrSize + layout.xSpacing);
             const regionY = layout.grid.startY + row * (layout.qrSize + layout.ySpacing);
             
-            // Use jsQR's scanRegion feature to only look in the exact location
-            const code = jsQR(mainImageData.data, mainImageData.width, mainImageData.height, {
-                inversionAttempts: "dontInvert",
-            });
+            // This is a simplified search; a true targeted search with jsQR requires more complex image manipulation.
+            // For now, we scan the whole image but rely on the clear layout to find codes.
+            // A more advanced implementation would copy the region to a new canvas and scan that.
+            const code = jsQR(mainImageData.data, mainImageData.width, mainImageData.height);
 
             if (code) {
-                 // Check if the found code is within the expected zone
-                const { x, y, width, height } = code.location.topRightFinderPattern;
-                if (x > regionX && x < (regionX + layout.qrSize) && y > regionY && y < (regionY + layout.qrSize) ) {
-                    allDecodedData.push({ data: code.data });
+                 // To improve precision, we can check if the found code is roughly where we expect it.
+                const { x, y } = code.location.topLeftCorner;
+                if (x >= regionX - 50 && x <= regionX + 50 && y >= regionY - 50 && y <= regionY + 50) {
+                     allDecodedData.push({ data: code.data });
                 }
             }
         }
@@ -527,7 +526,7 @@ const BanknoteLogic = (() => {
         if (allDecodedData.length > 0) {
             return allDecodedData;
         } else {
-            throw new Error("Validation Failed. No QR codes found at the exact locations. Tip: Use a flat, well-lit photo.");
+            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
         }
     }
 
@@ -622,13 +621,13 @@ const BanknoteDrawer = (() => {
         ctx.closePath();
     }
     
-    // NEW layout logic for 1200x1000 canvas
+    // NEW layout logic for 1200x1000 canvas with 9 QR Codes
     const getLayout = (width, height) => {
-        const qrSize = 300;
+        const qrSize = 250;
         const xSpacing = 20;
         const ySpacing = 20;
         const totalGridWidth = (qrSize * 3) + (xSpacing * 2);
-        const totalGridHeight = (qrSize * 2) + ySpacing;
+        const totalGridHeight = (qrSize * 3) + (ySpacing * 2);
         const grid = {
             startX: (width - totalGridWidth) / 2,
             startY: (height - totalGridHeight) / 2,
