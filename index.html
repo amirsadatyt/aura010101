@@ -471,12 +471,29 @@ const BanknoteLogic = (() => {
         }
     };
     
-    // REWRITTEN to be a clean async function and use sequential scanning
+    // REWRITTEN with Failsafe "Scan-then-Slice" logic
     async function decodeAllJabsFromImage(file) {
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Resizing and enhancing image for accuracy...', 'info');
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Resizing and enhancing image...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
         const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
     
+        // --- METHOD 1: Try the fast `findAll` scan first ---
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Performing fast scan on entire image...', 'info');
+        let allDecodedData = [];
+        try {
+            allDecodedData = await state.jabInterface.decode_message(processedDataUrl, { findAll: true });
+        } catch(e) {
+            console.warn("Fast scan failed, will attempt targeted scan.", e);
+        }
+
+        // If fast scan finds enough codes, we are done!
+        if (allDecodedData.length >= Constants.NUM_JABS) {
+            Utils.log("Fast scan successful.", 'success');
+            return allDecodedData.map(data => ({ data }));
+        }
+
+        // --- METHOD 2: Fallback to precise, targeted slicing ---
+        Utils.updateStatus(DOMElements.validationResult, '⚠️ Fast scan incomplete. Switching to high-precision zone scan...', 'warning');
         const img = new Image();
         img.src = processedDataUrl;
         await new Promise(resolve => img.onload = resolve);
@@ -488,15 +505,13 @@ const BanknoteLogic = (() => {
         mainCtx.drawImage(img, 0, 0);
 
         const layout = BanknoteDrawer.getLayout(img.width, img.height);
-        const allDecodedData = [];
+        allDecodedData = [];
 
-        // Use a sequential loop instead of Promise.all to prevent freezing
         for (let i = 0; i < Constants.NUM_JABS; i++) {
-            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Zone ${i + 1} of ${Constants.NUM_JABS}...`, 'info');
-            const row = Math.floor(i / 3);
+            const isTopRow = i < 3;
             const col = i % 3;
-            const regionX = layout.startX + col * (layout.jabSize + layout.xSpacing);
-            const regionY = layout.startY + row * (layout.jabSize + layout.ySpacing);
+            const regionX = layout.topRow.startX + col * (layout.jabSize + layout.xSpacing);
+            const regionY = isTopRow ? layout.topRow.startY : layout.bottomRow.startY;
             
             const regionCanvas = document.createElement('canvas');
             const slicePadding = layout.jabSize * 0.15;
@@ -508,22 +523,19 @@ const BanknoteLogic = (() => {
             regionCtx.fillRect(0, 0, regionCanvas.width, regionCanvas.height);
             regionCtx.drawImage(mainCanvas, regionX - slicePadding, regionY - slicePadding, layout.jabSize + slicePadding * 2, layout.jabSize + slicePadding * 2, 0, 0, regionCanvas.width, regionCanvas.height);
             
-            const regionDataUrl = regionCanvas.toDataURL();
-            
             try {
-                const decodedText = await state.jabInterface.decode_message(regionDataUrl);
-                if(decodedText) {
-                    allDecodedData.push({ data: decodedText });
-                }
+                const decodedText = await state.jabInterface.decode_message(regionCanvas.toDataURL());
+                if(decodedText) allDecodedData.push({ data: decodedText });
             } catch (err) {
-                console.warn(`Could not decode JAB in region ${i + 1}.`);
+                console.warn(`Could not decode JAB in zone ${i + 1}.`);
             }
         }
 
         if (allDecodedData.length > 0) {
+            Utils.log("Targeted scan successful.", 'success');
             return allDecodedData;
         } else {
-            throw new Error("No readable JAB codes found. Tip: Use a flat, well-lit photo with the banknote filling most of the frame.");
+            throw new Error("Validation Failed. Image is likely too blurry, skewed, or poorly lit. Please retake the photo, ensuring it is flat and in focus.");
         }
     }
 
@@ -540,8 +552,9 @@ const BanknoteLogic = (() => {
                 let resultHTML = `<span class="info">Found ${decodedCodes.length} JAB code(s) on the image. Assembling payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
 
-                let expectedTotalParts = 0;
+                let expectedTotalParts = Constants.NUM_JABS;
                 const receivedParts = {};
+                let uniqueCodes = 0;
                 
                 for (const code of decodedCodes) {
                     if (code.data.startsWith(Constants.VALIDATION_PREFIX)) {
@@ -549,30 +562,25 @@ const BanknoteLogic = (() => {
                         const match = payload.match(/^(\d+)\/(\d+):(.*)$/s);
                         if (match) {
                             const partNum = parseInt(match[1], 10);
-                            const totalParts = parseInt(match[2], 10);
-                            if (!expectedTotalParts) expectedTotalParts = totalParts;
                             if (!receivedParts[partNum]) {
                                 receivedParts[partNum] = match[3];
+                                uniqueCodes++;
                             }
                         }
                     }
                 }
                 
-                if (Object.keys(receivedParts).length < Constants.NUM_JABS) {
-                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${Object.keys(receivedParts).length}/${Constants.NUM_JABS} required JAB codes. The banknote may be damaged or fake.`, 'error');
+                if (uniqueCodes < expectedTotalParts) {
+                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required JAB codes. The banknote may be damaged or fake.`, 'error');
                     return;
                 }
 
                 let fullPayloadString = '';
-                for (let i = 1; i <= Constants.NUM_JABS; i++) {
-                    if (!receivedParts[i]) {
-                         Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Missing part ${i}/${Constants.NUM_JABS}.`, 'error');
-                         return;
-                    }
+                for (let i = 1; i <= expectedTotalParts; i++) {
                     fullPayloadString += receivedParts[i];
                 }
 
-                resultHTML += `<span class="valid">✅ Found all ${Constants.NUM_JABS} parts. Reconstructing payload...</span>\n`;
+                resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
                 
                 const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
@@ -621,16 +629,26 @@ const BanknoteDrawer = (() => {
         ctx.closePath();
     }
     
+    // NEW layout logic for top/bottom rows, optimized for scanning
     const getLayout = (width, height) => {
         const scale = width / 1200;
-        const jabSize = 220 * scale;
-        const xSpacing = 10 * scale;
-        const ySpacing = 10 * scale;
-        const totalGridWidth = (jabSize * 3) + (xSpacing * 2);
-        const totalGridHeight = (jabSize * 2) + ySpacing;
-        const startX = (width - totalGridWidth) / 2;
-        const startY = (height - totalGridHeight) / 2;
-        return { scale, jabSize, xSpacing, ySpacing, totalGridWidth, totalGridHeight, startX, startY };
+        const jabSize = 150 * scale;
+        const xSpacing = 15 * scale;
+        const totalRowWidth = (jabSize * 3) + (xSpacing * 2);
+        
+        const topMargin = 30 * scale;
+        const bottomMargin = 30 * scale;
+
+        const topRow = {
+            startX: (width - totalRowWidth) / 2,
+            startY: topMargin
+        };
+        const bottomRow = {
+            startX: (width - totalRowWidth) / 2,
+            startY: height - bottomMargin - jabSize
+        };
+
+        return { scale, jabSize, xSpacing, topRow, bottomRow };
     };
     
     return {
@@ -642,7 +660,6 @@ const BanknoteDrawer = (() => {
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, width, height);
             
-            // PIXEL-PERFECT RENDERING: Disable image smoothing for sharp codes
             ctx.imageSmoothingEnabled = false;
             
             const partLength = Math.ceil(fullPayload.length / Constants.NUM_JABS);
@@ -657,34 +674,29 @@ const BanknoteDrawer = (() => {
 
             const layout = getLayout(width, height);
 
-            const padding = 20 * layout.scale;
-            ctx.fillStyle = '#FFFFFF';
-            ctx.shadowColor = "rgba(0,0,0,0.2)";
-            ctx.shadowBlur = 15 * layout.scale;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 5 * layout.scale;
-            roundRect(ctx, Math.round(layout.startX - padding), Math.round(layout.startY - padding), Math.round(layout.totalGridWidth + padding*2), Math.round(layout.totalGridHeight + padding*2), Math.round(15*layout.scale));
-            ctx.fill();
-            ctx.shadowColor = "transparent";
-
+            // Draw the two rows of JAB codes
             jabImages.forEach((img, index) => {
-                const row = Math.floor(index / 3);
+                const isTopRow = index < 3;
                 const col = index % 3;
-                const x = Math.round(layout.startX + col * (layout.jabSize + layout.xSpacing));
-                const y = Math.round(layout.startY + row * (layout.jabSize + layout.ySpacing));
+                const rowConfig = isTopRow ? layout.topRow : layout.bottomRow;
+                
+                const x = Math.round(rowConfig.startX + col * (layout.jabSize + layout.xSpacing));
+                const y = Math.round(rowConfig.startY);
+                
                 ctx.drawImage(img, x, y, Math.round(layout.jabSize), Math.round(layout.jabSize));
             });
 
+            // Draw text in the large central area
             ctx.fillStyle = `#000000`;
             ctx.textBaseline = 'middle';
 
-            ctx.font = `bold ${48 * layout.scale}px 'Roboto Mono'`;
+            ctx.font = `bold ${64 * layout.scale}px 'Roboto Mono'`;
             ctx.textAlign = 'left';
-            ctx.fillText(amount.toLocaleString('en-US'), Math.round(40 * layout.scale), Math.round(height / 2));
+            ctx.fillText(amount.toLocaleString('en-US'), 60 * layout.scale, height / 2);
             
-            ctx.font = `bold ${24 * layout.scale}px 'Roboto Mono'`;
+            ctx.font = `bold ${32 * layout.scale}px 'Roboto Mono'`;
             ctx.textAlign = 'right';
-            ctx.fillText(serial, Math.round(width - 40 * layout.scale), Math.round(height / 2));
+            ctx.fillText(serial, width - 60 * layout.scale, height / 2);
         }
     };
 })();
