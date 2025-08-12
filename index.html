@@ -134,12 +134,20 @@ const Utils = {
         console.log(`[Sadat System] ${icon} ${message}`);
     },
     async createJabImage(payload) {
+        // This function is now more robust, validating the library's output.
         const dataUrl = state.jabInterface.encode_message(payload);
+        
+        // Defensive check: Ensure the library returned a valid dataURL string.
+        if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+            throw new Error('JAB library failed to produce a valid dataURL.');
+        }
+
         const img = new Image();
         img.src = dataUrl;
+        
         await new Promise((resolve, reject) => {
             img.onload = resolve;
-            img.onerror = reject;
+            img.onerror = () => reject(new Error('The generated JAB code dataURL failed to load as an image.'));
         });
         return img;
     },
@@ -334,7 +342,7 @@ const BanknoteLogic = (() => {
             const noteData = await createNoteData(DOMElements.amountInput.value);
             const fullPayload = createUnifiedVerificationPayload(noteData);
             await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, fullPayload, 1200, 533);
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ New banknote designed. For security, the key has been cleared. Re-activate to create more.`, 'success');
+            // Final status message is now set inside BanknoteDrawer for better feedback
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
             console.error(error);
@@ -511,7 +519,7 @@ const BanknoteLogic = (() => {
 })();
 
 // ===================================================================================
-// BANKNOTE DRAWER -- REWRITTEN FOR MEMORY EFFICIENCY
+// BANKNOTE DRAWER -- REWRITTEN FOR MEMORY EFFICIENCY AND RESILIENCE
 // ===================================================================================
 const BanknoteDrawer = (() => {
     const H = (text, index, min, max) => min + (parseInt(text.substring(index, index + 2), 16) % (max - min + 1));
@@ -551,19 +559,22 @@ const BanknoteDrawer = (() => {
         ctx.closePath();
     }
     
-    // Helper function for the new serialized drawing process
-    async function drawSingleJab(ctx, payload, x, y, size) {
-        // 1. Generate the image object
-        let jabImage = await Utils.createJabImage(payload);
-        
-        // 2. Draw it to the canvas IMMEDIATELY
-        ctx.drawImage(jabImage, x, y, size, size);
-        
-        // 3. Nullify the reference to mark the object and its large dataURL for garbage collection
-        jabImage = null;
-        
-        // 4. Yield to the event loop with a short pause
-        await new Promise(resolve => setTimeout(resolve, 50));
+    function drawErrorPlaceholder(ctx, x, y, size) {
+        ctx.save();
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x + size * 0.2, y + size * 0.2);
+        ctx.lineTo(x + size * 0.8, y + size * 0.8);
+        ctx.moveTo(x + size * 0.8, y + size * 0.2);
+        ctx.lineTo(x + size * 0.2, y + size * 0.8);
+        ctx.stroke();
+        ctx.font = `bold ${size * 0.15}px 'Roboto Mono'`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'red';
+        ctx.fillText('ERROR', x + size / 2, y + size / 2);
+        ctx.restore();
     }
     
     return {
@@ -573,7 +584,6 @@ const BanknoteDrawer = (() => {
             const scale = width / 1200; 
             const visualHash = shake256(Utils.arrayBufferToBase64(signatureTwo), 256);
 
-            // --- Draw Background and Text (Low memory usage) ---
             const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
             const baseHue = H(visualHash, 0, 0, 360);
             bgGradient.addColorStop(0, `hsl(${baseHue}, 50%, 6%)`);
@@ -596,52 +606,66 @@ const BanknoteDrawer = (() => {
             ctx.fillText(amount.toLocaleString('en-US'), width - (40 * scale), 65 * scale);
             ctx.shadowColor = "transparent";
 
-            // --- Split payload ---
             const totalLength = fullPayload.length;
             const part1Length = Math.ceil(totalLength / 3);
             const part2Length = Math.ceil(totalLength / 3);
             const part1 = fullPayload.substring(0, part1Length);
             const part2 = fullPayload.substring(part1Length, part1Length + part2Length);
             const part3 = fullPayload.substring(part1Length + part2Length);
-            const qrPayload1 = `${Constants.VALIDATION_PREFIX}1/3:${part1}`;
-            const qrPayload2 = `${Constants.VALIDATION_PREFIX}2/3:${part2}`;
-            const qrPayload3 = `${Constants.VALIDATION_PREFIX}3/3:${part3}`;
             
-            // --- Calculate geometry ---
+            const payloads = [
+                `${Constants.VALIDATION_PREFIX}1/3:${part1}`,
+                `${Constants.VALIDATION_PREFIX}2/3:${part2}`,
+                `${Constants.VALIDATION_PREFIX}3/3:${part3}`
+            ];
+            
             const jabSize = 350 * scale;
             const qrY = height * 0.22;
             const qrSpacing = 40 * scale;
             const totalQrWidth = jabSize * 3 + qrSpacing * 2;
             const startX = (width - totalQrWidth) / 2;
-            const qr1X = startX;
-            const qr2X = startX + jabSize + qrSpacing;
-            const qr3X = startX + jabSize * 2 + qrSpacing * 2;
             
-            // --- Draw QR Background ---
+            const positions = [
+                startX,
+                startX + jabSize + qrSpacing,
+                startX + jabSize * 2 + qrSpacing * 2
+            ];
+            
             ctx.fillStyle = 'white';
             const padding = 20 * scale;
             roundRect(ctx, startX - padding, qrY - padding, totalQrWidth + (padding * 2), jabSize + (padding * 2), 15 * scale);
             ctx.fill();
 
-            // --- SERIALIZED JAB CODE RENDERING (High memory usage handled here) ---
-            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 1/3...', 'info');
-            await drawSingleJab(ctx, qrPayload1, qr1X, qrY, jabSize);
-
-            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 2/3...', 'info');
-            await drawSingleJab(ctx, qrPayload2, qr2X, qrY, jabSize);
-
-            Utils.updateStatus(DOMElements.banknoteStatus, '🎨 Rendering JAB Code 3/3...', 'info');
-            await drawSingleJab(ctx, qrPayload3, qr3X, qrY, jabSize);
+            let allJabsRendered = true;
+            for (let i = 0; i < 3; i++) {
+                try {
+                    Utils.updateStatus(DOMElements.banknoteStatus, `🎨 Rendering JAB Code ${i + 1}/3...`, 'info');
+                    let jabImage = await Utils.createJabImage(payloads[i]);
+                    ctx.drawImage(jabImage, positions[i], qrY, jabSize, jabSize);
+                    jabImage = null; // Release reference
+                } catch (e) {
+                    allJabsRendered = false;
+                    const errorMessage = `Failed to render JAB Code ${i + 1}. The data payload may be too large for the JAB library.`;
+                    Utils.updateStatus(DOMElements.banknoteStatus, `❌ ${errorMessage}`, 'error');
+                    console.error(errorMessage, e);
+                    drawErrorPlaceholder(ctx, positions[i], qrY, jabSize);
+                }
+                // Pause regardless of success or failure to allow UI to update and memory to settle
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
             
-            // --- Final decorative lines ---
+            if (allJabsRendered) {
+                 Utils.updateStatus(DOMElements.banknoteStatus, `✅ Banknote designed successfully. Key has been cleared for security.`, 'success');
+            }
+
             ctx.strokeStyle = `hsla(${baseHue}, 50%, 30%, 0.8)`;
             ctx.lineWidth = 2 * scale;
             const lineY = qrY + jabSize / 2;
             ctx.beginPath();
-            ctx.moveTo(qr1X + jabSize, lineY);
-            ctx.lineTo(qr2X, lineY);
-            ctx.moveTo(qr2X + jabSize, lineY);
-            ctx.lineTo(qr3X, lineY);
+            ctx.moveTo(positions[0] + jabSize, lineY);
+            ctx.lineTo(positions[1], lineY);
+            ctx.moveTo(positions[1] + jabSize, lineY);
+            ctx.lineTo(positions[2], lineY);
             ctx.stroke();
         }
     };
