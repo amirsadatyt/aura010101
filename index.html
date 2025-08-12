@@ -323,12 +323,33 @@ const BanknoteLogic = (() => {
     };
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
+
+        // Operation 1: Generate Ephemeral Key
         const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
-        const noteData = { amount: parseInt(amount) || 0, serial: Math.random().toString(36).substring(2, 10).toUpperCase(), timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000), ephemeralPublicKey: ephemeralKeyPair.publicKey, signatureOne: null, signatureTwo: null };
+
+        // --- FIX: Introduce a small, non-blocking delay ---
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        const noteData = {
+            amount: parseInt(amount) || 0,
+            serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
+            timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
+            ephemeralPublicKey: ephemeralKeyPair.publicKey,
+            signatureOne: null,
+            signatureTwo: null
+        };
+
+        // Operation 2: Create Signature One
         const dataForSigOne = getStandardizedDataForSigning(noteData);
         noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
+
+        // --- FIX: Introduce another delay ---
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        // Operation 3: Create Signature Two
         const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
         noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
+
         return noteData;
     };
     const createUnifiedVerificationPayload = (noteData) => {
@@ -365,46 +386,61 @@ const BanknoteLogic = (() => {
     const handleDownloadBatch = async () => {
         if (!state.masterPrivateKey) { alert("Master Private Key is not active. Please activate it in Step 2."); return; }
         const quantity = parseInt(DOMElements.quantityInput.value) || 1;
+        const amount = DOMElements.amountInput.value;
         Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Preparing to create ${quantity} banknote(s)...`, 'info');
-        if (quantity > 1 && !window.showDirectoryPicker) {
-            Utils.log("Directory Picker API not available. Falling back to individual downloads.", 'warning');
-            alert("Your browser or security context does not support directory selection.\n\nThe banknotes will be downloaded individually to your default 'Downloads' folder.");
-        }
+
         try {
             const offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = 1200; offscreenCanvas.height = 533;
-            const notesToDownload = [];
-            Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Generating ${quantity} banknote(s) in memory...`, 'info');
+            offscreenCanvas.width = 1200;
+            offscreenCanvas.height = 533;
+            
+            let dirHandle = null;
+            // Ask for directory access only once if needed.
+            if (window.showDirectoryPicker && quantity > 1) {
+                Utils.updateStatus(DOMElements.banknoteStatus, `ℹ️ Please select a folder to save the banknotes.`, 'info');
+                dirHandle = await window.showDirectoryPicker();
+            }
+
+            Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Processing batch: 0/${quantity}...`, 'info');
+
+            // Process notes one by one to keep memory usage low (O(1) instead of O(n)).
             for (let i = 0; i < quantity; i++) {
-                const noteData = await createNoteData(DOMElements.amountInput.value);
+                // 1. Create a single note's data and signatures.
+                const noteData = await createNoteData(amount);
                 const fullPayload = createUnifiedVerificationPayload(noteData);
+
+                // 2. Draw it to the offscreen canvas.
                 await BanknoteDrawer.drawNoteOnCanvas(offscreenCanvas, noteData, fullPayload, 1200, 533);
+                
+                // 3. Get the blob for the completed note.
                 const blob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/png'));
-                notesToDownload.push({ blob, filename: `SADAT-NOTE-${noteData.serial}.png` });
+                const filename = `SADAT-NOTE-${noteData.serial}.png`;
+
+                // 4. Save the file immediately.
+                if (dirHandle) {
+                    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } else {
+                    Utils.downloadFile(blob, filename, 'image/png');
+                }
+                
+                Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Processing batch: ${i + 1}/${quantity}...`, 'info');
+
+                // If it's the last note, also display it on the main canvas.
                 if (i === quantity - 1) {
                     await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, fullPayload, 1200, 533);
                 }
+                // The memory for this note (keys, signatures, blob) is now free for the next iteration.
             }
-            if (window.showDirectoryPicker && quantity > 1) {
-                Utils.updateStatus(DOMElements.banknoteStatus, `ℹ️ Please select a folder to save the banknotes.`, 'info');
-                const dirHandle = await window.showDirectoryPicker();
-                Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Saving ${quantity} notes to your selected folder...`, 'info');
-                for (const note of notesToDownload) {
-                    const fileHandle = await dirHandle.getFileHandle(note.filename, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(note.blob);
-                    await writable.close();
-                }
-                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} notes to your selected folder.`, 'success');
-            } else {
-                Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Downloading ${quantity} note(s) individually...`, 'info');
-                notesToDownload.forEach(note => Utils.downloadFile(note.blob, note.filename, 'image/png'));
-                Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). Check your downloads folder.`, 'success');
-            }
+            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Saved ${quantity} note(s). For security, the key has been cleared.`, 'success');
+
         } catch (error) {
             Utils.updateStatus(DOMElements.banknoteStatus, `❌ Operation cancelled or failed: ${error.message}`, 'error');
             console.error(error);
         } finally {
+            // This security cleanup should always happen.
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
