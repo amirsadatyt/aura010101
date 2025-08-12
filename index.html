@@ -211,7 +211,6 @@ const UIHandlers = (() => {
         let statusHtml = '';
         statusHtml += fileKey ? '<span class="valid">✅ File Key loaded.</span>\n' : '<span class="invalid">❌ File Key NOT loaded.</span>\n';
         statusHtml += passwordKey ? '<span class="valid">✅ Password Key entered.</span>\n' : '<span class="invalid">❌ Password Key NOT entered.</span>\n';
-        // *** FIX: Check against null instead of truthiness to correctly handle empty strings ***
         statusHtml += visualKey !== null ? '<span class="valid">✅ Visual Key scanned.</span>\n' : '<span class="invalid">❌ Visual Key NOT scanned.</span>\n';
         DOMElements.keyReconstructionStatus.innerHTML = statusHtml;
         const allPiecesProvided = fileKey && passwordKey && visualKey !== null;
@@ -249,7 +248,11 @@ const UIHandlers = (() => {
         },
         handleImportPublicKey: async (event) => { const file = event.target.files[0]; if (!file) return; try { const data = JSON.parse(await file.text()); if (!data.masterPublicKey) throw new Error("Invalid public key file format."); state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey); Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported. Ready to validate banknotes.', 'success'); DOMElements.validatorInput.disabled = false; } catch (error) { Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error importing public key: ${error.message}`, 'error'); } event.target.value = ''; },
         handleFileKeyInput: async (event) => { const file = event.target.files[0]; if (!file) return; try { state.puzzlePieces.fileKey = JSON.parse(await file.text()); Utils.log("File Key loaded.", 'success'); } catch(e) { state.puzzlePieces.fileKey = null; Utils.log(`Failed to load File Key: ${e.message}`, 'error'); } updatePuzzleStatus(); event.target.value = ''; },
-        handlePasswordKeyInput: (event) => { state.puzzlePieces.passwordKey = event.target.value || null; updatePuzzleStatus(); },
+        handlePasswordKeyInput: (event) => {
+            // *** FIX: Trim whitespace from password input to prevent decryption errors ***
+            state.puzzlePieces.passwordKey = event.target.value.trim() || null;
+            updatePuzzleStatus();
+        },
         handleVisualKeyInput: async (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -326,7 +329,7 @@ const BanknoteLogic = (() => {
                 state.masterPrivateKey = null;
                 DOMElements.createNoteButton.disabled = true;
                 DOMElements.downloadBatchButton.disabled = true;
-                UIHandlers.handlePasswordKeyInput({ target: { value: null } });
+                UIHandlers.handlePasswordKeyInput({ target: { value: "" } }); // Clear password
                 DOMElements.passwordKeyInput.value = '';
                 Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. For security, it has been cleared from memory. Solve the puzzle again to activate.", 'warning');
                 Utils.log("Key cleared for security after single note creation.", 'warning');
@@ -379,7 +382,7 @@ const BanknoteLogic = (() => {
             state.masterPrivateKey = null;
             DOMElements.createNoteButton.disabled = true;
             DOMElements.downloadBatchButton.disabled = true;
-            UIHandlers.handlePasswordKeyInput({ target: { value: null } });
+            UIHandlers.handlePasswordKeyInput({ target: { value: "" } }); // Clear password
             DOMElements.passwordKeyInput.value = '';
             Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ Master Private Key is INACTIVE. For security, it has been cleared from memory. Solve the puzzle again to activate.", 'warning');
             Utils.log("Key cleared for security after batch operation.", 'warning');
