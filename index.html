@@ -324,12 +324,15 @@ const BanknoteLogic = (() => {
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
 
-        // Operation 1: Generate Ephemeral Key
-        const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
+        // This helper is needed because the original is scoped inside the BankCrypto IIFE.
+        const hashMessageForSigning = (message) => Utils.hexToUint8Array(shake256(message, 1536));
 
-        // --- FIX: Introduce a small, non-blocking delay ---
-        await new Promise(resolve => setTimeout(resolve, 20));
-
+        // --- STEP 1: Generate Ephemeral Key with a fresh Wasm instance ---
+        let falconApi = await pqcSignFalcon1024();
+        const ephemeralKeyPair = await falconApi.keypair();
+        falconApi = null; // Release the instance for garbage collection.
+        
+        // Create the note object with the key we just made.
         const noteData = {
             amount: parseInt(amount) || 0,
             serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
@@ -338,17 +341,22 @@ const BanknoteLogic = (() => {
             signatureOne: null,
             signatureTwo: null
         };
-
-        // Operation 2: Create Signature One
+        
+        // --- STEP 2: Create Signature One with a new Wasm instance ---
+        falconApi = await pqcSignFalcon1024();
         const dataForSigOne = getStandardizedDataForSigning(noteData);
-        noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
+        const dataHash1 = hashMessageForSigning(dataForSigOne);
+        const { signature: sig1 } = await falconApi.sign(dataHash1, ephemeralKeyPair.privateKey);
+        noteData.signatureOne = sig1;
+        falconApi = null; // Release the instance.
 
-        // --- FIX: Introduce another delay ---
-        await new Promise(resolve => setTimeout(resolve, 20));
-
-        // Operation 3: Create Signature Two
+        // --- STEP 3: Create Signature Two with a final Wasm instance ---
+        falconApi = await pqcSignFalcon1024();
         const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
-        noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, state.masterPrivateKey);
+        const dataHash2 = hashMessageForSigning(dataForSigTwo);
+        const { signature: sig2 } = await falconApi.sign(dataHash2, state.masterPrivateKey);
+        noteData.signatureTwo = sig2;
+        falconApi = null; // Release the final instance.
 
         return noteData;
     };
