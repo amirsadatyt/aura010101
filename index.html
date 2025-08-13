@@ -91,7 +91,7 @@ const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
     VALIDATION_PREFIX: "SADAT_V2_PART",
-    NUM_QR_CODES: 9, // Use 9 QR codes
+    NUM_QR_CODES: 9, 
     MAX_IMAGE_DIMENSION: 2000
 };
 
@@ -480,7 +480,7 @@ const BanknoteLogic = (() => {
     
     // REWRITTEN to use the "Exact Location Scan" method only.
     async function decodeAllQrCodesFromImage(file) {
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Resizing and enhancing image...', 'info');
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Pre-processing image for accuracy...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
         const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
     
@@ -488,7 +488,7 @@ const BanknoteLogic = (() => {
         img.src = processedDataUrl;
         await new Promise((resolve, reject) => {
             img.onload = resolve;
-            img.onerror = reject;
+            img.onerror = () => reject('Could not load processed image.');
         });
 
         const mainCanvas = document.createElement('canvas');
@@ -496,7 +496,6 @@ const BanknoteLogic = (() => {
         mainCanvas.height = img.height;
         const mainCtx = mainCanvas.getContext('2d');
         mainCtx.drawImage(img, 0, 0);
-        const mainImageData = mainCtx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
 
         const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
         const allDecodedData = [];
@@ -506,27 +505,24 @@ const BanknoteLogic = (() => {
             const row = Math.floor(i / 3);
             const col = i % 3;
             
-            const regionX = layout.grid.startX + col * (layout.qrSize + layout.xSpacing);
-            const regionY = layout.grid.startY + row * (layout.qrSize + layout.ySpacing);
+            const regionX = Math.round(layout.grid.startX + col * (layout.qrSize + layout.xSpacing));
+            const regionY = Math.round(layout.grid.startY + row * (layout.qrSize + layout.ySpacing));
+            const regionSize = Math.round(layout.qrSize);
             
-            // This is a simplified search; a true targeted search with jsQR requires more complex image manipulation.
-            // For now, we scan the whole image but rely on the clear layout to find codes.
-            // A more advanced implementation would copy the region to a new canvas and scan that.
-            const code = jsQR(mainImageData.data, mainImageData.width, mainImageData.height);
+            const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
 
-            if (code) {
-                 // To improve precision, we can check if the found code is roughly where we expect it.
-                const { x, y } = code.location.topLeftCorner;
-                if (x >= regionX - 50 && x <= regionX + 50 && y >= regionY - 50 && y <= regionY + 50) {
-                     allDecodedData.push({ data: code.data });
-                }
+            if (code && code.data) {
+                allDecodedData.push({ data: code.data });
+            } else {
+                 console.warn(`Could not decode QR in zone ${i + 1}.`);
             }
         }
 
         if (allDecodedData.length > 0) {
             return allDecodedData;
         } else {
-            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
+            throw new Error("Validation Failed. No QR codes found at exact locations. Tip: Use a flat, well-lit photo.");
         }
     }
 
@@ -539,7 +535,6 @@ const BanknoteLogic = (() => {
             const resultDiv = DOMElements.validationResult;
             Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
             try {
-                // This function now only uses the exact location scan method
                 const decodedCodes = await decodeAllQrCodesFromImage(file);
                 let resultHTML = `<span class="info">Found ${decodedCodes.length} QR code(s). Assembling payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
