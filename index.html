@@ -2,10 +2,11 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Cash - Transferable Asset</title>
+    <title>Sadat Quantum Wallet</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
@@ -13,308 +14,766 @@
 
     <style>
         :root {
-            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
-            --mono-font: 'Roboto Mono', monospace;
-            --dark-bg: #10101a;
-            --medium-bg: #1a1a2e;
-            --light-bg: #2a2a3e;
-            --accent-color-1: #e040fb;
-            --accent-color-2: #7c4dff;
-            --accent-color-3: #40c4ff; /* Accent for transfers */
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0c0;
-            --success-color: #00e676;
-            --error-color: #ff5252;
-            --info-color: #40c4ff;
-            --warning-color: #ffab40;
-            --border-color: rgba(124, 77, 255, 0.2);
+            --bg: #0d1117; --primary: #161b22; --secondary: #010409;
+            --text: #e6edf3; --text-muted: #7d8590;
+            --border: #30363d; --accent: #58a6ff; --accent-hover: #79c0ff;
+            --success: #3fb950; --error: #f85149; --warning: #d29922;
         }
-        body { margin: 0; font-family: var(--primary-font); background-color: var(--dark-bg); background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%); color: var(--text-color); text-align: center; padding: 24px; }
-        .container { max-width: 1200px; margin: 0 auto; background: rgba(26, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
-        .header { border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 24px; }
-        h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .header p { font-size: 1rem; color: var(--text-muted); margin: 0; }
-        canvas { border-radius: 16px; margin-top: 24px; background: #050508; cursor: default; box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); width: 100%; max-width: 1200px; height: auto; border: 1px solid var(--border-color); }
-        input, button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-        input[type="text"], input[type="number"], input[type="password"] { font-family: var(--mono-font); font-weight: 700; text-align: center; width: auto; max-width: 90%; }
-        input:focus { border-color: var(--accent-color-2); box-shadow: 0 0 15px rgba(124, 77, 255, 0.5); }
-        button:not([disabled]), label.button:not([disabled]) { font-weight: 600; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        button.sub-button, label.button.sub-button { background: var(--light-bg); border: 1px solid var(--border-color); }
-        button.transfer-button { background: linear-gradient(90deg, var(--accent-color-2), var(--accent-color-3)); }
-        button[disabled], label.button[disabled] { cursor: not-allowed; opacity: 0.5; background: var(--light-bg); border: 1px solid var(--border-color); }
-        button:hover:not([disabled]), label.button:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); }
-        .section { background: rgba(16, 16, 26, 0.5); padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); }
-        h2 { font-size: 1.5rem; color: var(--text-color); margin-top: 0; margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .controls-grid { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 16px; }
-        .status-box { margin-top: 20px; font-size: 13px; font-weight: normal; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); border: 1px solid var(--border-color); transition: all 0.3s ease; word-break: break-all; }
-        .valid { color: var(--success-color); } .invalid { color: var(--error-color); } .info { color: var(--info-color); } .warning { color: var(--warning-color); }
-        code { background: var(--medium-bg); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-        .input-label { font-size: 0.9rem; color: var(--text-muted); margin-right: -10px; }
-        .modal { position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; }
-        .modal-content { background-color: var(--medium-bg); padding: 30px; border: 1px solid var(--border-color); width: 80%; max-width: 500px; border-radius: 16px; text-align: center; }
-        #jab-display { margin: 20px auto; background: white; padding: 15px; border-radius: 8px; width: fit-content; }
-        #jab-display img { max-width: 100%; height: auto; }
-        .pill { background-color: var(--border-color); color: var(--accent-color-1); padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; margin: 5px; display: inline-block; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); }
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+        .header { text-align: center; padding: 20px 0; border-bottom: 1px solid var(--border); }
+        .header h1 { margin: 0; font-size: 24px; }
+        .header h1 span { font-weight: 700; color: var(--accent); }
+        .header p { margin: 5px 0 0; color: var(--text-muted); font-size: 14px; }
+        
+        .wallet-section { margin-top: 20px; }
+        #wallet-notes { min-height: 100px; background: var(--primary); border: 1px solid var(--border); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .note-card { background: var(--secondary); border: 1px solid var(--border); border-radius: 6px; padding: 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s ease; }
+        .note-card.selected { border-color: var(--accent); box-shadow: 0 0 10px rgba(88, 166, 255, 0.5); }
+        .note-card:hover { border-color: var(--text-muted); }
+        .note-amount { font-family: 'Roboto Mono', monospace; font-size: 20px; font-weight: 700; color: var(--accent); }
+        .note-serial { font-size: 12px; color: var(--text-muted); font-family: 'Roboto Mono', monospace; }
+        .wallet-placeholder { text-align: center; color: var(--text-muted); font-size: 14px; padding: 20px; }
+
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+        .actions-mint { display: flex; gap: 10px; margin-top: 10px; }
+        .actions-mint input { flex-grow: 1; }
+        button, input {
+            width: 100%; padding: 12px; font-size: 16px; font-family: inherit; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--primary); color: var(--text);
+            transition: all 0.2s ease; font-weight: 500;
+        }
+        button { cursor: pointer; }
+        button:hover:not(:disabled) { background-color: #21262d; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.primary { background-color: var(--accent); color: var(--secondary); font-weight: 600; border-color: var(--accent); }
+        button.primary:hover:not(:disabled) { background-color: var(--accent-hover); }
+        
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); }
+        .modal-content { background: var(--primary); padding: 25px; border-radius: 8px; border: 1px solid var(--border); text-align: center; max-width: 90%; width: 400px; }
+        .modal-content h2 { margin: 0 0 15px; }
+        .modal-content p { color: var(--text-muted); margin: 0 0 20px; }
+        .modal-spinner { border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #qr-code-display { background: white; padding: 10px; margin: 0 auto 20px; width: fit-content; border-radius: 6px; }
+        #qr-code-display canvas { display: block; }
+        #video-feed { width: 100%; border-radius: 6px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
+
 <div class="container">
-    <div class="header"><h1>Sadat Digital Cash</h1><p>A Quantum-Resistant, Offline, Transferable Digital Asset Ecosystem.</p></div>
-    
-    <div class="section">
-        <h2><span class="pill">Step 1</span> Guardian & User Setup</h2>
-        <div class="controls-grid">
-            <button id="generate-keys-button">🔑 Generate NEW Identity</button>
-            <label for="import-public-key" class="button sub-button">🛰️ Load Guardian Public Key</label>
-            <input type="file" id="import-public-key" accept=".json" style="display: none;">
-        </div>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: 20px auto 0 auto;">Use "Generate NEW Identity" to become a new Guardian or User. Use "Load Guardian Public Key" to validate an existing currency.</p>
-        <div id="key-gen-status" class="status-box"><span class="info">ℹ️ Welcome. Generate an identity for yourself, or load a Guardian's public key to validate their currency.</span></div>
+    <div class="header">
+        <h1>Sadat <span>Quantum Wallet</span></h1>
+        <p>A Self-Contained, Offline, Peer-to-Peer Digital Banknote System</p>
     </div>
 
-    <div class="section" id="validator-section">
-        <h2><span class="pill">Step 2</span> View & Verify Banknote</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">Upload a banknote image to verify its authenticity and view its current ownership details.</p>
-        <label for="validator-input" class="button">🔎 Select Banknote Image for Validation</label>
-        <input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;">
-        <div id="validation-result" class="status-box">Awaiting banknote for validation...</div>
+    <div class="wallet-section">
+        <div id="wallet-notes">
+            <div class="wallet-placeholder">Your wallet is empty.</div>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button id="send-btn" class="primary" disabled>Send</button>
+        <button id="receive-btn">Receive</button>
     </div>
     
-    <div class="section" id="transfer-section">
-        <h2><span class="pill">Step 3</span> Transfer Ownership</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To spend a banknote, first load it below. The system will confirm if it's valid and who owns it.</p>
-        
-        <div class="controls-grid">
-            <label for="transfer-note-input" class="button sub-button">1. Load Banknote to Spend</label>
-            <input type="file" id="transfer-note-input" accept="image/png, image/jpeg" style="display:none;" />
+    <div id="mint-section" style="display: none;">
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+        <h3 style="text-align: center; margin-top: 0;">Mint New Banknote</h3>
+        <div class="actions-mint">
+            <input type="number" id="mint-amount-input" placeholder="Enter amount" value="1000">
+            <button id="mint-btn">Mint Note</button>
         </div>
-        <div id="transfer-load-status" class="status-box">Awaiting banknote...</div>
-
-        <hr style="border-color: var(--border-color); margin: 20px;">
-        <p style="color: var(--text-muted); font-size: 0.9em;">2. Authenticate as Owner (with YOUR 3-piece key)</p>
-        <div class="controls-grid">
-            <label for="user-file-key-input" class="button sub-button">Your File Key</label><input type="file" id="user-file-key-input" accept=".json" style="display:none;" />
-            <input type="password" id="user-password-key-input" placeholder="Your Password Key">
-            <label for="user-visual-key-input" class="button sub-button">Your Visual Key (QR)</label><input type="file" id="user-visual-key-input" accept="image/png, image/jpeg" style="display:none;" />
-        </div>
-        <button id="reconstruct-user-key-button" disabled style="margin-top:20px;">🔑 Authenticate as Owner</button>
-        <div id="user-reconstruction-status" class="status-box">Owner is INACTIVE. You must authenticate to prove you own the loaded banknote.</div>
-
-        <hr style="border-color: var(--border-color); margin: 20px;">
-        <p style="color: var(--text-muted); font-size: 0.9em;">3. Create the Transfer</p>
-        <div class="controls-grid">
-             <label for="recipient-public-key-input" class="button sub-button">Load Recipient's Public Key</label>
-             <input type="file" id="recipient-public-key-input" accept=".json" style="display:none;" />
-        </div>
-        <button id="transfer-button" class="transfer-button" disabled>✈️ Sign & Create Transfer</button>
-        <div id="transfer-status" class="status-box">Awaiting all steps to be completed...</div>
     </div>
     
-    <div class="section">
-        <h2><span class="pill">Guardian Role</span> Create Wealth</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">Only a Guardian can create new banknotes. This requires a separate authentication.</p>
-         <div class="controls-grid">
-            <span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000">
-            <button id="create-note-button" disabled>🎨 Create & Display Banknote</button>
-        </div>
-        <div id="banknote-status" class="status-box">Authenticate as a Guardian by reconstructing your key to enable banknote creation. This is a separate, higher-privilege action.</div>
+    <div id="identity-section" style="display: none;">
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 20px 0;">
+        <h3 style="text-align: center; margin-top: 0;">Identity Management</h3>
+        <p style="text-align:center; font-size: 14px; color: var(--text-muted);">This will erase your current identity and wallet. Use with caution.</p>
+        <button id="reset-identity-btn" style="background-color: var(--error); border-color: var(--error); color: white;">Reset Identity & Erase Wallet</button>
     </div>
-
-    <canvas id="noteCanvas" width="1200" height="1000"></canvas>
 </div>
 
-<div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this QR Code or save the image file and store it in a secure physical location. It is the third piece of your key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download QR Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
+<div id="identity-creation-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h2>Welcome</h2>
+        <p>Create a secure password for your new quantum-resistant identity. This password encrypts your private key and is required for all transactions.</p>
+        <input type="password" id="identity-password" placeholder="Enter a strong password">
+        <button id="create-identity-btn" class="primary" style="margin-top: 15px;">Create Identity</button>
+    </div>
+</div>
+
+<div id="password-prompt-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h2 id="password-prompt-title">Enter Password</h2>
+        <p id="password-prompt-text">Your password is required to authorize this action.</p>
+        <input type="password" id="action-password" placeholder="Enter your password">
+        <div style="display:flex; gap: 10px; margin-top: 15px;">
+            <button id="password-cancel-btn">Cancel</button>
+            <button id="password-confirm-btn" class="primary">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div id="transfer-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h2 id="transfer-title">Initializing</h2>
+        <div class="modal-spinner"></div>
+        <p id="transfer-status">Please wait...</p>
+        <div id="qr-code-display" style="display: none;"></div>
+        <video id="video-feed" style="display: none;"></video>
+        <button id="transfer-cancel-btn">Cancel</button>
+    </div>
+</div>
+
 
 <script type="module">
 // --- DEPENDENCIES ---
-import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+import pqcSignFalcon1024 from 'https://cdn.jsdelivr.net/gh/Amir-S-T/pqc-sign-falcon-1024/pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-// --- Global State ---
-const state = {
-    falconApi: null,
-    guardianMasterPublicKey: null, // Public key of the currency issuer
-    currentUserPrivateKey: null, // Key of the authenticated user/owner for transfers
-    
-    noteToTransferData: null, // Full data of the banknote loaded for transfer
-    recipientPublicKey: null, // Public key of the person receiving the note
-    
-    puzzlePieces: { // Separate puzzles for Guardian and User roles
-        guardian: { fileKey: null, passwordKey: null, visualKey: null },
-        user: { fileKey: null, passwordKey: null, visualKey: null }
-    }
-};
+// ===================================================================================
+// 1. CORE CRYPTO ENGINE
+// ===================================================================================
+const CryptoEngine = (() => {
+    let falconApi = null;
+    const AES_ALGO = "AES-GCM";
+    const PBKDF2_ITERATIONS = 250000;
 
-// --- Constants & DOM Elements (Minor Changes) ---
-const Constants = { /* ... No changes ... */ };
-const DOMElements = { /* ... Updated to match new HTML ... */ };
-
-// --- Utility Functions (Unchanged) ---
-const Utils = { /* ... No changes ... */ };
-
-// --- CORE CRYPTO ENGINE (Unchanged) ---
-const BankCrypto = (() => { /* ... No changes ... */ })();
-
-
-// --- BANKNOTE LOGIC (Heavily Modified for Ownership) ---
-const BanknoteLogic = (() => {
-    // --- MODIFIED: Functions to define what gets signed ---
-    const getStandardizedDataForSigning = (noteData) => JSON.stringify({ a: noteData.amount, s: noteData.serial, t: noteData.timestamp });
-    const getStandardizedDataForMasterSig = (noteData) => JSON.stringify({ epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne) });
-    // --- NEW: Standardized data for the new transaction signature ---
-    const getStandardizedDataForTransactionSig = (serial, newOwnerPublicKey) => JSON.stringify({ s: serial, new_owner: Utils.arrayBufferToBase64(newOwnerPublicKey) });
-    
-    // --- MODIFIED: Includes new ownership fields in the payload ---
-    const createUnifiedVerificationPayload = (noteData) => {
-        const payload = {
-            a: noteData.amount, s: noteData.serial, t: noteData.timestamp,
-            epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey),
-            s1: Utils.arrayBufferToBase64(noteData.signatureOne),
-            s2: Utils.arrayBufferToBase64(noteData.signatureTwo),
-            own: Utils.arrayBufferToBase64(noteData.ownerPublicKey),
-            txs: noteData.lastTxSignature ? Utils.arrayBufferToBase64(noteData.lastTxSignature) : null,
-        };
-        const jsonString = JSON.stringify(payload);
-        const compressedData = pako.deflate(jsonString);
-        return Utils.arrayBufferToBase64(compressedData);
+    // --- Private Helper Functions ---
+    const getPbkdf2Key = async (password, salt) => {
+        const passwordBuffer = new TextEncoder().encode(password);
+        const importedKey = await crypto.subtle.importKey("raw", passwordBuffer, { name: "PBKDF2" }, false, ["deriveKey"]);
+        return await crypto.subtle.deriveKey(
+            { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+            importedKey, { name: AES_ALGO, length: 256 }, false, ["encrypt", "decrypt"]
+        );
     };
 
-    // --- MODIFIED: Parses new ownership fields ---
-    const parseUnifiedVerificationPayload = (base64CompressedString) => {
-        const compressedData = Utils.base64ToUint8Array(base64CompressedString);
-        const jsonString = pako.inflate(compressedData, { to: 'string' });
-        const p = JSON.parse(jsonString);
-        return {
-            amount: p.a, serial: p.s, timestamp: p.t,
-            ephemeralPublicKey: Utils.base64ToUint8Array(p.epk),
-            signatureOne: Utils.base64ToUint8Array(p.s1),
-            signatureTwo: Utils.base64ToUint8Array(p.s2),
-            ownerPublicKey: Utils.base64ToUint8Array(p.own),
-            lastTxSignature: p.txs ? Utils.base64ToUint8Array(p.txs) : null,
-        };
-    };
-    
-    // --- MODIFIED: Creates the initial "genesis" banknote data ---
-    const createNoteData = async (amount, guardianPrivateKey, guardianPublicKey) => {
-        if (!guardianPrivateKey || !guardianPublicKey) throw new Error("Guardian keys are not active.");
-
-        const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
-        const noteData = {
-            amount: parseInt(amount) || 0,
-            serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
-            timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
-            ephemeralPublicKey: ephemeralKeyPair.publicKey,
-            signatureOne: null, signatureTwo: null,
-            
-            // --- NEW: Genesis ownership data ---
-            ownerPublicKey: guardianPublicKey, // The Guardian is the first owner
-            lastTxSignature: null, // No previous owner, no signature
-        };
-        // Signatures remain the same
-        const dataForSigOne = getStandardizedDataForSigning(noteData);
-        noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
-        const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
-        noteData.signatureTwo = await BankCrypto.signData(dataForSigTwo, guardianPrivateKey);
-        return noteData;
-    };
-    
-    // --- NEW: Logic for handling transfers ---
-    const handleTransfer = async () => {
-        const { noteToTransferData, currentUserPrivateKey, recipientPublicKey } = state;
-        if (!noteToTransferData || !currentUserPrivateKey || !recipientPublicKey) {
-            Utils.updateStatus(DOMElements.transferStatus, '❌ Missing data. Ensure note is loaded, you are authenticated, and recipient key is loaded.', 'error'); return;
-        }
-        
-        Utils.updateStatus(DOMElements.transferStatus, '⏳ Creating transaction signature...', 'info');
-        
-        try {
-            // Create the new transaction signature
-            const dataToSign = getStandardizedDataForTransactionSig(noteToTransferData.serial, recipientPublicKey);
-            const txSignature = await BankCrypto.signData(dataToSign, currentUserPrivateKey);
-
-            // Create the new banknote data payload
-            const newNoteData = {
-                ...noteToTransferData, // Copy all genesis data
-                ownerPublicKey: recipientPublicKey, // Set new owner
-                lastTxSignature: txSignature, // Add the new transaction signature
-            };
-
-            // Generate the new visual banknote for the recipient
-            const fullPayload = createUnifiedVerificationPayload(newNoteData);
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, newNoteData, fullPayload, 1200, 1000);
-            
-            Utils.updateStatus(DOMElements.transferStatus, `✅ Transfer ready! The new banknote is displayed below. The recipient should scan or download it.`, 'success');
-            
-        } catch(error) {
-            Utils.updateStatus(DOMElements.transferStatus, `❌ Transfer failed: ${error.message}`, 'error');
-            console.error(error);
-        } finally {
-            // Clear the user's key from memory for security
-            state.currentUserPrivateKey = null;
-            // You would also reset the user puzzle state here
-            Utils.updateStatus(DOMElements.userReconstructionStatus, '⚠️ User key cleared for security.', 'warning');
-            DOMElements.transferButton.disabled = true;
-        }
+    const arrayBufferToBase64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const base64ToUint8Array = (base64) => {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+        return bytes;
     };
 
-    // --- MODIFIED: Validation now checks and displays ownership details ---
-    async function performValidation(file) {
-        if (!state.guardianMasterPublicKey) { 
-            return { success: false, message: '❌ Load a Guardian Public Key in Step 1 before validating.' };
-        }
-        
-        // This function now returns a result object instead of directly updating the DOM
-        // ... QR decoding logic ...
-        const fullPayloadString = '...'; // Assembled from QR codes
-        const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
-
-        const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, getStandardizedDataForSigning(parsedData), parsedData.ephemeralPublicKey);
-        if (!isSigOneValid) return { success: false, message: '❌ VERDICT: FORGERY (Data Tampering)' };
-        
-        const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, getStandardizedDataForMasterSig(parsedData), state.guardianMasterPublicKey);
-        if (!isSigTwoValid) return { success: false, message: '❌ VERDICT: FORGERY (Not issued by this Guardian)' };
-
-        // Transaction signature verification would happen here during a real P2P exchange,
-        // where the recipient has the sender's public key to check the `txs` field.
-        
-        let ownershipInfo = `<hr><span class="info">OWNERSHIP DETAILS:</span>\n`;
-        ownershipInfo += `<span>Current Owner Public Key: <code style="font-size:11px;">${Utils.arrayBufferToBase64(parsedData.ownerPublicKey).substring(0, 64)}...</code></span>\n`;
-        if (parsedData.lastTxSignature) {
-            ownershipInfo += `<span class="valid">✅ This note has been transferred at least once.</span>`;
-        } else {
-            ownershipInfo += `<span class="info">ℹ️ This note is in its original state from the Guardian.</span>`;
-        }
-
-        return {
-            success: true,
-            message: `✅ VERDICT: BANKNOTE IS AUTHENTIC.\n${ownershipInfo}`,
-            data: parsedData // Return the full data for use in the transfer function
-        };
-    }
-
+    // --- Public API ---
     return {
-        createNoteData,
-        handleTransfer,
-        performValidation
+        async initialize() {
+            if (!falconApi) {
+                falconApi = await pqcSignFalcon1024();
+            }
+            return !!falconApi;
+        },
+
+        async generateIdentity() {
+            if (!falconApi) throw new Error("Falcon API not initialized.");
+            return falconApi.keypair();
+        },
+
+        async encryptPrivateKey(privateKey, password) {
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const key = await getPbkdf2Key(password, salt);
+            const encryptedData = await crypto.subtle.encrypt({ name: AES_ALGO, iv }, key, privateKey);
+            return {
+                encryptedKeyB64: arrayBufferToBase64(encryptedData),
+                saltB64: arrayBufferToBase64(salt),
+                ivB64: arrayBufferToBase64(iv),
+            };
+        },
+
+        async decryptPrivateKey(encryptedPayload, password) {
+            const salt = base64ToUint8Array(encryptedPayload.saltB64);
+            const iv = base64ToUint8Array(encryptedPayload.ivB64);
+            const data = base64ToUint8Array(encryptedPayload.encryptedKeyB64);
+            const key = await getPbkdf2Key(password, salt);
+            const decryptedKey = await crypto.subtle.decrypt({ name: AES_ALGO, iv }, key, data);
+            return new Uint8Array(decryptedKey);
+        },
+        
+        async signData(data, privateKey) {
+            if (!falconApi) throw new Error("Falcon API not initialized.");
+            const dataHash = shake256.create().update(JSON.stringify(data)).digest();
+            const { signature } = await falconApi.sign(dataHash, privateKey);
+            return signature;
+        },
+
+        async verifySignature(signature, data, publicKey) {
+            if (!falconApi) throw new Error("Falcon API not initialized.");
+            const dataHash = shake256.create().update(JSON.stringify(data)).digest();
+            return falconApi.verify(signature, dataHash, publicKey);
+        },
+        
+        generateSpendSeed() {
+            return crypto.getRandomValues(new Uint8Array(32)); // 256-bit secret
+        },
+        
+        // Using AES-GCM to encrypt/decrypt the seed with a shared secret derived from Falcon keys
+        // NOTE: In a real-world scenario, a proper key exchange like Kyber would be used.
+        // For this self-contained demo, we simulate it with a simple hash.
+        async encryptSeed(seed, recipientPublicKey) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            // Simulate a shared secret. THIS IS NOT SECURE FOR PRODUCTION.
+            const sharedSecretHash = shake256.create().update(recipientPublicKey).digest();
+            const key = await crypto.subtle.importKey("raw", sharedSecretHash.slice(0,32), { name: AES_ALGO }, false, ["encrypt"]);
+            const encryptedSeed = await crypto.subtle.encrypt({ name: AES_ALGO, iv }, key, seed);
+            return JSON.stringify({
+                iv: arrayBufferToBase64(iv),
+                data: arrayBufferToBase64(encryptedSeed)
+            });
+        },
+
+        async decryptSeed(encryptedSeedPayload, ownPrivateKey) {
+            const payload = JSON.parse(encryptedSeedPayload);
+            const iv = base64ToUint8Array(payload.iv);
+            const data = base64ToUint8Array(payload.data);
+            const publicKey = (await falconApi.keypairFromPrivateKey(ownPrivateKey)).publicKey;
+            const sharedSecretHash = shake256.create().update(publicKey).digest();
+            const key = await crypto.subtle.importKey("raw", sharedSecretHash.slice(0,32), { name: AES_ALGO }, false, ["decrypt"]);
+            const decryptedSeed = await crypto.subtle.decrypt({ name: AES_ALGO, iv }, key, data);
+            return new Uint8Array(decryptedSeed);
+        },
+
+        utils: { arrayBufferToBase64, base64ToUint8Array }
     };
 })();
 
 
-// --- UI HANDLERS (Simplified and Role-Based) ---
-const UIHandlers = {
-    // ... Simplified and combined handlers for generating keys, loading keys, and reconstructing for both roles ...
-};
+// ===================================================================================
+// 2. WALLET & DATA MANAGER
+// ===================================================================================
+const WalletManager = (() => {
+    const IDENTITY_KEY = 'sadat_wallet_identity';
+    const NOTES_KEY = 'sadat_wallet_notes';
+    let identity = null;
+    let notes = [];
 
-// --- BANKNOTE DRAWER (Unchanged) ---
-const BanknoteDrawer = { /* ... No changes ... */ };
+    return {
+        load() {
+            const idData = localStorage.getItem(IDENTITY_KEY);
+            const notesData = localStorage.getItem(NOTES_KEY);
+            if (idData) identity = JSON.parse(idData);
+            if (notesData) notes = JSON.parse(notesData);
+            return !!identity;
+        },
 
-// --- APPLICATION INITIALIZATION ---
-async function main() {
-    // ... module loading and event listener setup for all the new and modified elements ...
-    // This part connects the UI buttons to the logic functions defined above.
-}
+        saveIdentity(id) {
+            identity = id;
+            localStorage.setItem(IDENTITY_KEY, JSON.stringify(id));
+        },
+        
+        saveNotes() {
+            localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+        },
 
-main();
+        getIdentity: () => identity,
+        getNotes: () => notes,
+        
+        addNote(note) {
+            notes.push(note);
+            this.saveNotes();
+        },
+
+        removeNote(serial) {
+            notes = notes.filter(n => n.serial !== serial);
+            this.saveNotes();
+        },
+
+        getNoteBySerial(serial) {
+            return notes.find(n => n.serial === serial);
+        },
+
+        eraseAll() {
+            identity = null;
+            notes = [];
+            localStorage.removeItem(IDENTITY_KEY);
+            localStorage.removeItem(NOTES_KEY);
+        }
+    };
+})();
+
+// ===================================================================================
+// 3. UI MANAGER
+// ===================================================================================
+const UIManager = (() => {
+    const DOMElements = {
+        walletNotes: document.getElementById('wallet-notes'),
+        sendBtn: document.getElementById('send-btn'),
+        receiveBtn: document.getElementById('receive-btn'),
+        mintSection: document.getElementById('mint-section'),
+        identitySection: document.getElementById('identity-section'),
+        mintAmountInput: document.getElementById('mint-amount-input'),
+        mintBtn: document.getElementById('mint-btn'),
+        resetIdentityBtn: document.getElementById('reset-identity-btn'),
+        identityModal: document.getElementById('identity-creation-modal'),
+        identityPasswordInput: document.getElementById('identity-password'),
+        createIdentityBtn: document.getElementById('create-identity-btn'),
+        passwordModal: document.getElementById('password-prompt-modal'),
+        passwordModalTitle: document.getElementById('password-prompt-title'),
+        passwordModalText: document.getElementById('password-prompt-text'),
+        passwordInput: document.getElementById('action-password'),
+        passwordConfirmBtn: document.getElementById('password-confirm-btn'),
+        passwordCancelBtn: document.getElementById('password-cancel-btn'),
+        transferModal: document.getElementById('transfer-modal'),
+        transferTitle: document.getElementById('transfer-title'),
+        transferStatus: document.getElementById('transfer-status'),
+        transferCancelBtn: document.getElementById('transfer-cancel-btn'),
+        qrCodeDisplay: document.getElementById('qr-code-display'),
+        videoFeed: document.getElementById('video-feed'),
+        spinner: document.querySelector('.modal-spinner'),
+    };
+
+    let selectedNoteSerial = null;
+    let passwordResolver = null;
+    let videoStream = null;
+
+    const showModal = (modal) => modal.style.display = 'flex';
+    const hideModal = (modal) => modal.style.display = 'none';
+
+    DOMElements.createIdentityBtn.onclick = async () => {
+        const password = DOMElements.identityPasswordInput.value;
+        if (password.length < 8) {
+            alert("Password must be at least 8 characters long.");
+            return;
+        }
+        DOMElements.createIdentityBtn.disabled = true;
+        DOMElements.createIdentityBtn.innerText = 'Creating...';
+        
+        const keyPair = await CryptoEngine.generateIdentity();
+        const encryptedPayload = await CryptoEngine.encryptPrivateKey(keyPair.privateKey, password);
+        
+        WalletManager.saveIdentity({
+            publicKeyB64: CryptoEngine.utils.arrayBufferToBase64(keyPair.publicKey),
+            encryptedPrivateKeyPayload: encryptedPayload
+        });
+        
+        hideModal(DOMElements.identityModal);
+        App.init();
+    };
+
+    DOMElements.passwordConfirmBtn.onclick = () => {
+        if (passwordResolver) {
+            passwordResolver(DOMElements.passwordInput.value);
+            passwordResolver = null;
+        }
+        DOMElements.passwordInput.value = '';
+        hideModal(DOMElements.passwordModal);
+    };
+
+    DOMElements.passwordCancelBtn.onclick = () => {
+        if (passwordResolver) {
+            passwordResolver(null); // Resolve with null on cancel
+            passwordResolver = null;
+        }
+        DOMElements.passwordInput.value = '';
+        hideModal(DOMElements.passwordModal);
+    };
+    
+    return {
+        DOMElements,
+        
+        renderWallet() {
+            const notes = WalletManager.getNotes();
+            DOMElements.walletNotes.innerHTML = '';
+            if (notes.length === 0) {
+                DOMElements.walletNotes.innerHTML = '<div class="wallet-placeholder">Your wallet is empty. Mint a new note to begin.</div>';
+            } else {
+                notes.forEach(note => {
+                    const card = document.createElement('div');
+                    card.className = 'note-card';
+                    card.dataset.serial = note.serial;
+                    card.innerHTML = `
+                        <div>
+                            <div class="note-amount">${note.amount.toLocaleString()}</div>
+                            <div class="note-serial">Serial: ${note.serial}</div>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    `;
+                    card.onclick = () => {
+                        document.querySelectorAll('.note-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        selectedNoteSerial = note.serial;
+                        DOMElements.sendBtn.disabled = false;
+                    };
+                    DOMElements.walletNotes.appendChild(card);
+                });
+            }
+            DOMElements.sendBtn.disabled = true;
+            selectedNoteSerial = null;
+        },
+
+        showIdentityCreation() {
+            showModal(DOMElements.identityModal);
+        },
+        
+        showMainInterface() {
+            DOMElements.mintSection.style.display = 'block';
+            DOMElements.identitySection.style.display = 'block';
+        },
+        
+        promptForPassword(title, text) {
+            return new Promise(resolve => {
+                passwordResolver = resolve;
+                DOMElements.passwordModalTitle.innerText = title;
+                DOMElements.passwordModalText.innerText = text;
+                showModal(DOMElements.passwordModal);
+            });
+        },
+        
+        showTransferModal(opts) {
+            DOMElements.transferTitle.innerText = opts.title;
+            DOMElements.transferStatus.innerText = opts.status;
+            DOMElements.spinner.style.display = opts.showSpinner ? 'block' : 'none';
+            DOMElements.qrCodeDisplay.style.display = 'none';
+            DOMElements.videoFeed.style.display = 'none';
+            showModal(DOMElements.transferModal);
+        },
+
+        hideTransferModal() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            hideModal(DOMElements.transferModal);
+        },
+        
+        displayQRCode(data) {
+            DOMElements.qrCodeDisplay.innerHTML = '';
+            const qr = qrcode(0, 'L');
+            qr.addData(data);
+            qr.make();
+            DOMElements.qrCodeDisplay.innerHTML = qr.createImgTag(4);
+            DOMElements.qrCodeDisplay.style.display = 'block';
+        },
+        
+        startQRScanner(callback) {
+            DOMElements.videoFeed.style.display = 'block';
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => {
+                videoStream = stream;
+                DOMElements.videoFeed.srcObject = stream;
+                DOMElements.videoFeed.play();
+                requestAnimationFrame(tick);
+            });
+
+            function tick() {
+                if (DOMElements.videoFeed.readyState === DOMElements.videoFeed.HAVE_ENOUGH_DATA) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = DOMElements.videoFeed.videoWidth;
+                    canvas.height = DOMElements.videoFeed.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(DOMElements.videoFeed, 0, 0, canvas.width, canvas.height);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+                    if (code) {
+                        callback(code.data);
+                        return; // Stop scanning
+                    }
+                }
+                if (videoStream) {
+                   requestAnimationFrame(tick);
+                }
+            }
+        },
+        
+        getSelectedNoteSerial: () => selectedNoteSerial
+    };
+})();
+
+// ===================================================================================
+// 4. TRANSFER MANAGER (NFC & QR)
+// ===================================================================================
+const TransferManager = (() => {
+    let nfcController = null;
+
+    const isNfcSupported = () => 'NDEFReader' in window;
+
+    return {
+        async send(payload) {
+             return new Promise(async (resolve, reject) => {
+                const transferPayload = JSON.stringify(payload);
+                
+                if (isNfcSupported()) {
+                    try {
+                        const ndef = new NDEFReader();
+                        UIManager.DOMElements.transferCancelBtn.onclick = () => {
+                            nfcController.abort();
+                            reject(new Error("Transfer cancelled by user."));
+                        };
+                        UIManager.showTransferModal({
+                           title: "Ready to Send",
+                           status: "Bring the recipient's device close to yours to initiate NFC transfer.",
+                           showSpinner: true
+                        });
+                        await ndef.write(transferPayload);
+                        resolve({ method: "NFC" });
+                    } catch (error) {
+                         // Fallback to QR code if NFC fails or is cancelled
+                        UIManager.showTransferModal({
+                           title: "NFC Failed. Use QR Code.",
+                           status: "Ask the recipient to scan this QR code with their wallet.",
+                           showSpinner: false
+                        });
+                        UIManager.displayQRCode(transferPayload);
+                        // Here, we just display. The transaction completes when the other party scans.
+                        // For this demo, we can't automatically know when it's scanned.
+                        UIManager.DOMElements.transferCancelBtn.onclick = () => {
+                             reject(new Error("Transfer cancelled."));
+                        }
+                    }
+                } else {
+                    // Directly go to QR code if NFC is not supported
+                    UIManager.showTransferModal({
+                       title: "Ready to Send via QR",
+                       status: "Ask the recipient to scan this QR code with their wallet.",
+                       showSpinner: false
+                    });
+                    UIManager.displayQRCode(transferPayload);
+                     UIManager.DOMElements.transferCancelBtn.onclick = () => {
+                         reject(new Error("Transfer cancelled."));
+                    }
+                }
+            });
+        },
+
+        async receive() {
+            return new Promise(async (resolve, reject) => {
+                UIManager.DOMElements.transferCancelBtn.onclick = () => {
+                    if (nfcController) nfcController.abort();
+                    reject(new Error("Receive cancelled."));
+                };
+                
+                if (isNfcSupported()) {
+                    try {
+                        const ndef = new NDEFReader();
+                        nfcController = new AbortController();
+                        UIManager.showTransferModal({
+                           title: "Ready to Receive",
+                           status: "Listening for NFC transfer... Or scan a QR code.",
+                           showSpinner: true
+                        });
+                        
+                        ndef.onreading = event => {
+                            const decoder = new TextDecoder();
+                            const payload = decoder.decode(event.message.records[0].data);
+                            resolve(JSON.parse(payload));
+                        };
+                        
+                        await ndef.scan({ signal: nfcController.signal });
+                    } catch (error) {
+                        UIManager.showTransferModal({
+                           title: "NFC Error. Scan QR.",
+                           status: "Point your camera at the sender's QR code.",
+                           showSpinner: false
+                        });
+                        UIManager.startQRScanner((data) => resolve(JSON.parse(data)));
+                    }
+                } else {
+                     UIManager.showTransferModal({
+                           title: "Ready to Receive via QR",
+                           status: "Point your camera at the sender's QR code.",
+                           showSpinner: false
+                        });
+                    UIManager.startQRScanner((data) => resolve(JSON.parse(data)));
+                }
+            });
+        }
+    };
+})();
+
+// ===================================================================================
+// 5. MAIN APPLICATION LOGIC
+// ===================================================================================
+const App = (() => {
+
+    const createBanknoteObject = async (amount, guardianIdentity) => {
+        const serial = 'S' + Date.now().toString().slice(-8) + Math.random().toString(36).substring(2, 6).toUpperCase();
+        const spendSeed = CryptoEngine.generateSpendSeed();
+        
+        const noteData = {
+            serial,
+            amount,
+            guardianPublicKeyB64: guardianIdentity.publicKeyB64,
+        };
+
+        const signature = await CryptoEngine.signData(noteData, guardianIdentity.decryptedPrivateKey);
+
+        return {
+            ...noteData,
+            signatureB64: CryptoEngine.utils.arrayBufferToBase64(signature),
+            currentOwnerPublicKeyB64: guardianIdentity.publicKeyB64,
+            spendSeedEncryptedPayload: await CryptoEngine.encryptSeed(spendSeed, CryptoEngine.utils.base64ToUint8Array(guardianIdentity.publicKeyB64))
+        };
+    };
+
+    const handleMint = async () => {
+        const amount = parseInt(UIManager.DOMElements.mintAmountInput.value);
+        if (isNaN(amount) || amount <= 0) {
+            alert("Please enter a valid amount.");
+            return;
+        }
+
+        const password = await UIManager.promptForPassword("Mint Note", `Enter your password to authorize minting a note of ${amount.toLocaleString()}.`);
+        if (!password) return;
+
+        try {
+            const identity = WalletManager.getIdentity();
+            const decryptedPrivateKey = await CryptoEngine.decryptPrivateKey(identity.encryptedPrivateKeyPayload, password);
+            const guardianIdentity = { ...identity, decryptedPrivateKey };
+            
+            const newNote = await createBanknoteObject(amount, guardianIdentity);
+            
+            WalletManager.addNote(newNote);
+            UIManager.renderWallet();
+            alert(`Successfully minted banknote with serial ${newNote.serial}.`);
+
+        } catch (e) {
+            alert("Minting failed. Incorrect password or cryptographic error.");
+            console.error(e);
+        }
+    };
+
+    const handleSend = async () => {
+        const serial = UIManager.getSelectedNoteSerial();
+        if (!serial) {
+            alert("Please select a banknote to send.");
+            return;
+        }
+        
+        const noteToSend = WalletManager.getNoteBySerial(serial);
+
+        const password = await UIManager.promptForPassword("Send Banknote", `Enter password to send the note for ${noteToSend.amount.toLocaleString()}.`);
+        if (!password) return;
+
+        try {
+            // 1. Decrypt sender's private key
+            const identity = WalletManager.getIdentity();
+            const decryptedPrivateKey = await CryptoEngine.decryptPrivateKey(identity.encryptedPrivateKeyPayload, password);
+
+            // 2. Decrypt the ONE-TIME spend seed
+            const spendSeed = await CryptoEngine.decryptSeed(noteToSend.spendSeedEncryptedPayload, decryptedPrivateKey);
+            
+            // This is the "Spend-and-Burn" key. We'll use the private key to sign, but conceptually, possession of the seed allows it.
+            // A more complex implementation would derive a one-time key from the seed.
+            
+            // 3. Initiate transfer to get recipient's public key
+            const recipientData = await TransferManager.receive(); // A bit of a hack: receiver starts first
+            const recipientPublicKeyB64 = recipientData.publicKeyB64;
+            
+            // 4. Create the NEW banknote state for the recipient
+            const newSpendSeed = CryptoEngine.generateSpendSeed();
+            const newNoteState = {
+                ...noteToSend,
+                currentOwnerPublicKeyB64: recipientPublicKeyB64,
+                spendSeedEncryptedPayload: await CryptoEngine.encryptSeed(newSpendSeed, CryptoEngine.utils.base64ToUint8Array(recipientPublicKeyB64))
+            };
+            
+            // The signature proves the transition from the old state to new state.
+            const spendSignature = await CryptoEngine.signData({ from: noteToSend, to: newNoteState }, decryptedPrivateKey);
+
+            const finalPayload = {
+                note: newNoteState,
+                spendSignatureB64: CryptoEngine.utils.arrayBufferToBase64(spendSignature)
+            };
+            
+            // 5. Send the new banknote state
+            await TransferManager.send(finalPayload);
+            
+            // 6. The "BURN" step: remove the note from our wallet
+            WalletManager.removeNote(serial);
+            UIManager.renderWallet();
+            
+            UIManager.hideTransferModal();
+            alert("Banknote sent successfully!");
+
+        } catch (e) {
+            UIManager.hideTransferModal();
+            alert(`Send failed: ${e.message}`);
+            console.error(e);
+        }
+    };
+    
+    const handleReceive = async () => {
+        try {
+             const identity = WalletManager.getIdentity();
+             const payload = { publicKeyB64: identity.publicKeyB64 };
+
+             // Announce our public key so the sender can get it
+             // This is simplified. The sender would start a receive-like process first.
+             const transferPromise = TransferManager.receive();
+             await TransferManager.send(payload); // Send our public key
+             
+             const receivedData = await transferPromise;
+
+            // Verification
+            const { note, spendSignatureB64 } = receivedData;
+            const guardianPublicKey = CryptoEngine.utils.base64ToUint8Array(note.guardianPublicKeyB64);
+            const spendSignature = CryptoEngine.utils.base64ToUint8Array(spendSignatureB64);
+            
+            // 1. Verify the original guardian signature
+            const coreNoteData = { serial: note.serial, amount: note.amount, guardianPublicKeyB64: note.guardianPublicKeyB64 };
+            const isGuardianSigValid = await CryptoEngine.verifySignature(CryptoEngine.utils.base64ToUint8Array(note.signatureB64), coreNoteData, guardianPublicKey);
+            if (!isGuardianSigValid) throw new Error("Guardian signature is invalid! This is a forged banknote.");
+
+            // 2. Check if we are the new owner
+            if (note.currentOwnerPublicKeyB64 !== identity.publicKeyB64) {
+                throw new Error("This banknote was not addressed to you.");
+            }
+            
+            // 3. Add to wallet
+            WalletManager.addNote(note);
+            UIManager.renderWallet();
+            UIManager.hideTransferModal();
+            alert(`Successfully received banknote for ${note.amount.toLocaleString()}`);
+
+        } catch (e) {
+             UIManager.hideTransferModal();
+             alert(`Receive failed: ${e.message}`);
+             console.error(e);
+        }
+    };
+    
+    return {
+        async init() {
+            try {
+                await CryptoEngine.initialize();
+            } catch (e) {
+                document.body.innerHTML = "<h1>Critical Error</h1><p>Could not load cryptographic modules. This application cannot run.</p>";
+                return;
+            }
+            
+            if (WalletManager.load()) {
+                UIManager.renderWallet();
+                UIManager.showMainInterface();
+            } else {
+                UIManager.showIdentityCreation();
+            }
+
+            // Attach event listeners
+            UIManager.DOMElements.mintBtn.addEventListener('click', handleMint);
+            UIManager.DOMElements.sendBtn.addEventListener('click', handleReceive); // Receiver must start first
+            UIManager.DOMElements.receiveBtn.addEventListener('click', handleSend);
+            UIManager.DOMElements.resetIdentityBtn.addEventListener('click', () => {
+                if(confirm("Are you sure? This will permanently erase your keys and all banknotes in this wallet.")) {
+                    WalletManager.eraseAll();
+                    window.location.reload();
+                }
+            });
+            UIManager.DOMElements.transferCancelBtn.addEventListener('click', UIManager.hideTransferModal);
+        }
+    };
+})();
+
+// --- Start the application ---
+window.onload = App.init;
+
 </script>
 </body>
 </html>
