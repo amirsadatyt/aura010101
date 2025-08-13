@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/base45@2.0.1/dist/base45.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
@@ -77,8 +78,6 @@
 // --- DEPENDENCIES ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-// ADDED: Import base45 library to fix "base45 is not defined" error.
-import base45 from 'https://cdn.skypack.dev/base45';
 
 // --- Global State ---
 const state = {
@@ -393,13 +392,11 @@ const BanknoteLogic = (() => {
         const payload = { a: noteData.amount, s: noteData.serial, t: noteData.timestamp, epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne), s2: Utils.arrayBufferToBase64(noteData.signatureTwo) };
         const jsonString = JSON.stringify(payload);
         const compressedData = pako.deflate(jsonString);
-        // FIXED: Use base45.encode instead of a base64 function
-        return base45.encode(compressedData);
+        return base45.encode(compressedData); // MODIFIED: Use Base45
     };
 
     const parseUnifiedVerificationPayload = (base45String) => {
-        // FIXED: Use base45.decode instead of a base64 function
-        const compressedData = base45.decode(base45String); 
+        const compressedData = base45.decode(base45String); // MODIFIED: Use Base45
         const jsonString = pako.inflate(compressedData, { to: 'string' });
         const p = JSON.parse(jsonString);
         return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), signatureOne: Utils.base64ToUint8Array(p.s1), signatureTwo: Utils.base64ToUint8Array(p.s2) };
@@ -482,7 +479,6 @@ const BanknoteLogic = (() => {
         }
     };
     
-    // FIXED: Replaced the entire function with the robust "Iterative Scan & Erase" method.
     async function decodeAllQrCodesFromImage(file) {
         Utils.updateStatus(DOMElements.validationResult, '⏳ Pre-processing image for accuracy...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
@@ -501,41 +497,33 @@ const BanknoteLogic = (() => {
         const mainCtx = mainCanvas.getContext('2d');
         mainCtx.drawImage(img, 0, 0);
 
+        const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
         const allDecodedData = [];
-        const foundPayloads = new Set(); // Use a Set to avoid processing duplicate QR codes
+        
+        // This is the "Exact Location Scan"
+        for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
+            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
+            const row = Math.floor(i / 3);
+            const col = i % 3;
+            
+            const regionX = Math.round(layout.grid.startX + col * (layout.qrSize + layout.xSpacing));
+            const regionY = Math.round(layout.grid.startY + row * (layout.qrSize + layout.ySpacing));
+            const regionSize = Math.round(layout.qrSize);
+            
+            // Create a small, temporary canvas for the isolated QR code region
+            const regionCanvas = document.createElement('canvas');
+            regionCanvas.width = regionSize;
+            regionCanvas.height = regionSize;
+            const regionCtx = regionCanvas.getContext('2d');
+            regionCtx.drawImage(mainCanvas, regionX, regionY, regionSize, regionSize, 0, 0, regionSize, regionSize);
+            const imageData = regionCtx.getImageData(0, 0, regionSize, regionSize);
 
-        // Iteratively find, log, and erase QR codes
-        // Loop a few extra times just in case of read errors on erased codes
-        for (let attempt = 0; attempt < Constants.NUM_QR_CODES + 3; attempt++) {
-            if (foundPayloads.size >= Constants.NUM_QR_CODES) break; // Exit if we have all 9
-
-            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning... Found ${foundPayloads.size}/${Constants.NUM_QR_CODES} unique codes.`, 'info');
-
-            const imageData = mainCtx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: "dontInvert", // Optimization
-            });
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
 
             if (code && code.data) {
-                // If the payload is new, add it to our results
-                if (!foundPayloads.has(code.data)) {
-                    foundPayloads.add(code.data);
-                    allDecodedData.push({ data: code.data });
-                }
-
-                // Erase the found QR code so it won't be found again in the next iteration
-                const loc = code.location;
-                const padding = 10; // Padding to ensure complete erasure
-                const x = loc.topLeftCorner.x - padding;
-                const y = loc.topLeftCorner.y - padding;
-                const width = loc.topRightCorner.x - loc.topLeftCorner.x + (padding * 2);
-                const height = loc.bottomLeftCorner.y - loc.topLeftCorner.y + (padding * 2);
-                mainCtx.fillStyle = "black"; // Color doesn't matter, just needs to destroy the pattern
-                mainCtx.fillRect(x, y, width, height);
-
+                allDecodedData.push({ data: code.data });
             } else {
-                // No more QR codes can be found on the canvas, so stop searching.
-                break;
+                 console.warn(`Could not decode QR in zone ${i + 1}.`);
             }
         }
 
@@ -739,20 +727,12 @@ async function main() {
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
     DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
     
-    // FIXED: This now downloads the Visual Key QR code as a proper .png file.
     DOMElements.downloadJabButton.addEventListener('click', () => {
         const img = DOMElements.jabDisplay.querySelector('img');
         if (img) {
-            // To ensure PNG format, draw the image to a canvas and get the data URL from there.
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            
             const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png'); // Force PNG format
-            a.download = 'Sadat-VISUAL-KEY.png'; // Use .png extension
+            a.href = img.src;
+            a.download = 'Sadat-VISUAL-KEY.png';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
