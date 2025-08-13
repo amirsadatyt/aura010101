@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/base45@2.0.1/dist/base45.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
@@ -194,10 +195,10 @@ const Utils = {
         });
     },
     async createQrCodeImage(payload) {
-        const qr = qrcode(0, 'L'); // Auto-detect typeNumber, set Error Correction to Low
+        const qr = qrcode(0, 'L'); 
         qr.addData(payload);
         qr.make();
-        const dataUrl = qr.createDataURL(10, 5); // 10px modules, 5-module margin
+        const dataUrl = qr.createDataURL(10, 5);
         const img = new Image();
         img.src = dataUrl;
         await new Promise((resolve, reject) => {
@@ -391,11 +392,11 @@ const BanknoteLogic = (() => {
         const payload = { a: noteData.amount, s: noteData.serial, t: noteData.timestamp, epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne), s2: Utils.arrayBufferToBase64(noteData.signatureTwo) };
         const jsonString = JSON.stringify(payload);
         const compressedData = pako.deflate(jsonString);
-        return Utils.arrayBufferToBase64(compressedData);
+        return base45.encode(compressedData); // MODIFIED: Use Base45
     };
 
-    const parseUnifiedVerificationPayload = (base64CompressedString) => {
-        const compressedData = Utils.base64ToUint8Array(base64CompressedString);
+    const parseUnifiedVerificationPayload = (base45String) => {
+        const compressedData = base45.decode(base45String); // MODIFIED: Use Base45
         const jsonString = pako.inflate(compressedData, { to: 'string' });
         const p = JSON.parse(jsonString);
         return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), signatureOne: Utils.base64ToUint8Array(p.s1), signatureTwo: Utils.base64ToUint8Array(p.s2) };
@@ -478,7 +479,6 @@ const BanknoteLogic = (() => {
         }
     };
     
-    // REWRITTEN to use the "Exact Location Scan" method only.
     async function decodeAllQrCodesFromImage(file) {
         Utils.updateStatus(DOMElements.validationResult, '⏳ Pre-processing image for accuracy...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
@@ -499,7 +499,8 @@ const BanknoteLogic = (() => {
 
         const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
         const allDecodedData = [];
-
+        
+        // This is the "Exact Location Scan"
         for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
             Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
             const row = Math.floor(i / 3);
@@ -509,7 +510,14 @@ const BanknoteLogic = (() => {
             const regionY = Math.round(layout.grid.startY + row * (layout.qrSize + layout.ySpacing));
             const regionSize = Math.round(layout.qrSize);
             
-            const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
+            // Create a small, temporary canvas for the isolated QR code region
+            const regionCanvas = document.createElement('canvas');
+            regionCanvas.width = regionSize;
+            regionCanvas.height = regionSize;
+            const regionCtx = regionCanvas.getContext('2d');
+            regionCtx.drawImage(mainCanvas, regionX, regionY, regionSize, regionSize, 0, 0, regionSize, regionSize);
+            const imageData = regionCtx.getImageData(0, 0, regionSize, regionSize);
+
             const code = jsQR(imageData.data, imageData.width, imageData.height);
 
             if (code && code.data) {
@@ -522,7 +530,7 @@ const BanknoteLogic = (() => {
         if (allDecodedData.length > 0) {
             return allDecodedData;
         } else {
-            throw new Error("Validation Failed. No QR codes found at exact locations. Tip: Use a flat, well-lit photo.");
+            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
         }
     }
 
