@@ -2,7 +2,7 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote - GUARDIAN ISSUER</title>
+    <title>Sadat Digital Banknote - USER WALLET</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
@@ -10,111 +10,108 @@
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-
-    <style>
-        :root {
-            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
-            --mono-font: 'Roboto Mono', monospace;
-            --dark-bg: #10101a;
-            --medium-bg: #1a1a2e;
-            --light-bg: #2a2a3e;
-            --accent-color-1: #e040fb;
-            --accent-color-2: #7c4dff;
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0c0;
-            --success-color: #00e676;
-            --error-color: #ff5252;
-            --info-color: #40c4ff;
-            --warning-color: #ffab40;
-            --border-color: rgba(124, 77, 255, 0.2);
-        }
-        body { margin: 0; font-family: var(--primary-font); background-color: var(--dark-bg); color: var(--text-color); text-align: center; padding: 24px; }
-        .container { max-width: 1200px; margin: 0 auto; background: rgba(26, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); }
-        h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .header p { font-size: 1rem; color: var(--text-muted); margin: 0; }
-        canvas#noteCanvas { border-radius: 16px; margin-top: 24px; background: #050508; width: 100%; max-width: 1200px; height: auto; border: 1px solid var(--border-color); }
-        input, button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-        button:not([disabled]) { font-weight: 600; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); border: none; }
-        button:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); }
-        .section { background: rgba(16, 16, 26, 0.5); padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); }
-        h2 { font-size: 1.5rem; color: var(--text-color); margin-top: 0; margin-bottom: 20px; font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .status-box { margin-top: 20px; font-size: 13px; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); border: 1px solid var(--border-color); }
-        .valid { color: var(--success-color); } .invalid { color: var(--error-color); } .info { color: var(--info-color); } .warning { color: var(--warning-color); }
-    </style>
 </head>
+<style>
+    :root { --primary-font: 'Poppins', 'Segoe UI', sans-serif; --mono-font: 'Roboto Mono', monospace; --dark-bg: #1a101a; --medium-bg: #2e1a2e; --light-bg: #3e2a3e; --accent-color-1: #00e676; --accent-color-2: #40c4ff; --text-color: #e0e0e0; --text-muted: #a0a0c0; --success-color: #00e676; --error-color: #ff5252; --info-color: #40c4ff; --warning-color: #ffab40; --border-color: rgba(0, 230, 118, 0.2); }
+    body { margin: 0; font-family: var(--primary-font); background-color: var(--dark-bg); color: var(--text-color); text-align: center; padding: 24px; }
+    .container { max-width: 800px; margin: 0 auto; background: rgba(46, 26, 46, 0.7); backdrop-filter: blur(12px); padding: 24px; border-radius: 24px; border: 1px solid var(--border-color); }
+    h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    button, label.button { padding: 14px 22px; font-size: 16px; border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; }
+    button.primary { font-weight: 600; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); border: none; }
+    button:hover, label.button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 230, 118, 0.2); }
+    .section { background: rgba(26, 16, 26, 0.5); padding: 20px; margin-top: 30px; border-radius: 16px; border: 1px solid var(--border-color); }
+    h2 { font-size: 1.5rem; margin-top: 0; }
+    .status-box { margin-top: 20px; font-size: 14px; min-height: 50px; line-height: 1.6; text-align: left; background: var(--dark-bg); padding: 15px 20px; border-radius: 12px; white-space: pre-wrap; font-family: var(--mono-font); border: 1px solid var(--border-color); }
+    .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); align-items: center; justify-content: center; flex-direction: column; }
+    .modal-content { background-color: var(--medium-bg); padding: 30px; border: 1px solid var(--border-color); width: 90%; max-width: 500px; border-radius: 16px; text-align: center; }
+    #qr-display { margin: 20px auto; background: white; padding: 15px; border-radius: 8px; width: fit-content; }
+    .hidden { display: none; }
+    .valid { color: var(--success-color); } .invalid { color: var(--error-color); } .info { color: var(--info-color); } .warning { color: var(--warning-color); }
+</style>
 <body>
 <div class="container">
-    <div class="header"><h1>Sadat Digital Banknote</h1><p>Guardian Issuance & Verification Terminal</p></div>
-    <div class="section"><h2><span style="color:var(--accent-color-1)">Step 1:</span> Guardian Setup</h2><button id="generate-keys-button">🔑 Generate Master Key Pair</button><label for="import-public-key" class="button">📥 Load Public Key</label><input type="file" id="import-public-key" accept=".json" style="display: none;"><div id="key-gen-status" class="status-box info">ℹ️ Generate a new Master Key Pair or load an existing public key.</div></div>
-    <div class="section"><h2><span style="color:var(--accent-color-1)">Step 2:</span> Activate Private Key</h2><div style="display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:10px;"><label for="file-key-input" class="button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key" style="width:200px;text-align:center;"><label for="visual-key-input" class="button">3. Upload Visual Key (QR)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top:20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box warning">⚠️ Master Private Key is INACTIVE.</div></div>
-    <div class="section"><h2><span style="color:var(--accent-color-1)">Step 3:</span> Create Banknotes</h2><div style="display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:10px;"><input type="number" id="amount-input" value="50000" style="width:150px;"> <button id="create-note-button" disabled>🎨 Create Single Banknote & Initial Spend Key</button></div><div id="banknote-status" class="status-box">Activate your private key to create new banknotes.</div><canvas id="noteCanvas" width="1200" height="1000"></canvas></div>
-    <div class="section"><h2><span style="color:var(--accent-color-1)">Step 4:</span> Verify Authenticity</h2><label for="validator-input" class="button">📂 Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
+    <h1>User Wallet</h1>
+    <div class="section" id="wallet-setup">
+        <h2>Wallet Setup</h2>
+        <label for="load-note-image" class="button">1. Load Banknote Image (.png)</label>
+        <input type="file" id="load-note-image" class="hidden" accept="image/png">
+        <label for="load-spend-key" class="button">2. Load Spend Key (.json)</label>
+        <input type="file" id="load-spend-key" class="hidden" accept="application/json">
+        <div id="setup-status" class="status-box warning">⚠️ Please load a banknote and its corresponding spend key.</div>
+    </div>
+
+    <div class="section hidden" id="wallet-main">
+        <h2>Banknote Details</h2>
+        <p>Serial: <strong id="note-serial"></strong></p>
+        <p style="font-size: 2rem; font-family: var(--mono-font);">Amount: <strong id="note-amount"></strong></p>
+        <hr style="border-color: var(--border-color); margin: 20px 0;">
+        <button id="send-btn" class="primary">💸 Send</button>
+        <button id="receive-btn" class="primary">💰 Receive</button>
+        <div id="tx-status" class="status-box info">ℹ️ Ready to transact.</div>
+    </div>
 </div>
-<div id="jab-modal" class="modal" style="display:none; position:fixed; z-index:100; left:0; top:0; width:100%; height:100%; overflow:auto; background-color:rgba(0,0,0,0.8); align-items:center; justify-content:center;"><div class="modal-content" style="background-color: var(--medium-bg); padding: 30px; border: 1px solid var(--border-color); width: 80%; max-width: 500px; border-radius: 16px; text-align: center;"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print or save this QR Code. It is the third piece of your Master Key.</p><div id="jab-display" style="margin: 20px auto; background: white; padding: 15px; border-radius: 8px; width: fit-content;"></div><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
+
+<div id="tx-modal" class="modal">
+    <div class="modal-content">
+        <h2 id="modal-title"></h2>
+        <p id="modal-instruction"></p>
+        <div id="qr-display"></div>
+        <div id="modal-input-area"></div>
+        <button id="modal-cancel-btn">Cancel</button>
+    </div>
+</div>
 
 <script type="module">
 // --- DEPENDENCIES (Keep these locally for full offline use) ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import { shake256, sha3_256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
 const state = {
     falconApi: null,
-    masterPublicKey: null,
-    masterPrivateKey: null,
-    puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null }
+    noteData: null,
+    spendPrivateKey: null,
 };
 
 // --- CONSTANTS ---
 const Constants = {
-    FALCON_PUBKEY_SIZE: 1793,
-    EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
     VALIDATION_PREFIX: "SADAT_V3_PART",
     NUM_QR_CODES: 9
 };
 
 // --- DOM Elements ---
 const DOMElements = {
-    generateKeysButton: document.getElementById('generate-keys-button'),
-    importPublicKey: document.getElementById('import-public-key'),
-    keyGenStatus: document.getElementById('key-gen-status'),
-    fileKeyInput: document.getElementById('file-key-input'),
-    passwordKeyInput: document.getElementById('password-key-input'),
-    visualKeyInput: document.getElementById('visual-key-input'),
-    reconstructKeyButton: document.getElementById('reconstruct-key-button'),
-    keyReconstructionStatus: document.getElementById('key-reconstruction-status'),
-    amountInput: document.getElementById('amount-input'),
-    createNoteButton: document.getElementById('create-note-button'),
-    noteCanvas: document.getElementById('noteCanvas'),
-    banknoteStatus: document.getElementById('banknote-status'),
-    validatorInput: document.getElementById('validator-input'),
-    validationResult: document.getElementById('validation-result'),
-    jabModal: document.getElementById('jab-modal'),
-    jabDisplay: document.getElementById('jab-display'),
-    jabModalTitle: document.getElementById('jab-modal-title')
+    loadNoteImage: document.getElementById('load-note-image'),
+    loadSpendKey: document.getElementById('load-spend-key'),
+    setupStatus: document.getElementById('setup-status'),
+    walletSetup: document.getElementById('wallet-setup'),
+    walletMain: document.getElementById('wallet-main'),
+    noteSerial: document.getElementById('note-serial'),
+    noteAmount: document.getElementById('note-amount'),
+    sendBtn: document.getElementById('send-btn'),
+    receiveBtn: document.getElementById('receive-btn'),
+    txStatus: document.getElementById('tx-status'),
+    txModal: document.getElementById('tx-modal'),
+    modalTitle: document.getElementById('modal-title'),
+    modalInstruction: document.getElementById('modal-instruction'),
+    qrDisplay: document.getElementById('qr-display'),
+    modalInputArea: document.getElementById('modal-input-area'),
+    modalCancelBtn: document.getElementById('modal-cancel-btn')
 };
 
-// --- Utility Functions ---
+// --- Utility and Crypto Functions ---
 const Utils = {
     arrayBufferToBase64: (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))),
     base64ToUint8Array: (base64) => Uint8Array.from(atob(base64), c => c.charCodeAt(0)),
     hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
-    downloadFile: (data, filename, type) => {
-        const blob = new Blob([data], { type });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
-    },
     updateStatus: (element, message, type = 'info') => {
         element.innerHTML = `<span class="${type}">${message}</span>`;
     },
     async createQrCodeImage(payload) {
-        const qr = qrcode(0, 'L');
+        const qr = qrcode(0, 'M');
         qr.addData(payload);
         qr.make();
-        const gifDataUrl = qr.createDataURL(10, 5);
+        const gifDataUrl = qr.createDataURL(8, 4);
         const img = new Image();
         img.src = gifDataUrl;
         await new Promise(resolve => { img.onload = resolve; });
@@ -141,364 +138,278 @@ const Utils = {
     }
 };
 
-// --- CORE CRYPTO ENGINE ---
 const BankCrypto = (() => {
-    const AES_ALGO = "AES-GCM";
-    const PBKDF2_ITERATIONS = 100000;
-    async function pbkdf2DeriveKey(password, salt) {
-        const pwKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
-        return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" }, pwKey, { name: AES_ALGO, length: 256 }, false, ["encrypt", "decrypt"]);
-    }
-    function hashMessageForSigning(message) { return Utils.hexToUint8Array(shake256(message, 1536)); }
+    function hash(message) { return new Uint8Array(sha3_256.arrayBuffer(message)); }
+    function hashForSigning(message) { return Utils.hexToUint8Array(shake256(message, 1536)); }
 
     return {
+        hash,
         generateNewKeyPair: () => state.falconApi.keypair(),
         signData: async (data, privateKey) => {
-            const dataHash = hashMessageForSigning(data);
+            const dataHash = hashForSigning(data);
             const { signature } = await state.falconApi.sign(dataHash, privateKey);
             return signature;
         },
         verifySignature: (signature, data, publicKey) => {
-            const dataHash = hashMessageForSigning(data);
+            const dataHash = hashForSigning(data);
             return state.falconApi.verify(signature, dataHash, publicKey);
         },
-        async encryptMasterKey(masterPrivateKeyBytes, passwordKey, visualKeySecret) {
-            const visualKeySalt = crypto.getRandomValues(new Uint8Array(16));
-            const visualKeyIV = crypto.getRandomValues(new Uint8Array(12));
-            const cryptoVisualKey = await pbkdf2DeriveKey(visualKeySecret, visualKeySalt);
-            const encryptedWithVisual = await crypto.subtle.encrypt({ name: AES_ALGO, iv: visualKeyIV }, cryptoVisualKey, masterPrivateKeyBytes);
-            const intermediatePayload = JSON.stringify({
-                encryptedKey: Utils.arrayBufferToBase64(encryptedWithVisual),
-                salt: Utils.arrayBufferToBase64(visualKeySalt),
-                iv: Utils.arrayBufferToBase64(visualKeyIV)
-            });
-            const passwordSalt = crypto.getRandomValues(new Uint8Array(16));
-            const passwordIV = crypto.getRandomValues(new Uint8Array(12));
-            const cryptoPasswordKey = await pbkdf2DeriveKey(passwordKey, passwordSalt);
-            const finalEncryptedKey = await crypto.subtle.encrypt({ name: AES_ALGO, iv: passwordIV }, cryptoPasswordKey, new TextEncoder().encode(intermediatePayload));
-            return { fileKey: { cipherText: Utils.arrayBufferToBase64(finalEncryptedKey), salt: Utils.arrayBufferToBase64(passwordSalt), iv: Utils.arrayBufferToBase64(passwordIV) } };
+        // Using native SubtleCrypto for encryption
+        async encrypt(data, publicKey) {
+            const importedKey = await crypto.subtle.importKey("raw", publicKey, { name: "ECDH", namedCurve: "P-256" }, true, []);
+            // This is a simplification. Real ECIES would be better.
+            // For prototype, we will just use a fixed IV and derive a key.
+            const sharedSecret = await crypto.subtle.deriveBits({ name: "ECDH", public: importedKey}, await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]), 256);
+            const aesKey = await crypto.subtle.importKey("raw", sharedSecret, "AES-GCM", false, ["encrypt"]);
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encryptedData = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, data);
+            // This is not a complete ECIES implementation. It's a placeholder.
+            // In a real app, a proper ECIES library should be used.
+            return { iv, encryptedData };
         },
-        async reconstructMasterKey(fileKey, passwordKey, visualKeySecret) {
-            const pwSalt = Utils.base64ToUint8Array(fileKey.salt);
-            const pwIV = Utils.base64ToUint8Array(fileKey.iv);
-            const pwCipherText = Utils.base64ToUint8Array(fileKey.cipherText);
-            const cryptoPasswordKey = await pbkdf2DeriveKey(passwordKey, pwSalt);
-            const decryptedIntermediate = await crypto.subtle.decrypt({ name: AES_ALGO, iv: pwIV }, cryptoPasswordKey, pwCipherText);
-            const iPayload = JSON.parse(new TextDecoder().decode(decryptedIntermediate));
-            const visSalt = Utils.base64ToUint8Array(iPayload.salt);
-            const visIV = Utils.base64ToUint8Array(iPayload.iv);
-            const visCipherText = Utils.base64ToUint8Array(iPayload.encryptedKey);
-            const cryptoVisualKey = await pbkdf2DeriveKey(visualKeySecret, visSalt);
-            return new Uint8Array(await crypto.subtle.decrypt({ name: AES_ALGO, iv: visIV }, cryptoVisualKey, visCipherText));
+        // Decrypt is similarly simplified and would need a proper ECIES implementation
+        async decrypt(encryptedPayload, privateKey) {
+             // Placeholder - real implementation needed
+            console.warn("Decryption is a placeholder and not fully implemented.");
+            return new Uint8Array(0); // return empty
         }
     };
 })();
 
-// --- Banknote Creation and Validation Logic ---
-const BanknoteLogic = (() => {
-    // --- Data definition for signing ---
-    const getAuthDataForSig = (noteData) => JSON.stringify({
-        a: noteData.amount,
-        s: noteData.serial,
-        t: noteData.timestamp,
-        spk: noteData.spendPublicKey_b64 // IMPORTANT: spendPublicKey is now part of the core authenticity
-    });
+// --- Wallet Logic ---
+const Wallet = (() => {
 
-    // --- MAIN FUNCTION: Create all data for a new banknote ---
-    const createNoteData = async (amount) => {
-        if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
-
-        // 1. Generate the initial "Soul" of the banknote: the Spend Keypair
-        const spendKeyPair = await BankCrypto.generateNewKeyPair();
-
-        const noteData = {
-            amount: parseInt(amount) || 0,
-            serial: Math.random().toString(36).substring(2, 10).toUpperCase(),
-            timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000),
-            spendPublicKey_b64: Utils.arrayBufferToBase64(spendKeyPair.publicKey),
-            guardianSignature_b64: null,
-            // The spendPrivateKey is NOT stored in the note data. It's kept separate.
-        };
-        
-        // 2. Guardian signs the core data to prove authenticity
-        const dataToSign = getAuthDataForSig(noteData);
-        const signature = await BankCrypto.signData(dataToSign, state.masterPrivateKey);
-        noteData.guardianSignature_b64 = Utils.arrayBufferToBase64(signature);
-
-        // 3. Return both the public note data and the secret spend key
-        return { noteData, spendPrivateKey: spendKeyPair.privateKey };
-    };
-    
-    // --- Data serialization for QR codes ---
-    const createUnifiedPayload = (noteData) => {
-        const jsonString = JSON.stringify(noteData);
-        const compressedData = pako.deflate(jsonString);
-        return Utils.arrayBufferToBase64(compressedData);
-    };
-
-    const parseUnifiedPayload = (base64CompressedString) => {
-        const compressedData = Utils.base64ToUint8Array(base64CompressedString);
-        const jsonString = pako.inflate(compressedData, { to: 'string' });
-        const data = JSON.parse(jsonString);
-        // Add decoded versions for easier use
-        data.spendPublicKey = Utils.base64ToUint8Array(data.spendPublicKey_b64);
-        data.guardianSignature = Utils.base64ToUint8Array(data.guardianSignature_b64);
-        return data;
-    };
-    
-    // --- Main handler for creating and saving a banknote ---
-    async function handleCreateAndSaveNote() {
-        if (!state.masterPrivateKey) { alert("Activate Master Private Key first."); return; }
-        Utils.updateStatus(DOMElements.banknoteStatus, `⏳ Creating banknote and initial spend key...`, 'info');
+    async function loadNote() {
         try {
-            const { noteData, spendPrivateKey } = await createNoteData(DOMElements.amountInput.value);
-            const fullPayload = createUnifiedPayload(noteData);
+            const file = DOMElements.loadNoteImage.files[0];
+            if (!file) return;
 
-            await BanknoteDrawer.drawNoteOnCanvas(DOMElements.noteCanvas, noteData, fullPayload);
-            Utils.updateStatus(DOMElements.banknoteStatus, `✅ Banknote created. Download the image and the initial spend key.`, 'success');
-
-            // Download the banknote image
-            DOMElements.noteCanvas.toBlob(blob => {
-                Utils.downloadFile(blob, `SADAT-NOTE-${noteData.serial}.png`, 'image/png');
-            }, 'image/png');
-
-            // Download the secret spend key
-            const spendKeyFile = {
-                serial: noteData.serial,
-                spendPrivateKey_b64: Utils.arrayBufferToBase64(spendPrivateKey)
-            };
-            Utils.downloadFile(JSON.stringify(spendKeyFile, null, 2), `SPEND-KEY-${noteData.serial}.json`, 'application/json');
-
-        } catch (error) {
-            Utils.updateStatus(DOMElements.banknoteStatus, `❌ Error: ${error.message}`, 'error');
-        } finally {
-            // For security, clear the master key after each use
-            state.masterPrivateKey = null;
-            DOMElements.createNoteButton.disabled = true;
-            DOMElements.passwordKeyInput.value = '';
-            state.puzzlePieces.passwordKey = null;
-            Utils.updateStatus(DOMElements.keyReconstructionStatus, "⚠️ For security, Master Private Key has been cleared from memory. Activate it again to create another note.", 'warning');
-        }
-    };
-
-    // --- Main handler for validating a banknote's authenticity ---
-    async function handleFileSelectForValidation(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        if (!state.masterPublicKey) {
-            Utils.updateStatus(DOMElements.validationResult, '❌ Load a Master Public Key before validating.', 'error');
-            return;
-        }
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Reading banknote image...', 'info');
-        try {
             const banknoteImage = new Image();
             banknoteImage.src = URL.createObjectURL(file);
-            await new Promise(resolve => { banknoteImage.onload = resolve; });
+            await new Promise(r => banknoteImage.onload = r);
 
-            const noteCtx = DOMElements.noteCanvas.getContext('2d');
-            DOMElements.noteCanvas.width = banknoteImage.width;
-            DOMElements.noteCanvas.height = banknoteImage.height;
-            noteCtx.drawImage(banknoteImage, 0, 0);
+            const canvas = document.createElement('canvas');
+            canvas.width = banknoteImage.width;
+            canvas.height = banknoteImage.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(banknoteImage, 0, 0);
 
-            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning for ${Constants.NUM_QR_CODES} QR codes...`, 'info');
-            const layout = BanknoteDrawer.getLayout(banknoteImage.width, banknoteImage.height);
+            const qrSize = 250, xSpacing = 20, ySpacing = 20;
+            const grid = {
+                startX: Math.round((canvas.width - ((qrSize * 3) + (xSpacing * 2))) / 2),
+                startY: Math.round((canvas.height - ((qrSize * 3) + (ySpacing * 2))) / 2)
+            };
+            
             const receivedParts = {};
             let foundCount = 0;
-
             for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-                const row = Math.floor(i / 3);
-                const col = i % 3;
-                const regionX = layout.grid.startX + col * (layout.qrSize + layout.xSpacing);
-                const regionY = layout.grid.startY + row * (layout.qrSize + layout.ySpacing);
-                const imageData = noteCtx.getImageData(regionX, regionY, layout.qrSize, layout.qrSize);
+                const row = Math.floor(i / 3), col = i % 3;
+                const regionX = grid.startX + col * (qrSize + xSpacing);
+                const regionY = grid.startY + row * (qrSize + ySpacing);
+                const imageData = ctx.getImageData(regionX, regionY, qrSize, qrSize);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
                 if (code && code.data.startsWith(Constants.VALIDATION_PREFIX)) {
-                    const payload = code.data.substring(Constants.VALIDATION_PREFIX.length);
-                    const match = payload.match(/^(\d+)\/(\d+):(.*)$/s);
+                    const match = code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
                     if (match) {
                         receivedParts[parseInt(match[1], 10)] = match[3];
                         foundCount++;
                     }
                 }
             }
-
-            if (foundCount < Constants.NUM_QR_CODES) {
-                throw new Error(`Incomplete banknote. Found ${foundCount}/${Constants.NUM_QR_CODES} required QR codes.`);
-            }
+             if (foundCount < Constants.NUM_QR_CODES) throw new Error("Could not read all QR codes from banknote.");
 
             let fullPayloadString = '';
             for (let i = 1; i <= Constants.NUM_QR_CODES; i++) {
                 fullPayloadString += receivedParts[i];
             }
             
-            const parsedData = parseUnifiedPayload(fullPayloadString);
-            const dataForSig = getAuthDataForSig(parsedData);
+            const compressedData = Utils.base64ToUint8Array(fullPayloadString);
+            const jsonString = pako.inflate(compressedData, { to: 'string' });
+            state.noteData = JSON.parse(jsonString);
 
-            const isAuthentic = await BankCrypto.verifySignature(parsedData.guardianSignature, dataForSig, state.masterPublicKey);
-
-            if (isAuthentic) {
-                Utils.updateStatus(DOMElements.validationResult, `✅ VERDICT: BANKNOTE IS AUTHENTIC\nAmount: ${parsedData.amount}\nSerial: ${parsedData.serial}`, 'success');
-            } else {
-                Utils.updateStatus(DOMElements.validationResult, '❌ VERDICT: FORGERY - Guardian signature is invalid.', 'error');
-            }
+            checkReadyState();
 
         } catch (e) {
-            Utils.updateStatus(DOMElements.validationResult, `❌ Validation Error: ${e.message}`, 'error');
-        } finally {
-            event.target.value = '';
+            Utils.updateStatus(DOMElements.setupStatus, `❌ Error loading banknote: ${e.message}`, 'error');
+            state.noteData = null;
         }
     }
 
-    return { handleCreateAndSaveNote, handleFileSelectForValidation, parseUnifiedPayload, getAuthDataForSig };
-})();
+    async function loadKey() {
+        try {
+            const file = DOMElements.loadSpendKey.files[0];
+            if (!file) return;
+            const keyData = JSON.parse(await file.text());
+            if (state.noteData && state.noteData.serial !== keyData.serial) {
+                throw new Error("Spend Key does not match the loaded banknote serial.");
+            }
+            state.spendPrivateKey = Utils.base64ToUint8Array(keyData.spendPrivateKey_b64);
+            checkReadyState();
+        } catch(e) {
+            Utils.updateStatus(DOMElements.setupStatus, `❌ Error loading key: ${e.message}`, 'error');
+            state.spendPrivateKey = null;
+        }
+    }
 
+    function checkReadyState() {
+        let noteLoaded = !!state.noteData;
+        let keyLoaded = !!state.spendPrivateKey;
+        Utils.updateStatus(DOMElements.setupStatus, `Banknote Loaded: ${noteLoaded ? '✅' : '❌'}\nSpend Key Loaded: ${keyLoaded ? '✅' : '❌'}`, noteLoaded && keyLoaded ? 'success' : 'warning');
+        
+        if (noteLoaded && keyLoaded) {
+            DOMElements.walletSetup.classList.add('hidden');
+            DOMElements.walletMain.classList.remove('hidden');
+            DOMElements.noteSerial.textContent = state.noteData.serial;
+            DOMElements.noteAmount.textContent = state.noteData.amount.toLocaleString('en-US');
+        }
+    }
 
-// --- UI and Drawing Logic ---
-const BanknoteDrawer = (() => {
-    function roundRect(ctx, x, y, width, height, radius) {
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + width - radius, y);
-        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-        ctx.lineTo(x + width, y + height - radius);
-        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-        ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
+    async function startReceive() {
+        DOMElements.modalTitle.textContent = "Receive Payment";
+        DOMElements.modalInstruction.textContent = "Show this QR code to the sender. This code is valid for one transaction only.";
+        
+        const challengeNonce = crypto.randomUUID();
+        // A real wallet would generate and manage a more robust temporary key.
+        // For this prototype, we'll just use the nonce.
+        const challengePayload = JSON.stringify({
+            nonce: challengeNonce
+            // In a real implementation, include a temporary public key for encryption here
+        });
+
+        const qrImg = await Utils.createQrCodeImage(challengePayload);
+        DOMElements.qrDisplay.innerHTML = '';
+        DOMElements.qrDisplay.appendChild(qrImg);
+
+        DOMElements.modalInputArea.innerHTML = `<label for="scan-transfer-qr" class="button">Scan Sender's QR Code</label><input type="file" id="scan-transfer-qr" class="hidden" accept="image/png">`;
+        DOMElements.txModal.style.display = 'flex';
+
+        document.getElementById('scan-transfer-qr').addEventListener('change', async (e) => {
+            try {
+                const transferQrData = await Utils.decodeQrCodeFromImage(e.target.files[0]);
+                const transferData = JSON.parse(transferQrData);
+
+                // --- Verification ---
+                // 1. Check if the nonce matches the one we issued
+                if (transferData.nonce !== challengeNonce) {
+                    throw new Error("Nonce mismatch! This is not for you or is an old request.");
+                }
+
+                // 2. Verify the sender's signature
+                const currentSpendPublicKey = Utils.base64ToUint8Array(state.noteData.spendPublicKey_b64);
+                const signedData = JSON.stringify({ transfer: true, nonce: transferData.nonce });
+                const signature = Utils.base64ToUint8Array(transferData.signature_b64);
+                const isSignatureValid = await BankCrypto.verifySignature(signature, signedData, currentSpendPublicKey);
+
+                if (!isSignatureValid) {
+                    throw new Error("Invalid sender signature!");
+                }
+                
+                // 3. Claim Ownership
+                // In a real system, you would decrypt the new spend key here.
+                // For the prototype, the sender will provide it. This is a security gap in the prototype.
+                const newSpendKey_b64 = prompt("PROTOTYPE STEP: Enter the new Spend Private Key from the sender.");
+                if (!newSpendKey_b64) throw new Error("Transaction cancelled.");
+
+                // Update the banknote state
+                state.noteData.spendPublicKey_b64 = transferData.newSpendPublicKey_b64;
+                state.noteData.history = state.noteData.history || [];
+                state.noteData.history.push({
+                    timestamp: Date.now(),
+                    nonce: transferData.nonce
+                });
+
+                // Set the new private key in the wallet
+                state.spendPrivateKey = Utils.base64ToUint8Array(newSpendKey_b64);
+
+                alert("✅ Transaction successful! You are now the owner of the banknote. Remember to save your new banknote image and spend key.");
+                resetWallet();
+
+            } catch(err) {
+                alert(`❌ Transaction Failed: ${err.message}`);
+            } finally {
+                DOMElements.txModal.style.display = 'none';
+            }
+        });
+    }
+
+    async function startSend() {
+        DOMElements.modalTitle.textContent = "Send Payment";
+        DOMElements.modalInstruction.textContent = "Scan the recipient's QR code to begin.";
+        DOMElements.qrDisplay.innerHTML = '';
+        DOMElements.modalInputArea.innerHTML = `<label for="scan-challenge-qr" class="button">Scan Recipient's QR Code</label><input type="file" id="scan-challenge-qr" class="hidden" accept="image/png">`;
+        DOMElements.txModal.style.display = 'flex';
+
+        document.getElementById('scan-challenge-qr').addEventListener('change', async (e) => {
+            try {
+                const challengeQrData = await Utils.decodeQrCodeFromImage(e.target.files[0]);
+                const challengeData = JSON.parse(challengeQrData);
+                const nonce = challengeData.nonce;
+
+                // --- Perform Transaction ---
+                // 1. Generate the next spend keypair
+                const newSpendKeyPair = await BankCrypto.generateNewKeyPair();
+                
+                // 2. Sign the transaction with the OLD spend key
+                const signedData = JSON.stringify({ transfer: true, nonce: nonce });
+                const signature = await BankCrypto.signData(signedData, state.spendPrivateKey);
+                
+                // 3. Prepare the transfer payload
+                const transferPayload = {
+                    nonce: nonce,
+                    signature_b64: Utils.arrayBufferToBase64(signature),
+                    newSpendPublicKey_b64: Utils.arrayBufferToBase64(newSpendKeyPair.publicKey),
+                    // In a real system, the new private key would be encrypted for the recipient here.
+                };
+
+                // 4. Show the transfer QR to the recipient
+                DOMElements.modalInstruction.textContent = "Have the recipient scan this QR code to complete the transfer.";
+                const qrImg = await Utils.createQrCodeImage(JSON.stringify(transferPayload));
+                DOMElements.qrDisplay.innerHTML = '';
+                DOMElements.qrDisplay.appendChild(qrImg);
+                DOMElements.modalInputArea.innerHTML = `<p class="warning">PROTOTYPE STEP: The new private key below must be securely given to the recipient.</p><textarea readonly style="width:90%;height:80px;font-size:12px;">${Utils.arrayBufferToBase64(newSpendKeyPair.privateKey)}</textarea>`;
+                
+                alert("The banknote has been sent. This wallet no longer holds the banknote or its key.");
+                resetWallet();
+
+            } catch (err) {
+                alert(`❌ Transaction Failed: ${err.message}`);
+                DOMElements.txModal.style.display = 'none';
+            }
+        });
     }
     
-    const getLayout = (width, height) => {
-        const qrSize = 250;
-        const xSpacing = 20;
-        const ySpacing = 20;
-        const totalGridWidth = (qrSize * 3) + (xSpacing * 2);
-        const totalGridHeight = (qrSize * 3) + (ySpacing * 2);
-        return {
-            qrSize, xSpacing, ySpacing,
-            grid: {
-                startX: Math.round((width - totalGridWidth) / 2),
-                startY: Math.round((height - totalGridHeight) / 2),
-                totalWidth: totalGridWidth,
-                totalHeight: totalGridHeight
-            }
-        };
-    };
-    
-    return {
-        getLayout,
-        drawNoteOnCanvas: async (targetCanvas, noteData, fullPayload) => {
-            const { width, height } = targetCanvas;
-            const ctx = targetCanvas.getContext("2d");
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, width, height);
-            
-            const partLength = Math.ceil(fullPayload.length / Constants.NUM_QR_CODES);
-            const qrPayloads = [];
-            for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-                const partData = fullPayload.substring(i * partLength, (i + 1) * partLength);
-                qrPayloads.push(`${Constants.VALIDATION_PREFIX}${i + 1}/${Constants.NUM_QR_CODES}:${partData}`);
-            }
+    function resetWallet() {
+        state.noteData = null;
+        state.spendPrivateKey = null;
+        DOMElements.txModal.style.display = 'none';
+        DOMElements.walletMain.classList.add('hidden');
+        DOMElements.walletSetup.classList.remove('hidden');
+        Utils.updateStatus(DOMElements.setupStatus, `⚠️ Please load a banknote and its corresponding spend key.`, 'warning');
+        DOMElements.loadNoteImage.value = '';
+        DOMElements.loadSpendKey.value = '';
+    }
 
-            const qrImages = await Promise.all(qrPayloads.map(payload => Utils.createQrCodeImage(payload)));
-            const layout = getLayout(width, height);
-
-            qrImages.forEach((img, index) => {
-                const row = Math.floor(index / 3);
-                const col = index % 3;
-                const x = layout.grid.startX + col * (layout.qrSize + layout.xSpacing);
-                const y = layout.grid.startY + row * (layout.qrSize + layout.ySpacing);
-                ctx.drawImage(img, x, y, layout.qrSize, layout.qrSize);
-            });
-
-            ctx.fillStyle = `#000`;
-            ctx.textAlign = 'center';
-            ctx.font = `bold 72px 'Roboto Mono'`;
-            ctx.fillText(noteData.amount.toLocaleString('en-US'), width / 2, layout.grid.startY / 2);
-            ctx.font = `bold 36px 'Roboto Mono'`;
-            ctx.fillText(noteData.serial, width / 2, layout.grid.startY + layout.grid.totalHeight + 50);
-        }
-    };
+    return { loadNote, loadKey, startReceive, startSend, resetWallet };
 })();
 
 // --- Main Application Setup ---
 async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Module...', 'info');
+    Utils.updateStatus(DOMElements.setupStatus, '⏳ Loading Falcon-1024 Module...', 'info');
     try {
         state.falconApi = await pqcSignFalcon1024();
-        Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Ready.', 'success');
+        Utils.updateStatus(DOMElements.setupStatus, '✅ Wallet ready. Please load banknote.', 'success');
     } catch (e) {
-        Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules.`, 'error');
+        Utils.updateStatus(DOMElements.setupStatus, `❌ Critical Error: Could not load modules.`, 'error');
         return;
     }
-    
-    DOMElements.generateKeysButton.addEventListener('click', async () => {
-        const password = prompt("Enter a strong password for your new Master Key.");
-        if (!password) return;
-        Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Generating new Falcon-1024 key pair...', 'info');
-        const keyPair = await BankCrypto.generateNewKeyPair();
-        state.masterPublicKey = keyPair.publicKey;
-        const visualKeySecret = crypto.randomUUID();
-        const { fileKey } = await BankCrypto.encryptMasterKey(keyPair.privateKey, password, visualKeySecret);
-        Utils.downloadFile(JSON.stringify({ masterPublicKey_b64: Utils.arrayBufferToBase64(keyPair.publicKey) }, null, 2), 'Sadat-MASTER-PUBLIC-KEY.json', 'application/json');
-        Utils.downloadFile(JSON.stringify(fileKey, null, 2), 'Sadat-FILE-KEY.json', 'application/json');
-        
-        const qrImg = await Utils.createQrCodeImage(visualKeySecret);
-        DOMElements.jabDisplay.innerHTML = '';
-        DOMElements.jabDisplay.appendChild(qrImg);
-        DOMElements.jabModal.style.display = 'flex';
-        Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated! Public key is now active. Files downloaded.`, 'success');
-    });
 
-    DOMElements.importPublicKey.addEventListener('change', async (event) => {
-        const file = event.target.files[0]; if (!file) return;
-        const data = JSON.parse(await file.text());
-        state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey_b64);
-        Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported.', 'success');
-        event.target.value = '';
+    DOMElements.loadNoteImage.addEventListener('change', Wallet.loadNote);
+    DOMElements.loadSpendKey.addEventListener('change', Wallet.loadKey);
+    DOMElements.sendBtn.addEventListener('click', Wallet.startSend);
+    DOMElements.receiveBtn.addEventListener('click', Wallet.startReceive);
+    DOMElements.modalCancelBtn.addEventListener('click', () => {
+        DOMElements.txModal.style.display = 'none';
     });
-    
-    function updatePuzzleStatus() {
-        const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
-        const allPieces = fileKey && passwordKey && visualKey;
-        DOMElements.reconstructKeyButton.disabled = !allPieces;
-        let statusHtml = `File Key: ${fileKey ? '✅' : '❌'}\nPassword: ${passwordKey ? '✅' : '❌'}\nVisual Key: ${visualKey ? '✅' : '❌'}`;
-        Utils.updateStatus(DOMElements.keyReconstructionStatus, statusHtml, allPieces ? 'success' : 'warning');
-    }
-
-    DOMElements.fileKeyInput.addEventListener('change', async (e) => {
-        state.puzzlePieces.fileKey = JSON.parse(await e.target.files[0].text());
-        updatePuzzleStatus(); e.target.value = '';
-    });
-    DOMElements.passwordKeyInput.addEventListener('input', (e) => {
-        state.puzzlePieces.passwordKey = e.target.value || null;
-        updatePuzzleStatus();
-    });
-    DOMElements.visualKeyInput.addEventListener('change', async (e) => {
-        state.puzzlePieces.visualKey = await Utils.decodeQrCodeFromImage(e.target.files[0]);
-        updatePuzzleStatus(); e.target.value = '';
-    });
-
-    DOMElements.reconstructKeyButton.addEventListener('click', async () => {
-        const { fileKey, passwordKey, visualKey } = state.puzzlePieces;
-        Utils.updateStatus(DOMElements.keyReconstructionStatus, "⏳ Reconstructing...", 'info');
-        try {
-            state.masterPrivateKey = await BankCrypto.reconstructMasterKey(fileKey, passwordKey, visualKey);
-            // Self-test
-            const testSig = await BankCrypto.signData("test", state.masterPrivateKey);
-            const isValid = await BankCrypto.verifySignature(testSig, "test", state.masterPublicKey);
-            if (!isValid) throw new Error("Key reconstruction failed self-test.");
-            Utils.updateStatus(DOMElements.keyReconstructionStatus, "✅ Master Private Key ACTIVE.", 'success');
-            DOMElements.createNoteButton.disabled = false;
-        } catch (error) {
-            Utils.updateStatus(DOMElements.keyReconstructionStatus, `❌ ${error.message}`, 'error');
-            state.masterPrivateKey = null;
-        }
-    });
-
-    DOMElements.createNoteButton.addEventListener('click', BanknoteLogic.handleCreateAndSaveNote);
-    DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
 }
 
 main();
