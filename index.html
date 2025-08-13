@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/base45@2.0.1/dist/base45.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
@@ -43,7 +42,6 @@
         h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header p { font-size: 1rem; color: var(--text-muted); margin: 0; }
         canvas#noteCanvas { border-radius: 16px; margin-top: 24px; background: #050508; cursor: default; box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); width: 100%; max-width: 1200px; height: auto; border: 1px solid var(--border-color); }
-        #validationCanvas { border-radius: 16px; margin-top: 24px; background: var(--dark-bg); width: 100%; max-width: 1200px; height: auto; border: 1px solid var(--border-color); }
         input, button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
         input[type="number"], input[type="password"] { font-family: var(--mono-font); font-weight: 700; text-align: center; width: 150px; }
         input:focus { border-color: var(--accent-color-2); box-shadow: 0 0 15px rgba(124, 77, 255, 0.5); }
@@ -71,15 +69,7 @@
     <div class="section"><h2><span class="pill">Step 1</span> Guardian Setup: Create Master Keys</h2><div class="controls-grid"><button id="generate-keys-button">🔑 Generate Master Key Pair</button><label for="import-public-key" class="button sub-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Load Public Key</label><input type="file" id="import-public-key" accept=".json" style="display: none;"></div><div id="key-gen-status" class="status-box"><span class="info">ℹ️ Welcome, Guardian. Generate a new Master Key Pair to begin your financial ecosystem. This process is fully offline and secure.</span></div></div>
     <div class="section"><h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p><div class="controls-grid"><label for="file-key-input" class="button sub-button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key"><label for="visual-key-input" class="button sub-button">3. Upload Visual Key (QR)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box"><span class="warning">⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.</span></div></div>
     <div class="section"><h2><span class="pill">Step 3</span> Create Wealth: Generate Banknotes</h2><div class="controls-grid"><span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000"><span class="input-label">Quantity:</span><input type="number" id="quantity-input" value="1" min="1" max="100"><button id="create-note-button" disabled>🎨 Create & Display Banknote</button><button id="download-batch-button" disabled>📥 Download Batch</button></div><div id="banknote-status" class="status-box">Use the controls above to create and sign new banknotes.</div><canvas id="noteCanvas" width="1200" height="1000"></canvas></div>
-    <div class="section" id="validator-section">
-        <h2><span class="pill">Step 4</span> Verify Authenticity</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all QR Codes.</p>
-        <label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label>
-        <input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;">
-        
-        <canvas id="validationCanvas"></canvas>
-        <div id="validation-status" class="status-box">Awaiting banknote for validation...</div>
-    </div>
+    <div class="section" id="validator-section"><h2><span class="pill">Step 4</span> Verify Authenticity</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all QR Codes.</p><label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
 </div>
 <div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this QR Code or save the image file and store it in a secure physical location. It is the third piece of your Master Key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download QR Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
 
@@ -87,6 +77,8 @@
 // --- DEPENDENCIES ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+// ADDED: Import base45 library to fix "base45 is not defined" error.
+import base45 from 'https://cdn.skypack.dev/base45';
 
 // --- Global State ---
 const state = {
@@ -122,8 +114,7 @@ const DOMElements = {
     noteCanvas: document.getElementById('noteCanvas'),
     banknoteStatus: document.getElementById('banknote-status'),
     validatorInput: document.getElementById('validator-input'),
-    validationCanvas: document.getElementById('validationCanvas'), // New canvas
-    validationStatus: document.getElementById('validation-status'), // New status div
+    validationResult: document.getElementById('validation-result'),
     jabModal: document.getElementById('jab-modal'),
     jabDisplay: document.getElementById('jab-display'),
     jabModalTitle: document.getElementById('jab-modal-title'),
@@ -402,11 +393,13 @@ const BanknoteLogic = (() => {
         const payload = { a: noteData.amount, s: noteData.serial, t: noteData.timestamp, epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne), s2: Utils.arrayBufferToBase64(noteData.signatureTwo) };
         const jsonString = JSON.stringify(payload);
         const compressedData = pako.deflate(jsonString);
+        // FIXED: Use base45.encode instead of a base64 function
         return base45.encode(compressedData);
     };
 
     const parseUnifiedVerificationPayload = (base45String) => {
-        const compressedData = base45.decode(base45String);
+        // FIXED: Use base45.decode instead of a base64 function
+        const compressedData = base45.decode(base45String); 
         const jsonString = pako.inflate(compressedData, { to: 'string' });
         const p = JSON.parse(jsonString);
         return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), signatureOne: Utils.base64ToUint8Array(p.s1), signatureTwo: Utils.base64ToUint8Array(p.s2) };
@@ -489,9 +482,9 @@ const BanknoteLogic = (() => {
         }
     };
     
-    // REWRITTEN to return a detailed report for visual feedback
+    // FIXED: Replaced the entire function with the robust "Iterative Scan & Erase" method.
     async function decodeAllQrCodesFromImage(file) {
-        Utils.updateStatus(DOMElements.validationStatus, '⏳ Pre-processing image for accuracy...', 'info');
+        Utils.updateStatus(DOMElements.validationResult, '⏳ Pre-processing image for accuracy...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
         const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
     
@@ -508,29 +501,49 @@ const BanknoteLogic = (() => {
         const mainCtx = mainCanvas.getContext('2d');
         mainCtx.drawImage(img, 0, 0);
 
-        const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
-        const scanResults = [];
+        const allDecodedData = [];
+        const foundPayloads = new Set(); // Use a Set to avoid processing duplicate QR codes
 
-        for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-            const row = Math.floor(i / 3);
-            const col = i % 3;
-            
-            const regionX = Math.round(layout.grid.startX + col * (layout.qrSize + layout.xSpacing));
-            const regionY = Math.round(layout.grid.startY + row * (layout.qrSize + layout.ySpacing));
-            const regionSize = Math.round(layout.qrSize);
-            
-            const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
+        // Iteratively find, log, and erase QR codes
+        // Loop a few extra times just in case of read errors on erased codes
+        for (let attempt = 0; attempt < Constants.NUM_QR_CODES + 3; attempt++) {
+            if (foundPayloads.size >= Constants.NUM_QR_CODES) break; // Exit if we have all 9
 
-            const result = {
-                success: !!code,
-                data: code ? code.data : null,
-                location: { x: regionX, y: regionY, size: regionSize }
-            };
-            scanResults.push(result);
+            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning... Found ${foundPayloads.size}/${Constants.NUM_QR_CODES} unique codes.`, 'info');
+
+            const imageData = mainCtx.getImageData(0, 0, mainCanvas.width, mainCanvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert", // Optimization
+            });
+
+            if (code && code.data) {
+                // If the payload is new, add it to our results
+                if (!foundPayloads.has(code.data)) {
+                    foundPayloads.add(code.data);
+                    allDecodedData.push({ data: code.data });
+                }
+
+                // Erase the found QR code so it won't be found again in the next iteration
+                const loc = code.location;
+                const padding = 10; // Padding to ensure complete erasure
+                const x = loc.topLeftCorner.x - padding;
+                const y = loc.topLeftCorner.y - padding;
+                const width = loc.topRightCorner.x - loc.topLeftCorner.x + (padding * 2);
+                const height = loc.bottomLeftCorner.y - loc.topLeftCorner.y + (padding * 2);
+                mainCtx.fillStyle = "black"; // Color doesn't matter, just needs to destroy the pattern
+                mainCtx.fillRect(x, y, width, height);
+
+            } else {
+                // No more QR codes can be found on the canvas, so stop searching.
+                break;
+            }
         }
 
-        return scanResults;
+        if (allDecodedData.length > 0) {
+            return allDecodedData;
+        } else {
+            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
+        }
     }
 
     return {
@@ -538,83 +551,65 @@ const BanknoteLogic = (() => {
         handleDownloadBatch,
         handleFileSelectForValidation: async (event) => {
             const file = event.target.files[0];
-            if (!file || !state.masterPublicKey) { 
-                Utils.updateStatus(DOMElements.validationStatus, '❌ Load a Master Public Key in Step 1 before validating.', 'error'); 
-                return; 
-            }
-            
-            const validationCanvas = DOMElements.validationCanvas;
-            const ctx = validationCanvas.getContext('2d');
-            const statusBox = DOMElements.validationStatus;
-
+            if (!file || !state.masterPublicKey) { Utils.updateStatus(DOMElements.validationResult, '❌ Load a Master Public Key in Step 1 before validating.', 'error'); return; }
+            const resultDiv = DOMElements.validationResult;
+            Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
             try {
-                Utils.updateStatus(statusBox, '⏳ Loading and displaying image...', 'info');
-                const userImage = new Image();
-                userImage.src = await Utils.resizeImage(file, 1200);
-                await new Promise(resolve => userImage.onload = resolve);
-                
-                validationCanvas.width = userImage.width;
-                validationCanvas.height = userImage.height;
-                ctx.drawImage(userImage, 0, 0);
+                const decodedCodes = await decodeAllQrCodesFromImage(file);
+                let resultHTML = `<span class="info">Found ${decodedCodes.length} QR code(s). Assembling payload...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
 
-                const scanResults = await decodeAllQrCodesFromImage(file);
-                
-                let successfulScans = 0;
-                ctx.font = 'bold 100px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                
-                for (const result of scanResults) {
-                    const centerX = result.location.x + result.location.size / 2;
-                    const centerY = result.location.y + result.location.size / 2;
-                    if (result.success) {
-                        successfulScans++;
-                        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-                        ctx.fillText('✓', centerX, centerY);
-                    } else {
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-                        ctx.fillText('❌', centerX, centerY);
-                    }
-                }
-
-                if (successfulScans < Constants.NUM_QR_CODES) {
-                    throw new Error(`Incomplete data: Found ${successfulScans}/${Constants.NUM_QR_CODES} required QR codes.`);
-                }
-                
-                Utils.updateStatus(statusBox, `✅ Found all ${successfulScans} QR codes. Assembling payload...`, 'success');
-
+                let expectedTotalParts = Constants.NUM_QR_CODES;
                 const receivedParts = {};
-                for (const result of scanResults) {
-                    const { data } = result;
-                    if (data && data.startsWith(Constants.VALIDATION_PREFIX)) {
-                        const payload = data.substring(Constants.VALIDATION_PREFIX.length);
+                let uniqueCodes = 0;
+                
+                for (const code of decodedCodes) {
+                    if (code.data.startsWith(Constants.VALIDATION_PREFIX)) {
+                        const payload = code.data.substring(Constants.VALIDATION_PREFIX.length);
                         const match = payload.match(/^(\d+)\/(\d+):(.*)$/s);
                         if (match) {
-                            receivedParts[parseInt(match[1], 10)] = match[3];
+                            const partNum = parseInt(match[1], 10);
+                            if (!receivedParts[partNum]) {
+                                receivedParts[partNum] = match[3];
+                                uniqueCodes++;
+                            }
                         }
                     }
                 }
                 
+                if (uniqueCodes < expectedTotalParts) {
+                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required QR codes. The banknote may be damaged or fake.`, 'error');
+                    return;
+                }
+
                 let fullPayloadString = '';
-                for (let i = 1; i <= Constants.NUM_QR_CODES; i++) {
+                for (let i = 1; i <= expectedTotalParts; i++) {
                     fullPayloadString += receivedParts[i];
                 }
 
-                const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
+                resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
                 
-                Utils.updateStatus(statusBox, 'ℹ️ Verifying signatures...', 'info');
+                const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
+                resultHTML += `<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
                 const dataForSigOne = getStandardizedDataForSigning(parsedData);
                 const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                if (!isSigOneValid) throw new Error("VERDICT: FORGERY (Invalid Ephemeral Signature)");
-
+                if (!isSigOneValid) { resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; resultDiv.innerHTML = resultHTML; return; }
+                resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
+                resultHTML += `<span class="info">ℹ️ Verifying Master Signature (Sig 2)...</span>\n`;
+                resultDiv.innerHTML = resultHTML;
                 const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
                 const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                if (!isSigTwoValid) throw new Error("VERDICT: FORGERY (Invalid Master Signature)");
-
-                Utils.updateStatus(statusBox, '✅ VERDICT: BANKNOTE IS AUTHENTIC', 'success');
-
+                if (!isSigTwoValid) { resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY (Not issued by this Guardian)</span>'; resultDiv.innerHTML = resultHTML; return; }
+                resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
+                resultDiv.innerHTML = resultHTML;
             } catch (e) {
-                Utils.updateStatus(statusBox, `❌ ${e.message}`, 'error');
+                if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The QR code data is corrupt or invalid.`, 'error');
+                } else {
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}`, 'error');
+                }
                 console.error(e);
             } finally {
                 event.target.value = '';
@@ -744,12 +739,20 @@ async function main() {
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
     DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
     
+    // FIXED: This now downloads the Visual Key QR code as a proper .png file.
     DOMElements.downloadJabButton.addEventListener('click', () => {
         const img = DOMElements.jabDisplay.querySelector('img');
         if (img) {
+            // To ensure PNG format, draw the image to a canvas and get the data URL from there.
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            
             const a = document.createElement('a');
-            a.href = img.src;
-            a.download = 'Sadat-VISUAL-KEY.png';
+            a.href = canvas.toDataURL('image/png'); // Force PNG format
+            a.download = 'Sadat-VISUAL-KEY.png'; // Use .png extension
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
