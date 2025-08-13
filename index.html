@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/base45@2.0.1/lib/base45.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
@@ -86,6 +85,7 @@
 // --- DEPENDENCIES ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import base45 from 'https://cdn.skypack.dev/base45'; // IMPORT base45 as a module
 
 // --- Global State ---
 const state = {
@@ -203,11 +203,35 @@ const Utils = {
             reader.readAsDataURL(file);
         });
     },
+    // REWRITTEN to manually draw QR to a canvas, ensuring PNG format.
     async createQrCodeImage(payload) {
         const qr = qrcode(0, 'L'); 
         qr.addData(payload);
         qr.make();
-        const dataUrl = qr.createDataURL(10, 5);
+        
+        const moduleCount = qr.getModuleCount();
+        const cellSize = 8;
+        const margin = cellSize * 4;
+        const canvasSize = moduleCount * cellSize + margin * 2;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+        ctx.fillStyle = '#000000';
+
+        for (let row = 0; row < moduleCount; row++) {
+            for (let col = 0; col < moduleCount; col++) {
+                if (qr.isDark(row, col)) {
+                    ctx.fillRect(margin + col * cellSize, margin + row * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+        
+        const dataUrl = canvas.toDataURL('image/png');
         const img = new Image();
         img.src = dataUrl;
         await new Promise((resolve, reject) => {
@@ -488,8 +512,8 @@ const BanknoteLogic = (() => {
         }
     };
     
+    // REWRITTEN to return a detailed report for visual feedback
     async function decodeAllQrCodesFromImage(file) {
-        Utils.updateStatus(DOMElements.validationStatus, '⏳ Pre-processing image for accuracy...', 'info');
         const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
         const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
     
@@ -508,6 +532,7 @@ const BanknoteLogic = (() => {
 
         const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
         const scanResults = [];
+        const originalImageSize = { width: img.width, height: img.height };
 
         for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
             const row = Math.floor(i / 3);
@@ -523,7 +548,7 @@ const BanknoteLogic = (() => {
             scanResults.push({
                 success: !!code,
                 data: code ? code.data : null,
-                location: { x: regionX, y: regionY, size: regionSize }
+                location: { x: regionX, y: regionY, size: regionSize, ...originalImageSize }
             });
         }
         return scanResults;
@@ -547,33 +572,38 @@ const BanknoteLogic = (() => {
             try {
                 Utils.updateStatus(statusBox, '⏳ Loading and displaying image...', 'info');
                 const userImage = new Image();
-                userImage.src = await Utils.resizeImage(file, 1200);
+                userImage.src = URL.createObjectURL(file); // Use object URL for original image
                 await new Promise(resolve => userImage.onload = resolve);
                 
-                validationCanvas.width = userImage.width;
-                validationCanvas.height = userImage.height;
-                ctx.drawImage(userImage, 0, 0);
+                const aspectRatio = userImage.width / userImage.height;
+                validationCanvas.width = Math.min(userImage.width, 1200);
+                validationCanvas.height = validationCanvas.width / aspectRatio;
+                ctx.drawImage(userImage, 0, 0, validationCanvas.width, validationCanvas.height);
+                URL.revokeObjectURL(userImage.src);
 
                 const scanResults = await decodeAllQrCodesFromImage(file);
                 
                 let successfulScans = 0;
-                ctx.font = `bold ${Math.min(validationCanvas.width, validationCanvas.height) / 10}px sans-serif`;
+                ctx.font = `bold ${Math.min(validationCanvas.width, validationCanvas.height) / 12}px sans-serif`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
+                ctx.shadowColor = "black";
+                ctx.shadowBlur = 10;
                 
                 for (const result of scanResults) {
-                    const scaleX = validationCanvas.width / result.location.imageWidth;
-                    const scaleY = validationCanvas.height / result.location.imageHeight;
+                    // Calculate the position on the displayed canvas, not the processed one
+                    const scaleX = validationCanvas.width / result.location.width;
+                    const scaleY = validationCanvas.height / result.location.height;
 
                     const centerX = result.location.x * scaleX + (result.location.size * scaleX / 2);
                     const centerY = result.location.y * scaleY + (result.location.size * scaleY / 2);
                     
                     if (result.success) {
                         successfulScans++;
-                        ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
                         ctx.fillText('✓', centerX, centerY);
                     } else {
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
                         ctx.fillText('❌', centerX, centerY);
                     }
                 }
