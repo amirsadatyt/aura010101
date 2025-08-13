@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/base45@2.0.1/dist/base45.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
@@ -194,18 +193,32 @@ const Utils = {
             reader.readAsDataURL(file);
         });
     },
-    async createQrCodeImage(payload) {
-        const qr = qrcode(0, 'L'); 
+    async createQrCodeImage(payload, asPngDataUrl = false) {
+        const qr = qrcode(0, 'L');
         qr.addData(payload);
         qr.make();
-        const dataUrl = qr.createDataURL(10, 5);
-        const img = new Image();
-        img.src = dataUrl;
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-        });
-        return img;
+        const gifDataUrl = qr.createDataURL(10, 5);
+
+        if (!asPngDataUrl) {
+            const img = new Image();
+            img.src = gifDataUrl;
+            await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+            return img;
+        } else {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = reject;
+                img.src = gifDataUrl;
+            });
+        }
     },
     async decodeQrCodeFromImage(file) {
       return new Promise((resolve, reject) => {
@@ -323,7 +336,11 @@ const UIHandlers = (() => {
                 Utils.downloadFile(JSON.stringify(fileKey, null, 2), 'Sadat-FILE-KEY.json', 'application/json');
                 DOMElements.jabModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.jabDisplay.innerHTML = '';
-                const qrImage = await Utils.createQrCodeImage(visualKeySecret);
+                
+                // --- MODIFICATION: Generate PNG data URL for visual key ---
+                const qrPngDataUrl = await Utils.createQrCodeImage(visualKeySecret, true);
+                const qrImage = new Image();
+                qrImage.src = qrPngDataUrl;
                 DOMElements.jabDisplay.appendChild(qrImage);
                 DOMElements.jabModal.style.display = 'flex';
                 Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key QR Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
@@ -392,11 +409,11 @@ const BanknoteLogic = (() => {
         const payload = { a: noteData.amount, s: noteData.serial, t: noteData.timestamp, epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne), s2: Utils.arrayBufferToBase64(noteData.signatureTwo) };
         const jsonString = JSON.stringify(payload);
         const compressedData = pako.deflate(jsonString);
-        return base45.encode(compressedData); // MODIFIED: Use Base45
+        return Utils.arrayBufferToBase64(compressedData);
     };
 
-    const parseUnifiedVerificationPayload = (base45String) => {
-        const compressedData = base45.decode(base45String); // MODIFIED: Use Base45
+    const parseUnifiedVerificationPayload = (base64CompressedString) => {
+        const compressedData = Utils.base64ToUint8Array(base64CompressedString);
         const jsonString = pako.inflate(compressedData, { to: 'string' });
         const p = JSON.parse(jsonString);
         return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), signatureOne: Utils.base64ToUint8Array(p.s1), signatureTwo: Utils.base64ToUint8Array(p.s2) };
@@ -479,68 +496,17 @@ const BanknoteLogic = (() => {
         }
     };
     
-    /**
-     * ✅ **FIX IMPLEMENTED**
-     * Draws a feedback symbol (checkmark or X) on the canvas.
-     */
-    function drawFeedbackSymbol(ctx, x, y, size, isSuccess) {
-        ctx.save();
-        const centerX = x + size / 2;
-        const centerY = y + size / 2;
-        ctx.font = `bold ${size * 0.8}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.globalAlpha = 0.8;
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = size / 25; // White border for visibility
-
-        if (isSuccess) {
-            ctx.fillStyle = 'green';
-            // Offset to better center the checkmark character
-            const symbol = '✔';
-            ctx.strokeText(symbol, centerX, centerY + size * 0.05); 
-            ctx.fillText(symbol, centerX, centerY + size * 0.05);
-        } else {
-            ctx.fillStyle = 'red';
-            const symbol = '❌';
-            ctx.strokeText(symbol, centerX, centerY);
-            ctx.fillText(symbol, centerX, centerY);
-        }
-        ctx.restore();
-    }
-    
-    async function decodeAllQrCodesFromImage(file) {
-        Utils.updateStatus(DOMElements.validationResult, '⏳ Pre-processing image for accuracy...', 'info');
-        const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
-        const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
-    
-        const img = new Image();
-        img.src = processedDataUrl;
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = () => reject('Could not load processed image.');
-        });
-
+    // MODIFIED: Returns detailed scan results including coordinates
+    async function decodeAllQrCodesFromImage(processedDataUrl, banknoteImage) {
         const mainCanvas = document.createElement('canvas');
-        mainCanvas.width = img.width;
-        mainCanvas.height = img.height;
+        mainCanvas.width = banknoteImage.width;
+        mainCanvas.height = banknoteImage.height;
         const mainCtx = mainCanvas.getContext('2d');
-        mainCtx.drawImage(img, 0, 0);
-        
-        // ✅ **FIX IMPLEMENTED**: Draw the uploaded (resized) image onto the main canvas for the user to see feedback on.
-        const visibleCanvas = DOMElements.noteCanvas;
-        const visibleCtx = visibleCanvas.getContext('2d');
-        const displayImg = new Image();
-        displayImg.src = resizedDataUrl;
-        await new Promise(res => displayImg.onload = res);
-        visibleCtx.clearRect(0, 0, visibleCanvas.width, visibleCanvas.height);
-        visibleCtx.drawImage(displayImg, 0, 0, visibleCanvas.width, visibleCanvas.height);
+        mainCtx.drawImage(banknoteImage, 0, 0);
 
         const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
-        const allDecodedData = [];
-        const scaleX = visibleCanvas.width / mainCanvas.width;
-        const scaleY = visibleCanvas.height / mainCanvas.height;
-        
+        const scanResults = [];
+
         for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
             Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
             const row = Math.floor(i / 3);
@@ -550,34 +516,24 @@ const BanknoteLogic = (() => {
             const regionY = Math.round(layout.grid.startY + row * (layout.qrSize + layout.ySpacing));
             const regionSize = Math.round(layout.qrSize);
             
-            const regionCanvas = document.createElement('canvas');
-            regionCanvas.width = regionSize;
-            regionCanvas.height = regionSize;
-            const regionCtx = regionCanvas.getContext('2d');
-            regionCtx.drawImage(mainCanvas, regionX, regionY, regionSize, regionSize, 0, 0, regionSize, regionSize);
-            const imageData = regionCtx.getImageData(0, 0, regionSize, regionSize);
-
+            const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
             const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-            // ✅ **FIX IMPLEMENTED**: Calculate position on visible canvas and draw feedback.
-            const feedbackX = regionX * scaleX;
-            const feedbackY = regionY * scaleY;
-            const feedbackSize = regionSize * scaleX;
-
+            
+            const result = { x: regionX, y: regionY, size: regionSize, data: null, success: false };
             if (code && code.data) {
-                allDecodedData.push({ data: code.data });
-                drawFeedbackSymbol(visibleCtx, feedbackX, feedbackY, feedbackSize, true);
+                result.data = code.data;
+                result.success = true;
             } else {
                  console.warn(`Could not decode QR in zone ${i + 1}.`);
-                 drawFeedbackSymbol(visibleCtx, feedbackX, feedbackY, feedbackSize, false);
             }
+            scanResults.push(result);
         }
-
-        if (allDecodedData.length > 0) {
-            return allDecodedData;
-        } else {
-            throw new Error("Validation Failed. No QR codes found. Tip: Use a flat, well-lit photo.");
+        
+        // Check if at least one QR code was found to prevent errors
+        if (scanResults.every(r => !r.success)) {
+             throw new Error("Validation Failed. No QR codes found at exact locations. Tip: Use a flat, well-lit photo.");
         }
+        return scanResults;
     }
 
     return {
@@ -587,10 +543,48 @@ const BanknoteLogic = (() => {
             const file = event.target.files[0];
             if (!file || !state.masterPublicKey) { Utils.updateStatus(DOMElements.validationResult, '❌ Load a Master Public Key in Step 1 before validating.', 'error'); return; }
             const resultDiv = DOMElements.validationResult;
+            const noteCanvas = DOMElements.noteCanvas;
+            const noteCtx = noteCanvas.getContext('2d');
             Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
+
             try {
-                const decodedCodes = await decodeAllQrCodesFromImage(file);
-                let resultHTML = `<span class="info">Found ${decodedCodes.length} QR code(s). Assembling payload...</span>\n`;
+                // MODIFICATION: Load and display the banknote image first
+                const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
+                const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
+                
+                const banknoteImage = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject('Could not load banknote image');
+                    img.src = processedDataUrl;
+                });
+                
+                // Scale canvas to match image and draw it
+                noteCanvas.width = banknoteImage.width;
+                noteCanvas.height = banknoteImage.height;
+                noteCtx.drawImage(banknoteImage, 0, 0);
+
+                const scanResults = await decodeAllQrCodesFromImage(processedDataUrl, banknoteImage);
+                
+                // MODIFICATION: Draw feedback marks on the canvas
+                scanResults.forEach(result => {
+                    if (result.success) {
+                        noteCtx.font = `bold ${result.size * 0.8}px sans-serif`;
+                        noteCtx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+                        noteCtx.textAlign = 'center';
+                        noteCtx.textBaseline = 'middle';
+                        noteCtx.fillText('✔', result.x + result.size / 2, result.y + result.size / 2);
+                    } else {
+                        noteCtx.font = `bold ${result.size * 0.8}px sans-serif`;
+                        noteCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+                        noteCtx.textAlign = 'center';
+                        noteCtx.textBaseline = 'middle';
+                        noteCtx.fillText('✖', result.x + result.size / 2, result.y + result.size / 2);
+                    }
+                });
+                
+                const decodedCodes = scanResults.filter(r => r.success);
+                let resultHTML = `<span class="info">Found ${decodedCodes.length}/${Constants.NUM_QR_CODES} QR code(s). Assembling payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
 
                 let expectedTotalParts = Constants.NUM_QR_CODES;
@@ -697,6 +691,8 @@ const BanknoteDrawer = (() => {
     return {
         getLayout,
         drawNoteOnCanvas: async (targetCanvas, noteData, fullPayload, width, height) => {
+            targetCanvas.width = width;
+            targetCanvas.height = height;
             const ctx = targetCanvas.getContext("2d");
             const { amount, serial } = noteData;
 
@@ -773,30 +769,21 @@ async function main() {
     DOMElements.downloadBatchButton.addEventListener('click', BanknoteLogic.handleDownloadBatch);
     DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
     
-    /**
-     * ✅ **FIX IMPLEMENTED**
-     * This listener now converts the QR code image (which is a GIF) to a proper PNG format
-     * before triggering the download.
-     */
+    // MODIFICATION: Download button now correctly downloads a PNG.
     DOMElements.downloadJabButton.addEventListener('click', () => {
         const img = DOMElements.jabDisplay.querySelector('img');
-        if (img) {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            ctx.drawImage(img, 0, 0);
+        if (img && img.src) {
             const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png');
+            a.href = img.src; // The src is now a PNG data URL
             a.download = 'Sadat-VISUAL-KEY.png';
-            document.body.appendChild(a); 
-            a.click(); 
-            document.body.removeChild(a);
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }
     });
 
     const canvas = DOMElements.noteCanvas;
     const ctx = canvas.getContext('2d');
+    canvas.width = 1200;
+    canvas.height = 1000;
     const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
     bgGradient.addColorStop(0, `hsl(250, 50%, 6%)`);
     bgGradient.addColorStop(1, `hsl(260, 40%, 4%)`);
