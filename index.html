@@ -2,15 +2,13 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote - QR Code System</title>
+    <title>Sadat Digital Banknote - JAB Code System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-
+    
     <style>
         :root {
             --primary-font: 'Poppins', 'Segoe UI', sans-serif;
@@ -41,7 +39,7 @@
         .header { border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 24px; }
         h1 { font-size: 2.5rem; font-weight: 600; color: #fff; margin: 0 0 8px 0; letter-spacing: 1px; background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header p { font-size: 1rem; color: var(--text-muted); margin: 0; }
-        canvas#noteCanvas { border-radius: 16px; margin-top: 24px; background: #050508; cursor: default; box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); width: 100%; max-width: 700px; height: auto; border: 1px solid var(--border-color); }
+        canvas#noteCanvas { border-radius: 16px; margin-top: 24px; background: #050508; cursor: default; box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); width: 100%; max-width: 790px; height: auto; border: 1px solid var(--border-color); }
         input, button, label { padding: 14px 22px; font-size: 16px; font-family: var(--primary-font); border-radius: 12px; margin: 8px 5px; border: 1px solid var(--border-color); background: var(--medium-bg); color: #fff; transition: all 0.3s ease; cursor: pointer; outline: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
         input[type="number"], input[type="password"] { font-family: var(--mono-font); font-weight: 700; text-align: center; width: 150px; }
         input:focus { border-color: var(--accent-color-2); box-shadow: 0 0 15px rgba(124, 77, 255, 0.5); }
@@ -65,22 +63,24 @@
 </head>
 <body>
 <div class="container">
-    <div class="header"><h1>Sadat Digital Banknote</h1><p>A Quantum-Resistant, Offline, Dual-Signature & <strong>Multi-QR-Code</strong> Digital Currency System.</p></div>
+    <div class="header"><h1>Sadat Digital Banknote</h1><p>A Quantum-Resistant, Offline, Dual-Signature & <strong>Multi-JAB-Code</strong> Digital Currency System.</p></div>
     <div class="section"><h2><span class="pill">Step 1</span> Guardian Setup: Create Master Keys</h2><div class="controls-grid"><button id="generate-keys-button">🔑 Generate Master Key Pair</button><label for="import-public-key" class="button sub-button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Load Public Key</label><input type="file" id="import-public-key" accept=".json" style="display: none;"></div><div id="key-gen-status" class="status-box"><span class="info">ℹ️ Welcome, Guardian. Generate a new Master Key Pair to begin your financial ecosystem. This process is fully offline and secure.</span></div></div>
-    <div class="section"><h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p><div class="controls-grid"><label for="file-key-input" class="button sub-button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key"><label for="visual-key-input" class="button sub-button">3. Upload Visual Key (QR)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box"><span class="warning">⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.</span></div></div>
-    <div class="section"><h2><span class="pill">Step 3</span> Create Wealth: Generate Banknotes</h2><div class="controls-grid"><span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000"><span class="input-label">Quantity:</span><input type="number" id="quantity-input" value="1" min="1" max="100"><button id="create-note-button" disabled>🎨 Create & Display Banknote</button><button id="download-batch-button" disabled>📥 Download Batch</button></div><div id="banknote-status" class="status-box">Use the controls above to create and sign new banknotes.</div><canvas id="noteCanvas" width="700" height="700"></canvas></div>
-    <div class="section" id="validator-section"><h2><span class="pill">Step 4</span> Verify Authenticity</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all QR Codes.</p><label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
+    <div class="section"><h2><span class="pill">Step 2</span> Activate System: Reconstruct Private Key</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To create banknotes, you must prove your identity by solving the "Three-Piece Puzzle". This ensures maximum security.</p><div class="controls-grid"><label for="file-key-input" class="button sub-button">1. Upload File Key</label><input type="file" id="file-key-input" accept=".json" style="display:none;" /><input type="password" id="password-key-input" placeholder="2. Enter Password Key"><label for="visual-key-input" class="button sub-button">3. Upload Visual Key (JAB)</label><input type="file" id="visual-key-input" accept="image/png, image/jpeg" style="display:none;" /></div><button id="reconstruct-key-button" disabled style="margin-top: 20px;">🔓 Activate Master Private Key</button><div id="key-reconstruction-status" class="status-box"><span class="warning">⚠️ Master Private Key is INACTIVE. Solve the puzzle to activate.</span></div></div>
+    <div class="section"><h2><span class="pill">Step 3</span> Create Wealth: Generate Banknotes</h2><div class="controls-grid"><span class="input-label">Amount:</span><input type="number" id="amount-input" value="50000"><span class="input-label">Quantity:</span><input type="number" id="quantity-input" value="1" min="1" max="100"><button id="create-note-button" disabled>🎨 Create & Display Banknote</button><button id="download-batch-button" disabled>📥 Download Batch</button></div><div id="banknote-status" class="status-box">Use the controls above to create and sign new banknotes.</div><canvas id="noteCanvas" width="790" height="790"></canvas></div>
+    <div class="section" id="validator-section"><h2><span class="pill">Step 4</span> Verify Authenticity</h2><p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>. The system will find and validate all JAB Codes.</p><label for="validator-input" class="button"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Select Banknote Image for Validation</label><input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;"><div id="validation-result" class="status-box">Awaiting banknote for validation...</div></div>
 </div>
-<div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this QR Code or save the image file and store it in a secure physical location. It is the third piece of your Master Key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download QR Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
+<div id="jab-modal" class="modal"><div class="modal-content"><h2 id="jab-modal-title">Your Visual Key</h2><p>Print this JAB Code or save the image file and store it in a secure physical location. It is the third piece of your Master Key puzzle.</p><div id="jab-display"></div><button id="download-jab-button" style="margin-top: 15px;">💾 Download JAB Code</button><button onclick="document.getElementById('jab-modal').style.display='none'">Close</button></div></div>
 
 <script type="module">
 // --- DEPENDENCIES ---
 import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+import JabcodeJSInterface from './jabcodeJSLib.min.js';
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
 // --- Global State ---
 const state = {
     falconApi: null,
+    jabInterface: null,
     masterPublicKey: null,
     masterPrivateKey: null,
     puzzlePieces: { fileKey: null, passwordKey: null, visualKey: null }
@@ -193,57 +193,17 @@ const Utils = {
             reader.readAsDataURL(file);
         });
     },
-    async createQrCodeImage(payload, asPngDataUrl = false) {
-        const qr = qrcode(0, 'L');
-        qr.addData(payload);
-        qr.make();
-        const gifDataUrl = qr.createDataURL(10, 5);
-
-        if (!asPngDataUrl) {
-            const img = new Image();
-            img.src = gifDataUrl;
-            await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
-            return img;
-        } else {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    resolve(canvas.toDataURL('image/png'));
-                };
-                img.onerror = reject;
-                img.src = gifDataUrl;
-            });
-        }
+    async createJabCodeImage(payload) {
+        if (!state.jabInterface) throw new Error("JAB Code Interface not initialized.");
+        const jabDataUrl = state.jabInterface.encode_message(payload);
+        const img = new Image();
+        img.src = jabDataUrl;
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+        return img;
     },
-    async decodeQrCodeFromImage(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                if (code) {
-                    resolve(code.data);
-                } else {
-                    reject(new Error("QR Code not found."));
-                }
-            };
-            img.src = event.target.result;
-        };
-        reader.onerror = () => reject(new Error("FileReader failed."));
-        reader.readAsDataURL(file);
-      });
+    async decodeJabCodeFromImage(fileOrBlob) {
+        if (!state.jabInterface) throw new Error("JAB Code Interface not initialized.");
+        return state.jabInterface.decode_message(fileOrBlob);
     }
 };
 
@@ -337,12 +297,12 @@ const UIHandlers = (() => {
                 DOMElements.jabModalTitle.innerText = "Your Visual Key (Piece 3/3)";
                 DOMElements.jabDisplay.innerHTML = '';
                 
-                const qrPngDataUrl = await Utils.createQrCodeImage(visualKeySecret, true);
-                const qrImage = new Image();
-                qrImage.src = qrPngDataUrl;
-                DOMElements.jabDisplay.appendChild(qrImage);
+                const jabDataUrl = state.jabInterface.encode_message(visualKeySecret);
+                const jabImage = new Image();
+                jabImage.src = jabDataUrl;
+                DOMElements.jabDisplay.appendChild(jabImage);
                 DOMElements.jabModal.style.display = 'flex';
-                Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key QR Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
+                Utils.updateStatus(DOMElements.keyGenStatus, `✅ New key pair generated!\n- MASTER-PUBLIC-KEY.json (share this)\n- FILE-KEY.json (keep this on a USB)\n- Password (memorize this)\n- Visual Key JAB Code (print and secure this)\nThe new Public Key is now active for validation.`, 'success');
             } catch (e) {
                 Utils.log(`Key generation failed: ${e.message}`, 'error');
                 Utils.updateStatus(DOMElements.keyGenStatus, `❌ Failed to generate keys: ${e.message}`, 'error');
@@ -355,12 +315,12 @@ const UIHandlers = (() => {
             const file = event.target.files[0];
             if (!file) return;
             try {
-                const decodedText = await Utils.decodeQrCodeFromImage(file);
+                const decodedText = await Utils.decodeJabCodeFromImage(file);
                 state.puzzlePieces.visualKey = decodedText;
-                Utils.log("Visual Key loaded from QR Code.", 'success');
+                Utils.log("Visual Key loaded from JAB Code.", 'success');
             } catch (error) {
                 state.puzzlePieces.visualKey = null;
-                Utils.log(`Error decoding QR Code: ${error.message}`, 'error');
+                Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
             } finally {
                 updatePuzzleStatus();
                 event.target.value = '';
@@ -493,7 +453,7 @@ const BanknoteLogic = (() => {
         }
     };
     
-    async function decodeAllQrCodesFromImage(processedDataUrl, banknoteImage) {
+    async function decodeAllJabCodesFromImage(banknoteImage) {
         const mainCanvas = document.createElement('canvas');
         mainCanvas.width = banknoteImage.width;
         mainCanvas.height = banknoteImage.height;
@@ -502,32 +462,40 @@ const BanknoteLogic = (() => {
 
         const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
         const scanResults = [];
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = layout.qrSize;
+        tempCanvas.height = layout.qrSize;
+        const tempCtx = tempCanvas.getContext('2d');
 
         for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
+            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning JAB Code in location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
             const row = Math.floor(i / 3);
             const col = i % 3;
             
-            // This calculation is now for a cropped image, starting at 0,0
             const regionX = col * (layout.qrSize + layout.xSpacing);
             const regionY = row * (layout.qrSize + layout.ySpacing);
             const regionSize = layout.qrSize;
             
             const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            
+            tempCtx.putImageData(imageData, 0, 0);
+
             const result = { x: regionX, y: regionY, size: regionSize, data: null, success: false };
-            if (code && code.data) {
-                result.data = code.data;
-                result.success = true;
-            } else {
-                 console.warn(`Could not decode QR in zone ${i + 1}.`);
+            try {
+                const dataUrl = tempCanvas.toDataURL('image/png');
+                const decodedData = await Utils.decodeJabCodeFromImage(dataUrl);
+                if (decodedData) {
+                    result.data = decodedData;
+                    result.success = true;
+                }
+            } catch (error) {
+                 console.warn(`Could not decode JAB code in zone ${i + 1}:`, error);
             }
             scanResults.push(result);
         }
         
         if (scanResults.every(r => !r.success)) {
-             throw new Error("Validation Failed. No QR codes found at exact locations. Tip: Use a flat, well-lit photo.");
+             throw new Error("Validation Failed. No JAB codes could be decoded. Tip: Use a flat, well-lit photo.");
         }
         return scanResults;
     }
@@ -545,20 +513,19 @@ const BanknoteLogic = (() => {
 
             try {
                 const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
-                const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
                 
                 const banknoteImage = await new Promise((resolve, reject) => {
                     const img = new Image();
                     img.onload = () => resolve(img);
                     img.onerror = () => reject('Could not load banknote image');
-                    img.src = processedDataUrl;
+                    img.src = resizedDataUrl;
                 });
                 
                 noteCanvas.width = banknoteImage.width;
                 noteCanvas.height = banknoteImage.height;
                 noteCtx.drawImage(banknoteImage, 0, 0);
 
-                const scanResults = await decodeAllQrCodesFromImage(processedDataUrl, banknoteImage);
+                const scanResults = await decodeAllJabCodesFromImage(banknoteImage);
                 
                 scanResults.forEach(result => {
                     if (result.success) {
@@ -577,7 +544,7 @@ const BanknoteLogic = (() => {
                 });
                 
                 const decodedCodes = scanResults.filter(r => r.success);
-                let resultHTML = `<span class="info">Found ${decodedCodes.length}/${Constants.NUM_QR_CODES} QR code(s). Assembling payload...</span>\n`;
+                let resultHTML = `<span class="info">Found ${decodedCodes.length}/${Constants.NUM_QR_CODES} JAB code(s). Assembling payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
 
                 let expectedTotalParts = Constants.NUM_QR_CODES;
@@ -599,7 +566,7 @@ const BanknoteLogic = (() => {
                 }
                 
                 if (uniqueCodes < expectedTotalParts) {
-                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required QR codes. The banknote may be damaged or fake.`, 'error');
+                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required JAB codes. The banknote may be damaged or fake.`, 'error');
                     return;
                 }
 
@@ -626,10 +593,10 @@ const BanknoteLogic = (() => {
                 resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
                 resultDiv.innerHTML = resultHTML;
             } catch (e) {
-                if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
-                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The QR code data is corrupt or invalid.`, 'error');
+                if (e.message && (e.message.includes("incorrect header check") || e.message.includes("invalid block type"))) {
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The JAB code data is corrupt or invalid.`, 'error');
                 } else {
-                     Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}`, 'error');
+                     Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message || e}`, 'error');
                 }
                 console.error(e);
             } finally {
@@ -643,10 +610,6 @@ const BanknoteLogic = (() => {
 // BANKNOTE DRAWER -- THIS SECTION CONTAINS THE LAYOUT FIX
 // ===================================================================================
 const BanknoteDrawer = (() => {
-    /**
-     * Draws microprint text in the gaps between QR codes.
-     * All coordinates are relative to a 0,0 origin.
-     */
     function drawMicroprint(ctx, layout, amount, serial) {
         ctx.fillStyle = "rgba(0, 0, 0, 0.35)"; // Watermark color
         ctx.font = "bold 9px 'Roboto Mono'";
@@ -656,7 +619,6 @@ const BanknoteDrawer = (() => {
         const amountStr = amount.toLocaleString('en-US');
         const serialStr = serial;
 
-        // --- Draw 6 VERTICAL texts ---
         const verticalTextX1 = layout.qrSize + (layout.xSpacing / 2);
         const verticalTextX2 = (layout.qrSize * 2) + layout.xSpacing + (layout.xSpacing / 2);
 
@@ -676,7 +638,6 @@ const BanknoteDrawer = (() => {
             ctx.restore();
         }
 
-        // --- Draw 4 HORIZONTAL texts ---
         const horizontalTextY1 = layout.qrSize + (layout.ySpacing / 2);
         const horizontalTextY2 = (layout.qrSize * 2) + layout.ySpacing + (layout.ySpacing / 2);
         
@@ -691,41 +652,35 @@ const BanknoteDrawer = (() => {
     }
 
     return {
-        // getLayout is used by the validator to know where to scan for QR codes
         getLayout: (width, height) => {
-            const qrSize = 220; // Changed from 250
+            const qrSize = 250;
             const xSpacing = 20;
             const ySpacing = 20;
-            const totalGridWidth = (qrSize * 3) + (xSpacing * 2); // 660 + 40 = 700
-            const totalGridHeight = (qrSize * 3) + (ySpacing * 2); // 660 + 40 = 700
+            const totalGridWidth = (qrSize * 3) + (xSpacing * 2);
+            const totalGridHeight = (qrSize * 3) + (ySpacing * 2);
             return { qrSize, xSpacing, ySpacing, totalGridWidth, totalGridHeight };
         },
         drawNoteOnCanvas: async (targetCanvas, noteData, fullPayload) => {
-            // Define layout constants directly
             const layout = {
-                qrSize: 220, // Changed from 250
+                qrSize: 250,
                 xSpacing: 20,
                 ySpacing: 20,
             };
 
-            // Calculate the exact canvas dimensions based on the QR grid
-            const finalWidth = (layout.qrSize * 3) + (layout.xSpacing * 2); // 700
-            const finalHeight = (layout.qrSize * 3) + (layout.ySpacing * 2); // 700
+            const finalWidth = (layout.qrSize * 3) + (layout.xSpacing * 2);
+            const finalHeight = (layout.qrSize * 3) + (layout.ySpacing * 2);
             
-            // Set the canvas size precisely
             targetCanvas.width = finalWidth;
             targetCanvas.height = finalHeight;
 
             const ctx = targetCanvas.getContext("2d");
             const { amount, serial } = noteData;
 
-            // Simple white background, no borders or shadows
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, finalWidth, finalHeight);
             
             ctx.imageSmoothingEnabled = false;
             
-            // Prepare QR code data
             const partLength = Math.ceil(fullPayload.length / Constants.NUM_QR_CODES);
             const qrPayloads = [];
             for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
@@ -733,9 +688,8 @@ const BanknoteDrawer = (() => {
                 qrPayloads.push(`${Constants.VALIDATION_PREFIX}${i + 1}/${Constants.NUM_QR_CODES}:${partData}`);
             }
 
-            const qrImages = await Promise.all(qrPayloads.map(payload => Utils.createQrCodeImage(payload)));
+            const qrImages = await Promise.all(qrPayloads.map(payload => Utils.createJabCodeImage(payload)));
 
-            // Draw QR codes starting from origin 0,0
             qrImages.forEach((img, index) => {
                 const row = Math.floor(index / 3);
                 const col = index % 3;
@@ -743,8 +697,6 @@ const BanknoteDrawer = (() => {
                 const y = row * (layout.qrSize + layout.ySpacing);
                 ctx.drawImage(img, x, y, Math.round(layout.qrSize), Math.round(layout.qrSize));
             });
-
-            // Draw the microprint text in the gaps
             drawMicroprint(ctx, layout, amount, serial);
         }
     };
@@ -754,15 +706,16 @@ const BanknoteDrawer = (() => {
 // APPLICATION INITIALIZATION
 // ===================================================================================
 async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Module...', 'info');
+    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Modules (Falcon-1024, JAB Code)...', 'info');
     try {
         state.falconApi = await pqcSignFalcon1024();
+        state.jabInterface = new JabcodeJSInterface();
         Utils.updateStatus(DOMElements.keyGenStatus, '✅ Modules loaded. Please generate or import keys to begin.', 'success');
-        Utils.log("All cryptographic and QR code modules initialized successfully.", 'success');
+        Utils.log("All cryptographic and JAB code modules initialized successfully.", 'success');
     } catch (e) {
         Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
         Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
-        alert("Error: Failed to load a required cryptographic module. The application cannot run.");
+        alert("Error: Failed to load a required module. The application cannot run.");
         return;
     }
     
