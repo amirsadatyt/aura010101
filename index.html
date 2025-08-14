@@ -92,7 +92,8 @@ const Constants = {
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
     VALIDATION_PREFIX: "SADAT_V2_PART",
     NUM_QR_CODES: 6, 
-    MAX_IMAGE_DIMENSION: 2000
+    MAX_IMAGE_DIMENSION: 2000,
+    SERIAL_NUM_SIZE: 8,
 };
 
 // --- DOM Elements ---
@@ -404,18 +405,58 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
+    // =========================================================================
+    // == INNOVATION: BINARY PROTOCOL INSTEAD OF JSON FOR PAYLOAD
+    // =========================================================================
     const createUnifiedVerificationPayload = (noteData) => {
-        const payload = { a: noteData.amount, s: noteData.serial, t: noteData.timestamp, epk: Utils.arrayBufferToBase64(noteData.ephemeralPublicKey), s1: Utils.arrayBufferToBase64(noteData.signatureOne), s2: Utils.arrayBufferToBase64(noteData.signatureTwo) };
-        const jsonString = JSON.stringify(payload);
-        const compressedData = pako.deflate(jsonString);
+        const { amount, serial, timestamp, ephemeralPublicKey, signatureOne, signatureTwo } = noteData;
+        const serialBytes = new TextEncoder().encode(serial);
+
+        // Calculate total size for the buffer
+        const totalSize = 4 + 4 + Constants.SERIAL_NUM_SIZE + ephemeralPublicKey.byteLength + 2 + signatureOne.byteLength + 2 + signatureTwo.byteLength;
+        const buffer = new ArrayBuffer(totalSize);
+        const view = new DataView(buffer);
+        const uint8View = new Uint8Array(buffer);
+
+        let offset = 0;
+        
+        // Write fixed-size data
+        view.setUint32(offset, amount, false); offset += 4;
+        view.setUint32(offset, timestamp, false); offset += 4;
+        uint8View.set(serialBytes, offset); offset += Constants.SERIAL_NUM_SIZE;
+        uint8View.set(ephemeralPublicKey, offset); offset += ephemeralPublicKey.byteLength;
+        
+        // Write variable-size data with length prefixes
+        view.setUint16(offset, signatureOne.byteLength, false); offset += 2;
+        uint8View.set(signatureOne, offset); offset += signatureOne.byteLength;
+        
+        view.setUint16(offset, signatureTwo.byteLength, false); offset += 2;
+        uint8View.set(signatureTwo, offset); offset += signatureTwo.byteLength;
+
+        const compressedData = pako.deflate(uint8View);
         return Utils.arrayBufferToBase64(compressedData);
     };
 
     const parseUnifiedVerificationPayload = (base64CompressedString) => {
         const compressedData = Utils.base64ToUint8Array(base64CompressedString);
-        const jsonString = pako.inflate(compressedData, { to: 'string' });
-        const p = JSON.parse(jsonString);
-        return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), signatureOne: Utils.base64ToUint8Array(p.s1), signatureTwo: Utils.base64ToUint8Array(p.s2) };
+        const buffer = pako.inflate(compressedData).buffer;
+        const view = new DataView(buffer);
+        const uint8View = new Uint8Array(buffer);
+        
+        let offset = 0;
+        
+        const amount = view.getUint32(offset, false); offset += 4;
+        const timestamp = view.getUint32(offset, false); offset += 4;
+        const serial = new TextDecoder().decode(uint8View.subarray(offset, offset + Constants.SERIAL_NUM_SIZE)); offset += Constants.SERIAL_NUM_SIZE;
+        const ephemeralPublicKey = uint8View.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
+        
+        const sig1Length = view.getUint16(offset, false); offset += 2;
+        const signatureOne = uint8View.subarray(offset, offset + sig1Length); offset += sig1Length;
+        
+        const sig2Length = view.getUint16(offset, false); offset += 2;
+        const signatureTwo = uint8View.subarray(offset, offset + sig2Length);
+
+        return { amount, serial, timestamp, ephemeralPublicKey, signatureOne, signatureTwo };
     };
     
     const handleCreateAndSignNotes = async () => {
