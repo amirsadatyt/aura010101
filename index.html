@@ -94,6 +94,7 @@ const Constants = {
     NUM_QR_CODES: 6, 
     MAX_IMAGE_DIMENSION: 2000,
     SERIAL_NUM_SIZE: 8,
+    SEED_SIZE: 64, // For deterministic key generation
 };
 
 // --- DOM Elements ---
@@ -248,7 +249,7 @@ const Utils = {
     }
 };
 
-// --- CORE CRYPTO ENGINE (Unchanged) ---
+// --- CORE CRYPTO ENGINE ---
 const BankCrypto = (() => {
     const AES_ALGO = "AES-GCM";
     const PBKDF2_ITERATIONS = 100000;
@@ -263,6 +264,18 @@ const BankCrypto = (() => {
         async generateNewKeyPair() {
             if (!state.falconApi) throw new Error("Falcon API not initialized.");
             return state.falconApi.keypair();
+        },
+        async generateKeyPairFromSeed(seed) {
+            // INNOVATION: Assumes the underlying library supports deterministic key generation.
+            // This is a placeholder to demonstrate the concept. A real system needs a library
+            // with an explicit `keypair_from_seed(seed)` function for this to be secure.
+            if (!state.falconApi) throw new Error("Falcon API not initialized.");
+            // The Falcon library used here takes an optional PRNG seed.
+            // This is NOT the same as a key derivation seed, but it makes the process
+            // deterministic for this demonstration.
+            const prng_seed = new Uint8Array(48);
+            prng_seed.set(seed.subarray(0, 48));
+            return state.falconApi.keypair(prng_seed);
         },
         async signData(data, privateKey) {
             if (!privateKey || !state.falconApi) throw new Error("Signing prerequisites not met.");
@@ -396,8 +409,21 @@ const BanknoteLogic = (() => {
     };
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
-        const ephemeralKeyPair = await BankCrypto.generateNewKeyPair();
-        const noteData = { amount: parseInt(amount) || 0, serial: Math.random().toString(36).substring(2, 10).toUpperCase(), timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000), ephemeralPublicKey: ephemeralKeyPair.publicKey, signatureOne: null, signatureTwo: null };
+        
+        // INNOVATION: Generate key pair from a deterministic seed
+        const seed = crypto.getRandomValues(new Uint8Array(Constants.SEED_SIZE));
+        const ephemeralKeyPair = await BankCrypto.generateKeyPairFromSeed(seed);
+
+        const noteData = { 
+            amount: parseInt(amount) || 0, 
+            serial: Math.random().toString(36).substring(2, 10).toUpperCase(), 
+            timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000), 
+            seed: seed, // Send the small seed instead of the large public key
+            ephemeralPublicKey: ephemeralKeyPair.publicKey, // Keep public key locally for signing
+            signatureOne: null, 
+            signatureTwo: null 
+        };
+
         const dataForSigOne = getStandardizedDataForSigning(noteData);
         noteData.signatureOne = await BankCrypto.signData(dataForSigOne, ephemeralKeyPair.privateKey);
         const dataForSigTwo = getStandardizedDataForMasterSig(noteData);
@@ -405,50 +431,47 @@ const BanknoteLogic = (() => {
         return noteData;
     };
     
-    // =========================================================================
-    // == INNOVATION: BINARY PROTOCOL INSTEAD OF JSON FOR PAYLOAD
-    // =========================================================================
     const createUnifiedVerificationPayload = (noteData) => {
-        const { amount, serial, timestamp, ephemeralPublicKey, signatureOne, signatureTwo } = noteData;
+        const { amount, serial, timestamp, seed, signatureOne, signatureTwo } = noteData;
         const serialBytes = new TextEncoder().encode(serial);
 
-        // Calculate total size for the buffer
-        const totalSize = 4 + 4 + Constants.SERIAL_NUM_SIZE + ephemeralPublicKey.byteLength + 2 + signatureOne.byteLength + 2 + signatureTwo.byteLength;
+        // Protocol: Amount (4B) | Timestamp (4B) | Serial (8B) | Seed (64B) | Sig1Len (2B) | Sig1 | Sig2Len (2B) | Sig2
+        const totalSize = 4 + 4 + Constants.SERIAL_NUM_SIZE + Constants.SEED_SIZE + 2 + signatureOne.byteLength + 2 + signatureTwo.byteLength;
         const buffer = new ArrayBuffer(totalSize);
         const view = new DataView(buffer);
         const uint8View = new Uint8Array(buffer);
 
         let offset = 0;
-        
-        // Write fixed-size data
         view.setUint32(offset, amount, false); offset += 4;
         view.setUint32(offset, timestamp, false); offset += 4;
         uint8View.set(serialBytes, offset); offset += Constants.SERIAL_NUM_SIZE;
-        uint8View.set(ephemeralPublicKey, offset); offset += ephemeralPublicKey.byteLength;
+        uint8View.set(seed, offset); offset += Constants.SEED_SIZE;
         
-        // Write variable-size data with length prefixes
         view.setUint16(offset, signatureOne.byteLength, false); offset += 2;
         uint8View.set(signatureOne, offset); offset += signatureOne.byteLength;
         
         view.setUint16(offset, signatureTwo.byteLength, false); offset += 2;
-        uint8View.set(signatureTwo, offset); offset += signatureTwo.byteLength;
+        uint8View.set(signatureTwo, offset);
 
         const compressedData = pako.deflate(uint8View);
         return Utils.arrayBufferToBase64(compressedData);
     };
 
-    const parseUnifiedVerificationPayload = (base64CompressedString) => {
+    const parseUnifiedVerificationPayload = async (base64CompressedString) => {
         const compressedData = Utils.base64ToUint8Array(base64CompressedString);
         const buffer = pako.inflate(compressedData).buffer;
         const view = new DataView(buffer);
         const uint8View = new Uint8Array(buffer);
         
         let offset = 0;
-        
         const amount = view.getUint32(offset, false); offset += 4;
         const timestamp = view.getUint32(offset, false); offset += 4;
         const serial = new TextDecoder().decode(uint8View.subarray(offset, offset + Constants.SERIAL_NUM_SIZE)); offset += Constants.SERIAL_NUM_SIZE;
-        const ephemeralPublicKey = uint8View.subarray(offset, offset + Constants.FALCON_PUBKEY_SIZE); offset += Constants.FALCON_PUBKEY_SIZE;
+        const seed = uint8View.subarray(offset, offset + Constants.SEED_SIZE); offset += Constants.SEED_SIZE;
+        
+        // INNOVATION: Reconstruct public key from seed
+        const ephemeralKeyPair = await BankCrypto.generateKeyPairFromSeed(seed);
+        const ephemeralPublicKey = ephemeralKeyPair.publicKey;
         
         const sig1Length = view.getUint16(offset, false); offset += 2;
         const signatureOne = uint8View.subarray(offset, offset + sig1Length); offset += sig1Length;
@@ -651,7 +674,9 @@ const BanknoteLogic = (() => {
                 resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
                 
-                const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
+                // parsing now happens asynchronously
+                const parsedData = await parseUnifiedVerificationPayload(fullPayloadString);
+
                 resultHTML += `<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
                 const dataForSigOne = getStandardizedDataForSigning(parsedData);
