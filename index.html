@@ -89,9 +89,9 @@ const state = {
 // --- CONSTANTS ---
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
-    FALCON_PRIVKEY_SIZE: 2305, // Definitive private key size for Falcon-1024
+    FALCON_PRNG_SEED_SIZE: 48, // The size of the seed for the Falcon library's PRNG
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    VALIDATION_PREFIX: "SADAT_V4_PART", // Version up for the final fix
+    VALIDATION_PREFIX: "SADAT_V5_PART", // Version up for the "Clean Room" fix
     NUM_QR_CODES: 6, 
     MAX_IMAGE_DIMENSION: 2000,
     SERIAL_NUM_SIZE: 8,
@@ -267,33 +267,28 @@ const BankCrypto = (() => {
             return state.falconApi.keypair();
         },
         async generateKeyPairFromSeed(masterSeed) {
-            // PROFESSIONAL, DEFINITIVE SOLUTION: Directly derive the private key using HKDF.
-            // This bypasses the library's internal PRNG, guaranteeing determinism.
-            if (!state.falconApi) throw new Error("Falcon API not initialized.");
+            // "CLEAN ROOM" SOLUTION: To guarantee determinism, we create a fresh, isolated
+            // instance of the Falcon engine. This prevents any internal state from the
+            // global `state.falconApi` from interfering with the result.
+            const freshFalconApi = await pqcSignFalcon1024();
 
-            // 1. Import the master seed to use with HKDF
+            // Use HKDF to derive a deterministic seed for the PRNG. This is robust.
             const masterKeyMaterial = await crypto.subtle.importKey(
                 "raw", masterSeed, { name: "HKDF" }, false, ["deriveBits"]
             );
-
-            // 2. Derive a deterministic byte array of the exact private key size
-            const privateKeyBytes = await crypto.subtle.deriveBits(
+            const prngSeed = await crypto.subtle.deriveBits(
                 {
                     name: "HKDF",
-                    hash: "SHA-512", // Using a stronger hash for derivation
-                    salt: new Uint8Array(), 
-                    info: new TextEncoder().encode("falcon-ephemeral-private-key"),
+                    hash: "SHA-256",
+                    salt: new Uint8Array(),
+                    info: new TextEncoder().encode("falcon-prng-seed"),
                 },
                 masterKeyMaterial,
-                Constants.FALCON_PRIVKEY_SIZE * 8 // Length in bits
+                Constants.FALCON_PRNG_SEED_SIZE * 8
             );
-            
-            const privateKey = new Uint8Array(privateKeyBytes);
-            
-            // 3. Derive the corresponding public key from the deterministic private key
-            const publicKey = state.falconApi.pk_from_sk(privateKey);
 
-            return { privateKey, publicKey };
+            // Use the deterministically derived seed on the FRESH engine instance.
+            return freshFalconApi.keypair(new Uint8Array(prngSeed));
         },
         async signData(data, privateKey) {
             if (!privateKey || !state.falconApi) throw new Error("Signing prerequisites not met.");
