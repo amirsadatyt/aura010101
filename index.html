@@ -315,12 +315,20 @@ const UIHandlers = (() => {
             const file = event.target.files[0];
             if (!file) return;
             try {
-                const decodedText = await Utils.decodeJabCodeFromImage(file);
+                // Convert the file to a data URL before decoding
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                const decodedText = await Utils.decodeJabCodeFromImage(dataUrl);
                 state.puzzlePieces.visualKey = decodedText;
                 Utils.log("Visual Key loaded from JAB Code.", 'success');
             } catch (error) {
                 state.puzzlePieces.visualKey = null;
-                Utils.log(`Error decoding JAB Code: ${error.message}`, 'error');
+                Utils.log(`Error decoding JAB Code. Ensure the uploaded image is a clear, valid JAB Code. Details: ${error.message || error}`, 'error');
             } finally {
                 updatePuzzleStatus();
                 event.target.value = '';
