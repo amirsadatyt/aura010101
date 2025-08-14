@@ -89,12 +89,13 @@ const state = {
 // --- CONSTANTS ---
 const Constants = {
     FALCON_PUBKEY_SIZE: 1793,
+    FALCON_PRNG_SEED_SIZE: 48, // The size of the seed for the Falcon library's PRNG
     EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    VALIDATION_PREFIX: "SADAT_V2_PART",
+    VALIDATION_PREFIX: "SADAT_V3_PART", // Version up
     NUM_QR_CODES: 6, 
     MAX_IMAGE_DIMENSION: 2000,
     SERIAL_NUM_SIZE: 8,
-    SEED_SIZE: 64, // For deterministic key generation
+    MASTER_SEED_SIZE: 64, // The master seed sent in the payload
 };
 
 // --- DOM Elements ---
@@ -265,17 +266,34 @@ const BankCrypto = (() => {
             if (!state.falconApi) throw new Error("Falcon API not initialized.");
             return state.falconApi.keypair();
         },
-        async generateKeyPairFromSeed(seed) {
-            // INNOVATION: Assumes the underlying library supports deterministic key generation.
-            // This is a placeholder to demonstrate the concept. A real system needs a library
-            // with an explicit `keypair_from_seed(seed)` function for this to be secure.
+        async generateKeyPairFromSeed(masterSeed) {
+            // PROFESSIONAL SOLUTION: Use HKDF to derive a deterministic seed for the PRNG.
+            // This guarantees the same key pair is generated from the same master seed every time.
             if (!state.falconApi) throw new Error("Falcon API not initialized.");
-            // The Falcon library used here takes an optional PRNG seed.
-            // This is NOT the same as a key derivation seed, but it makes the process
-            // deterministic for this demonstration.
-            const prng_seed = new Uint8Array(48);
-            prng_seed.set(seed.subarray(0, 48));
-            return state.falconApi.keypair(prng_seed);
+
+            // 1. Import the master seed as a crypto key for HKDF
+            const masterKeyMaterial = await crypto.subtle.importKey(
+                "raw",
+                masterSeed,
+                { name: "HKDF" },
+                false,
+                ["deriveBits"]
+            );
+
+            // 2. Derive a deterministic 48-byte seed for the Falcon PRNG
+            const prngSeed = await crypto.subtle.deriveBits(
+                {
+                    name: "HKDF",
+                    hash: "SHA-256",
+                    salt: new Uint8Array(), // Salt can be empty for this use case
+                    info: new TextEncoder().encode("falcon-prng-seed"), // Context-specific info
+                },
+                masterKeyMaterial,
+                Constants.FALCON_PRNG_SEED_SIZE * 8 // Length in bits
+            );
+
+            // 3. Use the deterministically derived seed to generate the key pair
+            return state.falconApi.keypair(new Uint8Array(prngSeed));
         },
         async signData(data, privateKey) {
             if (!privateKey || !state.falconApi) throw new Error("Signing prerequisites not met.");
@@ -410,16 +428,15 @@ const BanknoteLogic = (() => {
     const createNoteData = async (amount) => {
         if (!state.masterPrivateKey) throw new Error("Master Private Key is not active.");
         
-        // INNOVATION: Generate key pair from a deterministic seed
-        const seed = crypto.getRandomValues(new Uint8Array(Constants.SEED_SIZE));
-        const ephemeralKeyPair = await BankCrypto.generateKeyPairFromSeed(seed);
+        const masterSeed = crypto.getRandomValues(new Uint8Array(Constants.MASTER_SEED_SIZE));
+        const ephemeralKeyPair = await BankCrypto.generateKeyPairFromSeed(masterSeed);
 
         const noteData = { 
             amount: parseInt(amount) || 0, 
             serial: Math.random().toString(36).substring(2, 10).toUpperCase(), 
             timestamp: Math.floor((Date.now() - Constants.EPOCH) / 1000), 
-            seed: seed, // Send the small seed instead of the large public key
-            ephemeralPublicKey: ephemeralKeyPair.publicKey, // Keep public key locally for signing
+            masterSeed: masterSeed, 
+            ephemeralPublicKey: ephemeralKeyPair.publicKey,
             signatureOne: null, 
             signatureTwo: null 
         };
@@ -432,11 +449,10 @@ const BanknoteLogic = (() => {
     };
     
     const createUnifiedVerificationPayload = (noteData) => {
-        const { amount, serial, timestamp, seed, signatureOne, signatureTwo } = noteData;
+        const { amount, serial, timestamp, masterSeed, signatureOne, signatureTwo } = noteData;
         const serialBytes = new TextEncoder().encode(serial);
 
-        // Protocol: Amount (4B) | Timestamp (4B) | Serial (8B) | Seed (64B) | Sig1Len (2B) | Sig1 | Sig2Len (2B) | Sig2
-        const totalSize = 4 + 4 + Constants.SERIAL_NUM_SIZE + Constants.SEED_SIZE + 2 + signatureOne.byteLength + 2 + signatureTwo.byteLength;
+        const totalSize = 4 + 4 + Constants.SERIAL_NUM_SIZE + Constants.MASTER_SEED_SIZE + 2 + signatureOne.byteLength + 2 + signatureTwo.byteLength;
         const buffer = new ArrayBuffer(totalSize);
         const view = new DataView(buffer);
         const uint8View = new Uint8Array(buffer);
@@ -445,7 +461,7 @@ const BanknoteLogic = (() => {
         view.setUint32(offset, amount, false); offset += 4;
         view.setUint32(offset, timestamp, false); offset += 4;
         uint8View.set(serialBytes, offset); offset += Constants.SERIAL_NUM_SIZE;
-        uint8View.set(seed, offset); offset += Constants.SEED_SIZE;
+        uint8View.set(masterSeed, offset); offset += Constants.MASTER_SEED_SIZE;
         
         view.setUint16(offset, signatureOne.byteLength, false); offset += 2;
         uint8View.set(signatureOne, offset); offset += signatureOne.byteLength;
@@ -467,10 +483,9 @@ const BanknoteLogic = (() => {
         const amount = view.getUint32(offset, false); offset += 4;
         const timestamp = view.getUint32(offset, false); offset += 4;
         const serial = new TextDecoder().decode(uint8View.subarray(offset, offset + Constants.SERIAL_NUM_SIZE)); offset += Constants.SERIAL_NUM_SIZE;
-        const seed = uint8View.subarray(offset, offset + Constants.SEED_SIZE); offset += Constants.SEED_SIZE;
+        const masterSeed = uint8View.subarray(offset, offset + Constants.MASTER_SEED_SIZE); offset += Constants.MASTER_SEED_SIZE;
         
-        // INNOVATION: Reconstruct public key from seed
-        const ephemeralKeyPair = await BankCrypto.generateKeyPairFromSeed(seed);
+        const ephemeralKeyPair = await BankCrypto.generateKeyPairFromSeed(masterSeed);
         const ephemeralPublicKey = ephemeralKeyPair.publicKey;
         
         const sig1Length = view.getUint16(offset, false); offset += 2;
@@ -674,7 +689,6 @@ const BanknoteLogic = (() => {
                 resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
                 resultDiv.innerHTML = resultHTML;
                 
-                // parsing now happens asynchronously
                 const parsedData = await parseUnifiedVerificationPayload(fullPayloadString);
 
                 resultHTML += `<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>\n`;
