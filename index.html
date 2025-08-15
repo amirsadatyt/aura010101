@@ -201,10 +201,26 @@
         function generateReceiveQrCode() {
             DOMElements.myQrCodeContainer.innerHTML = '';
             const payload = JSON.stringify({type:"SADAT_WALLET_ADDRESS", uid:state.currentUser.uid});
-            const qr = qrcode(0,'L'); qr.addData(payload); qr.make();
+            const qr = qrcode(0,'L');
+            qr.addData(payload);
+            qr.make();
             DOMElements.myQrCodeContainer.innerHTML = qr.createImgTag(6, 10);
+
+            // منطق دانلود با پس‌زمینه سفید
             const img = DOMElements.myQrCodeContainer.querySelector('img');
-            const canvas = document.createElement('canvas'); const scale=3; canvas.width=img.width*scale; canvas.height=img.height*scale; const ctx=canvas.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.drawImage(img,0,0,canvas.width,canvas.height);
+            const canvas = document.createElement('canvas');
+            const scale = 3; 
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+
+            // *** خط جدید: پس‌زمینه کانواس را سفید می‌کند ***
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // بقیه کد بدون تغییر باقی می‌ماند
+            ctx.imageSmoothingEnabled = false; 
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             DOMElements.downloadQrLink.href = canvas.toDataURL('image/png');
         }
 
