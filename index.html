@@ -13,8 +13,9 @@
         .hidden { display: none; }
         button { background: linear-gradient(90deg, #8e44ad, #9b59b6); color: white; border: none; padding: 12px 18px; border-radius: 8px; cursor: pointer; font-size: 16px; transition: transform 0.2s, background 0.3s; margin: 5px; }
         button:hover { transform: scale(1.05); background: linear-gradient(90deg, #9b59b6, #8e44ad); }
-        button:disabled { background: #555; cursor: not-allowed; transform: none; }
-        input { width: calc(100% - 24px); padding: 12px; border-radius: 8px; border: 1px solid #444; background: #2c2c2c; color: white; font-size: 16px; margin: 8px 0; }
+        button:disabled { background: #555; cursor: not-allowed; transform: none; opacity: 0.7; }
+        input, textarea { width: calc(100% - 24px); padding: 12px; border-radius: 8px; border: 1px solid #444; background: #2c2c2c; color: white; font-size: 16px; margin: 8px 0; font-family: inherit; }
+        textarea { height: 100px; resize: vertical; }
         .address-box { word-wrap: break-word; background: #101010; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 12px; margin: 10px 0; text-align: left; direction: ltr; }
         #display-qr-code { background: white; padding: 10px; margin: 20px auto; width: fit-content; border-radius: 8px; }
         .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -62,6 +63,14 @@
             <div id="display-qr-code"></div>
             <button id="close-qr-view-btn">بستن</button>
         </div>
+
+        <div class="section hidden" id="redeem-view">
+            <h2>نقد کردن چک آفلاین</h2>
+            <p>اطلاعات چک آفلاین (رشته JSON از QR کد) را وارد کنید:</p>
+            <textarea id="redeem-check-data" placeholder='{"sender": "...", "recipient": "...", ...}'></textarea>
+            <button id="submit-redeem-btn">ارسال برای نقد کردن</button>
+            <button id="close-redeem-view-btn">انصراف</button>
+        </div>
         
         <div class="footer">
             <p>وضعیت: <span id="general-status">آماده</span></p>
@@ -81,19 +90,25 @@
             sessionSeed: null,
             offlineNonce: 0
         };
+        
+        // --- Crypto Module ---
+        // Will be initialized in init() after confirming superSphincs is loaded
+        let Crypto;
 
         // --- DOM Elements ---
         const DOMElements = {
-            // ... (A comprehensive list of all document.getElementById calls for cleaner code)
             createWalletBtn: document.getElementById('create-wallet-btn'),
             depositBtn: document.getElementById('deposit-btn'),
             redeemCheckBtn: document.getElementById('redeem-check-btn'),
             sendOnlineBtn: document.getElementById('send-online-btn'),
             sendOfflineBtn: document.getElementById('send-offline-btn'),
             closeQrBtn: document.getElementById('close-qr-view-btn'),
+            submitRedeemBtn: document.getElementById('submit-redeem-btn'),
+            closeRedeemBtn: document.getElementById('close-redeem-view-btn'),
             setupSection: document.getElementById('wallet-setup'),
             mainSection: document.getElementById('wallet-main'),
             qrSection: document.getElementById('qr-display-view'),
+            redeemSection: document.getElementById('redeem-view'),
             walletAddress: document.getElementById('wallet-address'),
             balanceDisplay: document.getElementById('balance-display'),
             setupStatus: document.getElementById('setup-status'),
@@ -102,27 +117,7 @@
             sendAmount: document.getElementById('send-amount'),
             qrTitle: document.getElementById('qr-title'),
             qrCodeDiv: document.getElementById('display-qr-code'),
-        };
-        
-        // --- SPHINCS+ Crypto Module ---
-        const Crypto = {
-            async generateKeys() {
-                await superSphincs.ready;
-                const keyPair = await superSphincs.keyPair();
-                return {
-                    publicKey: superSphincs.utils.to_base64(keyPair.publicKey),
-                    privateKey: superSphincs.utils.to_base64(keyPair.privateKey)
-                };
-            },
-            async sign(data, privateKeyB64) {
-                const privateKey = superSphincs.utils.from_base64(privateKeyB64);
-                return await superSphincs.signDetached(data, privateKey, 'base64');
-            },
-            async verify(signatureB64, data, publicKeyB64) {
-                const publicKey = superSphincs.utils.from_base64(publicKeyB64);
-                const signature = superSphincs.utils.from_base64(signatureB64);
-                return await superSphincs.verifyDetached(signature, data, publicKey);
-            }
+            redeemCheckData: document.getElementById('redeem-check-data'),
         };
 
         // --- UI & Helper Functions ---
@@ -132,36 +127,37 @@
         }
 
         function showSection(sectionToShow) {
-            ['setupSection', 'mainSection', 'qrSection'].forEach(key => {
-                DOMElements[key].classList.add('hidden');
-            });
+            [DOMElements.setupSection, DOMElements.mainSection, DOMElements.qrSection, DOMElements.redeemSection].forEach(s => s.classList.add('hidden'));
             sectionToShow.classList.remove('hidden');
+        }
+        
+        async function withLoading(button, asyncFunc) {
+            button.disabled = true;
+            const originalText = button.textContent;
+            button.textContent = '...درحال پردازش';
+            try {
+                await asyncFunc();
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
         }
 
         // --- Core Functions ---
-
         async function secureFetch(endpoint, data) {
+            // ... (rest of the functions remain the same as before)
             if (!wallet.keys) throw new Error("کیف پول بارگذاری نشده است.");
-            
             updateStatus(DOMElements.generalStatus, `درحال ارسال درخواست به ${endpoint}...`, 'info');
             const dataToSign = JSON.stringify(data);
             const signature = await Crypto.sign(dataToSign, wallet.keys.privateKey);
-
             try {
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        publicKey: wallet.keys.publicKey,
-                        signature,
-                        data 
-                    })
+                    body: JSON.stringify({ publicKey: wallet.keys.publicKey, signature, data })
                 });
-                
                 const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.error || `Server error: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(result.error || `Server error: ${response.status}`);
                 updateStatus(DOMElements.generalStatus, "درخواست با موفقیت انجام شد.", 'success');
                 return result;
             } catch (error) {
@@ -175,18 +171,14 @@
             updateStatus(DOMElements.setupStatus, "در حال ساخت کلیدهای کوانتومی SPHINCS+...", 'info');
             try {
                 wallet.keys = await Crypto.generateKeys();
-                localStorage.setItem('quantumWalletKeys', JSON.stringify(wallet.keys));
-                
-                updateStatus(DOMElements.setupStatus, "درحال ثبت کلید عمومی در سرور...", 'info');
-                await secureFetch('/register', {}); // Register public key with the server
-                
+                await secureFetch('/register', {});
                 wallet.balance = 0;
                 wallet.offlineNonce = 0;
                 wallet.sessionSeed = null;
-                
+                localStorage.setItem('quantumWalletKeys', JSON.stringify(wallet.keys));
+                localStorage.removeItem('quantumWalletState');
                 DOMElements.walletAddress.textContent = wallet.keys.publicKey;
                 DOMElements.balanceDisplay.textContent = wallet.balance;
-                
                 updateStatus(DOMElements.setupStatus, "کیف پول با موفقیت ساخته و ثبت شد!", 'success');
                 showSection(DOMElements.mainSection);
             } catch (e) {
@@ -194,39 +186,32 @@
             }
         }
 
+        function saveWalletState() {
+            const state = { balance: wallet.balance, sessionSeed: wallet.sessionSeed, offlineNonce: wallet.offlineNonce };
+            localStorage.setItem('quantumWalletState', JSON.stringify(state));
+        }
+        
         async function depositWithBanknote() {
-            const serial = prompt("لطفاً شماره سریال اسکناس امضا شده با Falcon را برای شارژ وارد کنید:");
+            const serial = prompt("لطفاً شماره سریال اسکناس را برای شارژ وارد کنید:");
             if (!serial) return;
-            
-            // In a real app, you would scan the banknote image, extract the data
-            // and the Falcon signature, and verify it here using the Guardian's public Falcon key.
-            // For this prototype, we trust the serial number and send it for server-side validation.
-            
             try {
                 const result = await secureFetch('/deposit', { serialNumber: serial });
                 if (result.success) {
                     wallet.sessionSeed = result.sessionSeed;
-                    wallet.offlineNonce = 0; // Reset offline counter [cite: 30]
+                    wallet.offlineNonce = 0;
                     wallet.balance = result.newBalance;
-                    localStorage.setItem('quantumWalletState', JSON.stringify({balance: wallet.balance, sessionSeed: wallet.sessionSeed, offlineNonce: wallet.offlineNonce}));
-                    
+                    saveWalletState();
                     DOMElements.balanceDisplay.textContent = wallet.balance;
-                    alert("کیف پول با موفقیت شارژ شد. بذر جلسه برای تراکنش آفلاین ذخیره شد.");
+                    alert("کیف پول با موفقیت شارژ شد و بذر جلسه برای تراکنش آفلاین ذخیره شد.");
                 }
             } catch (e) {
                 alert(`خطا در شارژ: ${e.message}`);
             }
         }
-
-        async function createOfflineCheck() {
-            if (!wallet.sessionSeed) {
-                alert("برای ساخت چک آفلاین، ابتدا باید کیف پول خود را آنلاین شارژ کنید تا بذر جلسه دریافت شود.");
-                return;
-            }
-
-            const recipient = DOMElements.recipientAddress.value;
+        
+        async function sendOnline() {
+            const recipient = DOMElements.recipientAddress.value.trim();
             const amount = parseInt(DOMElements.sendAmount.value, 10);
-
             if (!recipient || !amount || amount <= 0) {
                 alert("لطفا آدرس گیرنده و مبلغ صحیح را وارد کنید.");
                 return;
@@ -235,47 +220,65 @@
                 alert("موجودی کافی نیست.");
                 return;
             }
+            try {
+                const result = await secureFetch('/transfer', { recipient, amount });
+                if (result.success) {
+                    wallet.balance = result.newBalance;
+                    saveWalletState();
+                    DOMElements.balanceDisplay.textContent = wallet.balance;
+                    DOMElements.recipientAddress.value = '';
+                    DOMElements.sendAmount.value = '';
+                    alert("انتقال آنلاین با موفقیت انجام شد.");
+                }
+            } catch(e) {
+                alert(`خطا در انتقال آنلاین: ${e.message}`);
+            }
+        }
 
-            wallet.offlineNonce++; // Increment nonce before signing [cite: 48]
-            
-            const checkData = {
-                sender: wallet.keys.publicKey,
-                recipient,
-                amount,
-                nonce: wallet.offlineNonce
-            };
-            
-            // The signature is created over the check data combined with the secret session seed [cite: 49]
+        async function createOfflineCheck() {
+            if (!wallet.sessionSeed) {
+                alert("برای ساخت چک آفلاین، ابتدا باید کیف پول خود را آنلاین شارژ کنید تا بذر جلسه دریافت شود.");
+                return;
+            }
+            const recipient = DOMElements.recipientAddress.value.trim();
+            const amount = parseInt(DOMElements.sendAmount.value, 10);
+            if (!recipient || !amount || amount <= 0) {
+                alert("لطفا آدرس گیرنده و مبلغ صحیح را وارد کنید.");
+                return;
+            }
+            if (amount > wallet.balance) {
+                alert("موجودی کافی نیست.");
+                return;
+            }
+            wallet.offlineNonce++;
+            const checkData = { sender: wallet.keys.publicKey, recipient, amount, nonce: wallet.offlineNonce };
             const dataToSign = JSON.stringify(checkData) + wallet.sessionSeed;
             const signature = await Crypto.sign(dataToSign, wallet.keys.privateKey);
             const fullCheck = { ...checkData, signature };
-
-            wallet.balance -= amount; // Deduct balance locally [cite: 51]
+            wallet.balance -= amount;
             DOMElements.balanceDisplay.textContent = wallet.balance;
-            localStorage.setItem('quantumWalletState', JSON.stringify({balance: wallet.balance, sessionSeed: wallet.sessionSeed, offlineNonce: wallet.offlineNonce}));
-
-
-            // Display as QR Code [cite: 50]
+            saveWalletState();
             const qrData = JSON.stringify(fullCheck);
             DOMElements.qrCodeDiv.innerHTML = '';
-            new QRCode(DOMElements.qrCodeDiv, { text: qrData, width: 256, height: 256 });
+            new QRCode(DOMElements.qrCodeDiv, { text: qrData, width: 256, height: 256, correctLevel : QRCode.CorrectLevel.H });
             DOMElements.qrTitle.textContent = "چک آفلاین - برای گیرنده اسکن شود";
             showSection(DOMElements.qrSection);
             alert(`چک آفلاین با نانس ${wallet.offlineNonce} ساخته شد. موجودی شما به صورت محلی کم شد.`);
         }
         
-        async function redeemCheck() {
-            const checkJson = prompt("لطفا اطلاعات چک آفلاین (رشته JSON از QR کد) را وارد کنید:");
+        async function submitRedeem() {
+            const checkJson = DOMElements.redeemCheckData.value;
             if (!checkJson) return;
-
             try {
                 const check = JSON.parse(checkJson);
                 const result = await secureFetch('/redeemCheck', { check });
                 if (result.success) {
                     wallet.balance = result.newBalance;
+                    saveWalletState();
                     DOMElements.balanceDisplay.textContent = wallet.balance;
-                    localStorage.setItem('quantumWalletState', JSON.stringify({balance: wallet.balance, sessionSeed: wallet.sessionSeed, offlineNonce: wallet.offlineNonce}));
                     alert("چک با موفقیت نقد و به موجودی شما اضافه شد.");
+                    DOMElements.redeemCheckData.value = '';
+                    showSection(DOMElements.mainSection);
                 }
             } catch (e) {
                 alert(`خطا در نقد کردن چک: ${e.message}`);
@@ -283,11 +286,31 @@
         }
 
         function init() {
-            DOMElements.createWalletBtn.addEventListener('click', createWallet);
-            DOMElements.depositBtn.addEventListener('click', depositWithBanknote);
-            DOMElements.sendOfflineBtn.addEventListener('click', createOfflineCheck);
-            DOMElements.redeemCheckBtn.addEventListener('click', redeemCheck);
+            // **FIX:** Define the Crypto object now that we know superSphincs exists.
+            Crypto = {
+                async generateKeys() {
+                    await superSphincs.ready;
+                    const keyPair = await superSphincs.keyPair();
+                    return {
+                        publicKey: superSphincs.utils.to_base_64(keyPair.publicKey),
+                        privateKey: superSphincs.utils.to_base_64(keyPair.privateKey)
+                    };
+                },
+                async sign(data, privateKeyB64) {
+                    const privateKey = superSphincs.utils.from_base_64(privateKeyB64);
+                    return await superSphincs.signDetached(data, privateKey, 'base64');
+                }
+            };
+            
+            // Now, attach event listeners and load the wallet state.
+            DOMElements.createWalletBtn.addEventListener('click', () => withLoading(DOMElements.createWalletBtn, createWallet));
+            DOMElements.depositBtn.addEventListener('click', () => withLoading(DOMElements.depositBtn, depositWithBanknote));
+            DOMElements.sendOnlineBtn.addEventListener('click', () => withLoading(DOMElements.sendOnlineBtn, sendOnline));
+            DOMElements.sendOfflineBtn.addEventListener('click', () => withLoading(DOMElements.sendOfflineBtn, createOfflineCheck));
+            DOMElements.redeemCheckBtn.addEventListener('click', () => showSection(DOMElements.redeemSection));
+            DOMElements.submitRedeemBtn.addEventListener('click', () => withLoading(DOMElements.submitRedeemBtn, submitRedeem));
             DOMElements.closeQrBtn.addEventListener('click', () => showSection(DOMElements.mainSection));
+            DOMElements.closeRedeemBtn.addEventListener('click', () => showSection(DOMElements.mainSection));
 
             const savedKeys = localStorage.getItem('quantumWalletKeys');
             if (savedKeys) {
@@ -308,7 +331,20 @@
             }
         }
 
-        init();
+        // **FIX:** This function waits for the sphincs+.js library to load
+        // before starting the main application logic.
+        function startApp() {
+            if (typeof superSphincs !== 'undefined') {
+                console.log("sphincs+.js library loaded successfully.");
+                init();
+            } else {
+                console.log("Waiting for sphincs+.js library...");
+                setTimeout(startApp, 100); // Poll every 100ms
+            }
+        }
+
+        // **FIX:** Start the application by calling the polling function.
+        startApp();
     </script>
 </body>
 </html>
