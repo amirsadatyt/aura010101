@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>کیف پول دیجیتال سادات (نسخه محلی)</title>
+    <title>کیف پول دیجیتال سادات (نسخه نهایی)</title>
     
     <style>
         body {
@@ -26,7 +26,7 @@
             text-align: center;
         }
         input[type="text"], input[type="password"], input[type="file"] {
-            width: calc(100% - 20px);
+            width: calc(100% - 22px);
             padding: 10px;
             margin-bottom: 15px;
             border: 1px solid #ddd;
@@ -48,8 +48,8 @@
         .button-group button { margin-top: 10px; }
         .back-button { background: #6c757d; margin-top: 20px; }
         .error-message { color: #d93025; }
-        #validation-status .error { color: #d93025; }
-        #validation-status .success { color: #1e8e3e; }
+        #validation-status .error { color: #d93025; font-weight: bold; }
+        #validation-status .success { color: #1e8e3e; font-weight: bold; }
         #my-qr-code img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
     </style>
 </head>
@@ -92,8 +92,7 @@
     <div id="send-view" class="view">
         <div class="card">
             <h2>ارسال وجه</h2>
-            <p>QR Code گیرنده را آپلود کنید.</p>
-            <input type="file" id="recipient-qr-input" accept="image/*">
+            <p>این بخش در حال توسعه است.</p>
             <button class="back-button">بازگشت</button>
         </div>
     </div>
@@ -113,41 +112,51 @@
     <script src="https://cdn.skypack.dev/js-sha3"></script>
 
     <script type="module">
-        // **تغییر اصلی:** وارد کردن ماژول فالکون به صورت محلی
+        // وارد کردن ماژول فالکون به صورت محلی
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 
-        // ==========================================================
-        // بقیه کد جاوااسکریپت بدون تغییر باقی می‌ماند
-        // ==========================================================
-        const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", NUM_QR_CODES: 9 };
+        // کلید عمومی کامل و صحیح
+        const MASTER_PUBLIC_KEY_B64 = "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";
+
+        const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART" };
         const Utils = {
-            arrayBufferToBase64: (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))),
             base64ToUint8Array: (base64) => {
-                const b = atob(base64); const l = b.length; const u = new Uint8Array(l);
-                while(l--) u[l] = b.charCodeAt(l); return u;
+                const binaryString = atob(base64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes;
             },
-            hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
+            hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
         };
         const BankCrypto = (() => {
-            const h = (m) => Utils.hexToUint8Array(shake256(m, 1536));
-            return { async verifySignature(sig, data, pk, api) { return api.verify(sig, h(data), pk); } };
+            const hash = (message) => Utils.hexToUint8Array(shake256(message, 1536));
+            return {
+                async verifySignature(signature, data, publicKey, falconApi) {
+                    if (!publicKey || !falconApi) throw new Error("Verification prerequisites not met.");
+                    const dataHash = hash(data);
+                    return falconApi.verify(signature, dataHash, publicKey);
+                }
+            };
         })();
+
         const getStandardizedDataForSigning = (d) => JSON.stringify({t:d.timestamp, s:d.serial},['t','s']);
         const getStandardizedDataForMasterSig = (d) => {
-            const t = {e:Utils.arrayBufferToBase64(d.ephemeralPublicKey), s:Utils.arrayBufferToBase64(d.signatureOne)};
+            const t = {e:btoa(String.fromCharCode.apply(null, d.ephemeralPublicKey)), s:btoa(String.fromCharCode.apply(null, d.signatureOne))};
             return JSON.stringify(t, Object.keys(t).sort());
         };
-        const parseUnifiedVerificationPayload = (b) => {
-            const c = Utils.base64ToUint8Array(b); const j = pako.inflate(c,{to:'string'}); const p=JSON.parse(j);
+        const parseUnifiedVerificationPayload = (b64) => {
+            const compressed = Utils.base64ToUint8Array(b64);
+            const jsonString = pako.inflate(compressed, { to: 'string' });
+            const p = JSON.parse(jsonString);
             return {a:p.a, s:p.s, t:p.t, epk:Utils.base64ToUint8Array(p.epk), s1:Utils.base64ToUint8Array(p.s1), s2:Utils.base64ToUint8Array(p.s2)};
         };
-
-        const MASTER_PUBLIC_KEY_B64 = "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";
 
         const state = { falconApi: null, masterPublicKey: null, currentUser: null, balance: 0 };
         const DOMElements = {
             views: document.querySelectorAll('.view'),
-            walletView: document.getElementById('wallet-view'),
             loginButton: document.getElementById('login-button'),
             loginError: document.getElementById('login-error'),
             balanceDisplay: document.getElementById('balance-display'),
@@ -169,11 +178,12 @@
 
         async function initializeApp() {
             try {
-                // اجرا و آماده‌سازی کتابخانه فالکون که در ابتدای اسکریپت import شد
                 state.falconApi = await pqcSignFalcon1024();
                 console.log("ماژول Falcon با موفقیت لود شد.");
+                
                 state.masterPublicKey = Utils.base64ToUint8Array(MASTER_PUBLIC_KEY_B64);
                 console.log("کلید عمومی با موفقیت آماده شد.");
+
                 setupEventListeners();
             } catch (e) {
                 alert("خطای حیاتی در راه‌اندازی برنامه: " + e.message + "\n\nمطمئن شوید پروژه را از طریق یک وب سرور محلی اجرا می‌کنید.");
@@ -181,45 +191,76 @@
             }
         }
         function handleLogin() {
-            const u = document.getElementById('uid-input').value;
-            const p = document.getElementById('password-input').value;
-            if(u === 'ABCDEFGHIJ' && p === '12345') { state.currentUser = {uid:u}; updateBalanceDisplay(); showView('wallet-view'); }
-            else { DOMElements.loginError.textContent = 'شناسه کاربری یا رمز عبور اشتباه است.'; }
+            const uid = document.getElementById('uid-input').value;
+            const password = document.getElementById('password-input').value;
+            if(uid === 'ABCDEFGHIJ' && password === '12345') {
+                state.currentUser = {uid: uid};
+                updateBalanceDisplay();
+                showView('wallet-view');
+            } else {
+                DOMElements.loginError.textContent = 'شناسه کاربری یا رمز عبور اشتباه است.';
+            }
         }
-        async function handleBanknoteValidation(e) {
-            const f = e.target.files[0]; if (!f) return;
-            DOMElements.validationStatus.innerHTML = '⏳ در حال پردازش...'; DOMElements.chargeConfirmation.style.display = 'none';
+        async function handleBanknoteValidation(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            DOMElements.validationStatus.innerHTML = '⏳ در حال پردازش تصویر...';
+            DOMElements.chargeConfirmation.style.display = 'none';
+
             try {
-                const p = await findAllQrParts(f);
-                DOMElements.validationStatus.innerHTML = '<span class="success">✅ QR کد پیدا شد. در حال اعتبارسنجی...</span>';
-                const d = parseUnifiedVerificationPayload(p);
-                if(!await BankCrypto.verifySignature(d.s1, getStandardizedDataForSigning(d), d.epk, state.falconApi)) throw new Error("امضای اول نامعتبر است. اسکناس جعلی است.");
-                if(!await BankCrypto.verifySignature(d.s2, getStandardizedDataForMasterSig(d), state.masterPublicKey, state.falconApi)) throw new Error("امضای اصلی نامعتبر است.");
+                const payload = await findQrAndGetPayload(file);
+                DOMElements.validationStatus.innerHTML = '<span class="success">✅ QR کد پیدا شد. در حال اعتبارسنجی امضاها...</span>';
+                
+                const banknoteData = parseUnifiedVerificationPayload(payload);
+
+                const isSigOneValid = await BankCrypto.verifySignature(banknoteData.s1, getStandardizedDataForSigning(banknoteData), banknoteData.epk, state.falconApi);
+                if (!isSigOneValid) throw new Error("امضای اول نامعتبر است. اسکناس جعلی است.");
+
+                const isSigTwoValid = await BankCrypto.verifySignature(banknoteData.s2, getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
+                if (!isSigTwoValid) throw new Error("امضای اصلی نامعتبر است. این اسکناس توسط این مرکز صادر نشده.");
+
                 DOMElements.validationStatus.innerHTML = '<span class="success">✅ اسکناس معتبر است!</span>';
-                DOMElements.validatedAmount.textContent = `${d.a.toLocaleString('fa-IR')} تومان`;
-                DOMElements.chargeConfirmation.dataset.amount = d.a; DOMElements.chargeConfirmation.style.display = 'block';
-            } catch (err) { DOMElements.validationStatus.innerHTML = `<span class="error">❌ خطا: ${err.message}</span>`; }
-            finally { e.target.value = ''; }
+                DOMElements.validatedAmount.textContent = `${banknoteData.a.toLocaleString('fa-IR')} تومان`;
+                DOMElements.chargeConfirmation.dataset.amount = banknoteData.a;
+                DOMElements.chargeConfirmation.style.display = 'block';
+            } catch (err) {
+                DOMElements.validationStatus.innerHTML = `<span class="error">❌ خطا: ${err.message}</span>`;
+            } finally {
+                event.target.value = '';
+            }
         }
-        async function findAllQrParts(f) {
-            const i = await readImageForJsQR(f); const c = jsQR(i.data, i.width, i.height);
-            if (!c) throw new Error("هیچ QR کدی پیدا نشد.");
-            if (!c.data.startsWith(Constants.VALIDATION_PREFIX)) throw new Error("این QR کد مربوط به اسکناس سادات نیست.");
-            const m = c.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
-            if (m) return m[3];
+        async function findQrAndGetPayload(file) {
+            const imageData = await readImageForJsQR(file);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (!code) throw new Error("هیچ QR کدی در تصویر پیدا نشد.");
+            if (!code.data.startsWith(Constants.VALIDATION_PREFIX)) throw new Error("این QR کد مربوط به اسکناس سادات نیست.");
+            const match = code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
+            if (match && match[3]) return match[3];
             throw new Error("فرمت QR کد نامعتبر است.");
         }
         function confirmCharge() {
-            const a = parseInt(DOMElements.chargeConfirmation.dataset.amount, 10);
-            if(a > 0) { state.balance += a; updateBalanceDisplay(); alert(`مبلغ ${a.toLocaleString('fa-IR')} تومان اضافه شد.`); showView('wallet-view'); }
+            const amount = parseInt(DOMElements.chargeConfirmation.dataset.amount, 10);
+            if(amount > 0) {
+                state.balance += amount;
+                updateBalanceDisplay();
+                alert(`مبلغ ${amount.toLocaleString('fa-IR')} تومان با موفقیت به کیف پول اضافه شد.`);
+                showView('wallet-view');
+            }
         }
         function generateReceiveQrCode() {
-            DOMElements.myQrCodeContainer.innerHTML = ''; const p = JSON.stringify({type:"SADAT_WALLET_ADDRESS", uid:state.currentUser.uid});
-            const qr = qrcode(0,'L'); qr.addData(p); qr.make();
-            DOMElements.myQrCodeContainer.innerHTML = qr.createImgTag(6,10);
-            const i = DOMElements.myQrCodeContainer.querySelector('img'); const c = document.createElement('canvas');
-            c.width=i.width; c.height=i.height; c.getContext('2d').drawImage(i,0,0);
-            DOMElements.downloadQrLink.href = c.toDataURL('image/png');
+            DOMElements.myQrCodeContainer.innerHTML = '';
+            const payload = JSON.stringify({type:"SADAT_WALLET_ADDRESS", uid:state.currentUser.uid});
+            const qr = qrcode(0,'L');
+            qr.addData(payload);
+            qr.make();
+            DOMElements.myQrCodeContainer.innerHTML = qr.createImgTag(6, 10);
+
+            const img = DOMElements.myQrCodeContainer.querySelector('img');
+            const canvas = document.createElement('canvas');
+            canvas.width=img.width; canvas.height=img.height;
+            canvas.getContext('2d').drawImage(img, 0, 0);
+            DOMElements.downloadQrLink.href = canvas.toDataURL('image/png');
         }
         function setupEventListeners() {
             DOMElements.loginButton.addEventListener('click', handleLogin);
@@ -230,11 +271,24 @@
             DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
             DOMElements.backButtons.forEach(b => b.addEventListener('click', () => showView('wallet-view')));
         }
-        function readImageForJsQR(f) {
-            return new Promise((res, rej) => {
-                const r = new FileReader(); r.onload = e => { const i = new Image(); i.onload = () => {
-                    const c = document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.drawImage(i,0,0); res(x.getImageData(0,0,c.width,c.height));
-                }; i.onerror=rej; i.src=e.target.result; }; r.onerror=rej; r.readAsDataURL(f);
+        function readImageForJsQR(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = event => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        resolve(ctx.getImageData(0, 0, canvas.width, canvas.height));
+                    };
+                    img.onerror = reject;
+                    img.src = event.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
             });
         }
         document.addEventListener('DOMContentLoaded', initializeApp);
