@@ -79,35 +79,52 @@
         let transactionChain = []; // Personal Transaction Chain
         const state = { falconApi: null, masterPublicKey: null, currentUser: null, isRestoring: false, isLogin: false };
 
-        const DOMElements = {
-            views: document.querySelectorAll('.view'),
-            // Login/Restore View
-            startView: document.getElementById('start-view'), showCreateLink: document.getElementById('show-create-link'),
-            showRestoreLink: document.getElementById('show-restore-link'),
-            // Create View
-            createView: document.getElementById('create-view'), createPasswordInput: document.getElementById('create-password-input'),
-            createButton: document.getElementById('create-button'), createStatus: document.getElementById('create-status'),
-            recoveryPhraseContainer: document.getElementById('recovery-phrase-container'), recoveryPhraseDisplay: document.getElementById('recovery-phrase'),
-            // Restore View
-            restoreView: document.getElementById('restore-view'), restorePhraseInput: document.getElementById('restore-phrase-input'),
-            restorePasswordInput: document.getElementById('restore-password-input'), restoreButton: document.getElementById('restore-button'),
-            restoreStatus: document.getElementById('restore-status'),
-            // Wallet View
-            walletView: document.getElementById('wallet-view'), welcomeMessage: document.getElementById('welcome-message'),
-            balanceDisplay: document.getElementById('balance-display'),
-            showChargeViewButton: document.getElementById('show-charge-view-button'), showSendViewButton: document.getElementById('show-send-view-button'), showReceiveViewButton: document.getElementById('show-receive-view-button'),
-            logoutButton: document.getElementById('logout-button'),
-            // Charge View
-            chargeView: document.getElementById('charge-view'), publicKeyInput: document.getElementById('public-key-input'), keyStatus: document.getElementById('key-status'),
-            banknoteImageInput: document.getElementById('banknote-image-input'), validationStatus: document.getElementById('validation-status'),
-            chargeConfirmation: document.getElementById('charge-confirmation'), validatedAmount: document.getElementById('validated-amount'), confirmChargeButton: document.getElementById('confirm-charge-button'),
-            // Send View
-            sendView: document.getElementById('send-view'), sendAmountInput: document.getElementById('send-amount-input'), recipientQrInput: document.getElementById('recipient-qr-input'),
-            recipientInfo: document.getElementById('recipient-info'), sendFundsButton: document.getElementById('send-funds-button'), sendStatus: document.getElementById('send-status'),
-            // Receive View
-            receiveView: document.getElementById('receive-view'), myQrCodeContainer: document.getElementById('my-qr-code'), downloadQrLink: document.getElementById('download-qr-link'),
-            backButtons: document.querySelectorAll('.back-button'),
-        };
+        // Centralized DOM Element storage
+        const DOMElements = {};
+
+        // Function to find all relevant DOM elements and store them
+        function getDOMElements() {
+            DOMElements.views = document.querySelectorAll('.view');
+            DOMElements.startView = document.getElementById('start-view');
+            DOMElements.showCreateLink = document.getElementById('show-create-link');
+            DOMElements.showRestoreLink = document.getElementById('show-restore-link');
+            DOMElements.createView = document.getElementById('create-view');
+            DOMElements.createPasswordInput = document.getElementById('create-password-input');
+            DOMElements.createButton = document.getElementById('create-button');
+            DOMElements.createStatus = document.getElementById('create-status');
+            DOMElements.recoveryPhraseContainer = document.getElementById('recovery-phrase-container');
+            DOMElements.recoveryPhraseDisplay = document.getElementById('recovery-phrase');
+            DOMElements.restoreView = document.getElementById('restore-view');
+            DOMElements.restorePhraseInput = document.getElementById('restore-phrase-input');
+            DOMElements.restorePasswordInput = document.getElementById('restore-password-input');
+            DOMElements.restoreButton = document.getElementById('restore-button');
+            DOMElements.restoreStatus = document.getElementById('restore-status');
+            DOMElements.walletView = document.getElementById('wallet-view');
+            DOMElements.welcomeMessage = document.getElementById('welcome-message');
+            DOMElements.balanceDisplay = document.getElementById('balance-display');
+            DOMElements.showChargeViewButton = document.getElementById('show-charge-view-button');
+            DOMElements.showSendViewButton = document.getElementById('show-send-view-button');
+            DOMElements.showReceiveViewButton = document.getElementById('show-receive-view-button');
+            DOMElements.logoutButton = document.getElementById('logout-button');
+            DOMElements.chargeView = document.getElementById('charge-view');
+            DOMElements.publicKeyInput = document.getElementById('public-key-input');
+            DOMElements.keyStatus = document.getElementById('key-status');
+            DOMElements.banknoteImageInput = document.getElementById('banknote-image-input');
+            DOMElements.validationStatus = document.getElementById('validation-status');
+            DOMElements.chargeConfirmation = document.getElementById('charge-confirmation');
+            DOMElements.validatedAmount = document.getElementById('validated-amount');
+            DOMElements.confirmChargeButton = document.getElementById('confirm-charge-button');
+            DOMElements.sendView = document.getElementById('send-view');
+            DOMElements.sendAmountInput = document.getElementById('send-amount-input');
+            DOMElements.recipientQrInput = document.getElementById('recipient-qr-input');
+            DOMElements.recipientInfo = document.getElementById('recipient-info');
+            DOMElements.sendFundsButton = document.getElementById('send-funds-button');
+            DOMElements.sendStatus = document.getElementById('send-status');
+            DOMElements.receiveView = document.getElementById('receive-view');
+            DOMElements.myQrCodeContainer = document.getElementById('my-qr-code');
+            DOMElements.downloadQrLink = document.getElementById('download-qr-link');
+            DOMElements.backButtons = document.querySelectorAll('.back-button');
+        }
 
         // --- Data Persistence ---
         function saveWallet(password) {
@@ -135,10 +152,11 @@
 
         // --- Core App Functions ---
         async function initializeApp() {
+            getDOMElements();
+            setupEventListeners();
             try {
                 state.falconApi = await pqcSignFalcon1024();
                 console.log("System Initialized.");
-                setupEventListeners();
                 showView('start-view');
             } catch (e) {
                 alert(`خطای حیاتی در راه‌اندازی: ${e.message}`);
@@ -259,7 +277,11 @@
             tx.id = ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(tx) + Date.now()));
             tx.timestamp = Date.now();
             transactionChain.push(tx);
-            saveWallet(DOMElements.restorePasswordInput.value || DOMElements.createPasswordInput.value);
+            // Get the current password from the correct input field before saving.
+            const currentPassword = DOMElements.restorePasswordInput.value || DOMElements.createPasswordInput.value;
+            if (currentPassword) {
+                saveWallet(currentPassword);
+            }
             updateBalanceDisplay();
         }
 
@@ -283,8 +305,6 @@
             if (!recipientAddress) { DOMElements.sendStatus.innerHTML = '<span class="error">لطفاً کد QR گیرنده را بارگذاری کنید.</span>'; return; }
             if (amount > calculateBalance()) { DOMElements.sendStatus.innerHTML = '<span class="error">موجودی کافی نیست.</span>'; return; }
 
-            // Here we would implement the "Digital Handshake"
-            // For this simple implementation, we just record the transaction
             addTransaction({
                 type: 'send',
                 amount: amount,
