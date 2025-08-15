@@ -102,7 +102,8 @@
             wallet: null, 
             falconApi: null,
             masterPublicKey: null, 
-            userStore: null, 
+            userStore: null,
+            tempPassword: null, // FIX: To hold password between create and confirm views
         };
 
         const WitnessNetwork = {
@@ -273,39 +274,83 @@
         function setupEventListeners() {
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
+            
             document.getElementById('create-wallet-button').addEventListener('click', () => {
                 const pass = document.getElementById('create-password-input').value;
                 const confirmPass = document.getElementById('confirm-password-input').value;
                 if (pass.length < 8) { document.getElementById('create-status').textContent = 'Password must be at least 8 characters.'; return; }
                 if (pass !== confirmPass) { document.getElementById('create-status').textContent = 'Passwords do not match.'; return; }
+                
+                // FIX: Store the password temporarily in the state
+                state.tempPassword = pass;
+
                 const { mnemonic } = WalletLogic.createWallet(pass);
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
+
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                const pass = document.getElementById('create-password-input').value;
+                // FIX: Use the password from the state, not from the hidden input field
+                const pass = state.tempPassword;
+                if (!pass) {
+                    alert('An error occurred. Please try creating the wallet again.');
+                    showView('create-wallet-view');
+                    return;
+                }
                 const success = await WalletLogic.login(pass);
-                if (success) { updateBalanceDisplay(); showView('wallet-view'); }
-                else { alert('Automatic login failed.'); showView('login-view'); }
+                state.tempPassword = null; // Clear the temporary password
+                if (success) { 
+                    updateBalanceDisplay(); 
+                    showView('wallet-view'); 
+                } else { 
+                    alert('Automatic login failed. Please log in manually.'); 
+                    showView('login-view'); 
+                }
             });
-            document.getElementById('restore-wallet-button').addEventListener('click', () => {
+
+            document.getElementById('restore-wallet-button').addEventListener('click', async () => { // FIX: Make the listener async
                 const mnemonic = document.getElementById('restore-seed-input').value.trim();
                 const pass = document.getElementById('restore-password-input').value;
-                if (mnemonic.split(' ').length !== 12) { document.getElementById('restore-status').textContent = 'Recovery phrase must be 12 words.'; return; }
-                if (pass.length < 8) { document.getElementById('restore-status').textContent = 'Password must be at least 8 characters.'; return; }
+                const statusEl = document.getElementById('restore-status');
+
+                if (mnemonic.split(' ').length !== 12) { statusEl.textContent = 'Recovery phrase must be 12 words.'; return; }
+                if (pass.length < 8) { statusEl.textContent = 'Password must be at least 8 characters.'; return; }
+                
                 const success = WalletLogic.restoreWallet(mnemonic, pass);
-                if (success) { document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.'; setTimeout(() => showView('login-view'), 2000); }
-                else { document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.'; }
+                if (success) {
+                    statusEl.textContent = 'Wallet restored successfully! Logging in...';
+                    
+                    // FIX: Automatically log the user in after a successful restore
+                    const loginSuccess = await WalletLogic.login(pass);
+                    if (loginSuccess) {
+                        updateBalanceDisplay();
+                        showView('wallet-view');
+                    } else {
+                        statusEl.textContent = 'Restore successful, but auto-login failed. Please go to the login page.';
+                    }
+
+                } else { 
+                    statusEl.textContent = 'Restore failed. Invalid phrase.'; 
+                }
             });
+
             document.getElementById('login-button').addEventListener('click', async () => {
                 const pass = document.getElementById('login-password-input').value;
                 const statusEl = document.getElementById('login-status');
                 statusEl.textContent = 'Decrypting...';
                 const success = await WalletLogic.login(pass);
-                if (success) { updateBalanceDisplay(); showView('wallet-view'); document.getElementById('login-password-input').value = ''; statusEl.textContent = ''; }
-                else { statusEl.textContent = 'Invalid password.'; }
+                if (success) { 
+                    updateBalanceDisplay(); 
+                    showView('wallet-view'); 
+                    document.getElementById('login-password-input').value = ''; 
+                    statusEl.textContent = ''; 
+                } else { 
+                    statusEl.textContent = 'Invalid password.'; 
+                }
             });
+
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
+            
             document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
@@ -313,6 +358,7 @@
                     location.reload();
                 }
             });
+            
             document.getElementById('show-charge-view-button').addEventListener('click', () => showView('charge-view'));
             document.getElementById('show-send-view-button').addEventListener('click', () => showView('send-view'));
             document.getElementById('show-receive-view-button').addEventListener('click', () => showView('scan-proposal-view'));
