@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Wallet (Professional Final Version)</title>
+    <title>Sadat Digital Wallet (Final Version)</title>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -33,7 +33,7 @@
     <div id="wallet-view" class="view"><div class="card"><h2>My Wallet</h2><p>Current Balance:</p><h1 id="balance-display">$0.00</h1><div class="button-group" style="margin-top:20px;"><button id="show-charge-view-button">Charge Wallet</button><button id="show-send-view-button" style="margin-top:10px;">Send Funds</button><button id="show-receive-view-button" style="margin-top:10px;">Receive Funds</button></div></div></div>
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div class="upload-step"><h3>Step 1: Upload Public Key</h3><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div class="upload-step"><h3>Step 2: Validate Banknote</h3><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful. Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button">Back to Wallet</button></div></div>
     <div id="send-view" class="view"><div class="card"><h2>Send Funds</h2><input type="number" id="send-amount-input" placeholder="Amount to Send"><label for="recipient-qr-input" style="cursor: pointer; display: block; margin-bottom: 15px; text-decoration: underline; color: #007bff;">Upload Recipient QR Code</label><input type="file" id="recipient-qr-input" accept=".png, .jpg, .jpeg" style="display: none;"><div id="recipient-info" style="min-height: 20px; margin-bottom: 15px;"></div><button id="send-funds-button">Send</button><div id="send-status" class="status-box"></div><button class="back-button">Back to Wallet</button></div></div>
-    <div id="receive-view" class="view"><div class="card"><h2>Receive Funds</h2><p>Share this QR Code with the sender.</p><div id="my-qr-code"></div><a id="download-qr-link" download="My-Wallet-QR.png"><button>Download QR Code (PNG)</button></a><button class="back-button">Back to Wallet</button></div></div>
+    <div id="receive-view" class="view"><div class="card"><h2>Receive Funds</h2><p>Share this QR Code with the sender.</p><div id="my-qr-code"></div><a id="download-qr-link"><button>Download QR Code (PNG)</button></a><button class="back-button">Back to Wallet</button></div></div>
 
     <script type="module">
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
@@ -48,7 +48,7 @@
                 arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
                 base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; },
                 hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
-                preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.filter='grayscale(1) contrast(2.5) brightness(1.1)';x.drawImage(i,0,0);res(c.toDataURL('image/jpeg'));}; i.onerror=rej; i.src=d; }),
+                preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }),
                 resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}),
                 decodeQrFromImage: (f) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);const d=x.getImageData(0,0,c.width,c.height);const code=jsQR(d.data,d.width,d.height);if(code){res(code.data);}else{rej(new Error("No QR code found."));}};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);})
             };
@@ -198,30 +198,54 @@
             }
         }
         
+        // *** تابع اصلاح‌شده با منطق جدید ***
         function generateReceiveQrCode() {
             DOMElements.myQrCodeContainer.innerHTML = '';
             const payload = JSON.stringify({type:"SADAT_WALLET_ADDRESS", uid:state.currentUser.uid});
+            
+            // 1. دیتا را برای QR کد آماده می‌کنیم
             const qr = qrcode(0,'L');
             qr.addData(payload);
             qr.make();
-            DOMElements.myQrCodeContainer.innerHTML = qr.createImgTag(6, 10);
+            
+            // 2. به جای تگ img، مستقیما دیتا URL را می‌گیریم
+            const qrDataURL = qr.createDataURL(6, 10);
 
-            // منطق دانلود با پس‌زمینه سفید
-            const img = DOMElements.myQrCodeContainer.querySelector('img');
-            const canvas = document.createElement('canvas');
-            const scale = 3; 
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-            const ctx = canvas.getContext('2d');
+            // 3. یک تصویر جدید در حافظه می‌سازیم تا آن را روی کانواس نقاشی کنیم
+            const img = new Image();
 
-            // *** خط جدید: پس‌زمینه کانواس را سفید می‌کند ***
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 4. تعیین می‌کنیم که بعد از بارگذاری کامل تصویر چه اتفاقی بیفتد
+            img.onload = () => {
+                // نمایش QR کد روی صفحه
+                const displayImg = DOMElements.myQrCodeContainer.querySelector('img');
+                if (displayImg) {
+                    displayImg.src = qrDataURL;
+                } else {
+                    DOMElements.myQrCodeContainer.innerHTML = `<img src="${qrDataURL}" alt="Wallet QR Code">`;
+                }
 
-            // بقیه کد بدون تغییر باقی می‌ماند
-            ctx.imageSmoothingEnabled = false; 
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            DOMElements.downloadQrLink.href = canvas.toDataURL('image/png');
+                // آماده‌سازی کانواس برای دانلود
+                const canvas = document.createElement('canvas');
+                const scale = 3;
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                
+                // 5. پس‌زمینه را سفید می‌کنیم
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 6. تصویر بارگذاری‌شده را روی پس‌زمینه سفید نقاشی می‌کنیم
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // 7. لینک دانلود را با فایل PNG نهایی آپدیت می‌کنیم
+                DOMElements.downloadQrLink.href = canvas.toDataURL('image/png');
+                DOMElements.downloadQrLink.download = 'My-Wallet-QR.png';
+            };
+
+            // 8. فرآیند بارگذاری تصویر را با دادن آدرس دیتا URL آغاز می‌کنیم
+            img.src = qrDataURL;
         }
 
         document.addEventListener('DOMContentLoaded', initializeApp);
