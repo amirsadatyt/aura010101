@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>کیف پول دیجیتال سادات (اصلاح‌شده)</title>
+    <title>کیف پول دیجیتال سادات (نسخه نهایی کامل)</title>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; direction: rtl; }
@@ -13,12 +13,10 @@
         button { width: 100%; padding: 12px; background: linear-gradient(90deg, #4b6cb7, #182848); color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: transform 0.2s; }
         button:hover { transform: translateY(-2px); }
         button:disabled { background: #ccc; cursor: not-allowed; }
-        .button-group button { margin-top: 10px; }
         .back-button { background: #6c757d; margin-top: 20px; }
-        .error-message { color: #d93025; }
         #validation-status .error, #key-status .error { color: #d93025; font-weight: bold; }
         #validation-status .success, #key-status .success { color: #1e8e3e; font-weight: bold; }
-        #my-qr-code img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
+        #validation-status .info { color: #007bff; }
         .upload-step { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
         .upload-step h3 { margin-top: 0; color: #333; }
     </style>
@@ -39,13 +37,17 @@
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-        const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000 };
+        const Constants = {
+            VALIDATION_PREFIX: "SADAT_V2_PART",
+            MAX_IMAGE_DIMENSION: 2000,
+            NUM_QR_CODES: 9
+        };
+
         const Utils = {
             base64ToUint8Array: (base64) => {
                 const binaryString = atob(base64);
-                const len = binaryString.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) {
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
                     bytes[i] = binaryString.charCodeAt(i);
                 }
                 return bytes;
@@ -65,7 +67,7 @@
             }),
             resizeImage: (file, maxSize) => new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = e => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
@@ -89,10 +91,11 @@
         };
         
         const BankCrypto = (() => {
-            const hash = (message) => new Uint8Array(shake256.digest(message, 1536));
+            const hash = (message) => new Uint8Array(shake256.digest(message));
             return {
                 async verifySignature(signature, data, publicKey, falconApi) {
-                    return falconApi.verify(signature, hash(data), publicKey);
+                    const dataHash = hash(data);
+                    return falconApi.verify(signature, dataHash, publicKey);
                 }
             };
         })();
@@ -109,20 +112,72 @@
             return {a:p.a, s:p.s, t:p.t, epk:Utils.base64ToUint8Array(p.epk), s1:Utils.base64ToUint8Array(p.s1), s2:Utils.base64ToUint8Array(p.s2)};
         };
 
+        function getQrGridLayout(imageWidth) {
+            const originalSize = 790;
+            const scale = imageWidth / originalSize;
+            return {
+                qrSize: Math.round(250 * scale),
+                xSpacing: Math.round(20 * scale),
+                ySpacing: Math.round(20 * scale),
+            };
+        }
+
+        async function decodeQrGrid(imageData, statusElement) {
+            const layout = getQrGridLayout(imageData.width);
+            const foundParts = {};
+            let uniqueCodes = 0;
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = imageData.width;
+            tempCanvas.height = imageData.height;
+            tempCtx.putImageData(imageData, 0, 0);
+
+            for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
+                statusElement.innerHTML = `<span class="info">⏳ در حال اسکن ناحیه ${i + 1} از ${Constants.NUM_QR_CODES}...</span>`;
+                await new Promise(r => setTimeout(r, 10));
+
+                const row = Math.floor(i / 3);
+                const col = i % 3;
+
+                const regionX = col * (layout.qrSize + layout.xSpacing);
+                const regionY = row * (layout.qrSize + layout.ySpacing);
+                
+                const regionImageData = tempCtx.getImageData(regionX, regionY, layout.qrSize, layout.qrSize);
+                const code = jsQR(regionImageData.data, regionImageData.width, regionImageData.height);
+
+                if (code && code.data.startsWith(Constants.VALIDATION_PREFIX)) {
+                    const payload = code.data.substring(Constants.VALIDATION_PREFIX.length);
+                    const match = payload.match(/^(\d+)\/(\d+):(.*)$/s);
+                    if (match) {
+                        const partNum = parseInt(match[1], 10);
+                        if (!foundParts[partNum]) {
+                            foundParts[partNum] = match[3];
+                            uniqueCodes++;
+                        }
+                    }
+                }
+            }
+
+            if (uniqueCodes < Constants.NUM_QR_CODES) {
+                throw new Error(`اسکن کامل نشد. ${uniqueCodes} از ${Constants.NUM_QR_CODES} بخش پیدا شد. لطفاً از یک عکس صاف و با نور خوب استفاده کنید.`);
+            }
+
+            let fullPayloadString = '';
+            for (let i = 1; i <= Constants.NUM_QR_CODES; i++) {
+                fullPayloadString += foundParts[i];
+            }
+            return fullPayloadString;
+        }
+
         const state = { falconApi: null, masterPublicKey: null, currentUser: null, balance: 0 };
-        
-        // **اصلاح شماره ۱: تمام عناصر در یک مکان تعریف شده‌اند**
         const DOMElements = {
             views: document.querySelectorAll('.view'),
-            // Login View
             loginButton: document.getElementById('login-button'),
             loginError: document.getElementById('login-error'),
-            // Wallet View
             balanceDisplay: document.getElementById('balance-display'),
             showChargeViewButton: document.getElementById('show-charge-view-button'),
             showSendViewButton: document.getElementById('show-send-view-button'),
             showReceiveViewButton: document.getElementById('show-receive-view-button'),
-            // Charge View
             publicKeyInput: document.getElementById('public-key-input'),
             keyStatus: document.getElementById('key-status'),
             banknoteImageInput: document.getElementById('banknote-image-input'),
@@ -130,12 +185,29 @@
             chargeConfirmation: document.getElementById('charge-confirmation'),
             validatedAmount: document.getElementById('validated-amount'),
             confirmChargeButton: document.getElementById('confirm-charge-button'),
-            // Receive View
             myQrCodeContainer: document.getElementById('my-qr-code'),
             downloadQrLink: document.getElementById('download-qr-link'),
-            // Common
             backButtons: document.querySelectorAll('.back-button'),
         };
+
+        function setupEventListeners() {
+            DOMElements.loginButton.addEventListener('click', handleLogin);
+            DOMElements.showChargeViewButton.addEventListener('click', () => showView('charge-view'));
+            DOMElements.showSendViewButton.addEventListener('click', () => showView('send-view'));
+            DOMElements.showReceiveViewButton.addEventListener('click', () => {
+                generateReceiveQrCode();
+                showView('receive-view');
+            });
+            DOMElements.publicKeyInput.addEventListener('change', handlePublicKeyUpload);
+            DOMElements.banknoteImageInput.addEventListener('change', handleBanknoteValidation);
+            DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
+            DOMElements.backButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    resetChargeView();
+                    showView('wallet-view');
+                });
+            });
+        }
 
         async function initializeApp() {
             try {
@@ -146,29 +218,6 @@
                 alert("خطای حیاتی در راه‌اندازی برنامه: " + e.message);
                 console.error(e);
             }
-        }
-        
-        // **اصلاح شماره ۲: تمام رویدادها در یک تابع واحد و منظم قرار گرفته‌اند**
-        function setupEventListeners() {
-            DOMElements.loginButton.addEventListener('click', handleLogin);
-            
-            DOMElements.showChargeViewButton.addEventListener('click', () => showView('charge-view'));
-            DOMElements.showSendViewButton.addEventListener('click', () => showView('send-view'));
-            DOMElements.showReceiveViewButton.addEventListener('click', () => {
-                generateReceiveQrCode();
-                showView('receive-view');
-            });
-            
-            DOMElements.publicKeyInput.addEventListener('change', handlePublicKeyUpload);
-            DOMElements.banknoteImageInput.addEventListener('change', handleBanknoteValidation);
-            DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
-
-            DOMElements.backButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    resetChargeView();
-                    showView('wallet-view');
-                });
-            });
         }
         
         function showView(id) { DOMElements.views.forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
@@ -194,7 +243,7 @@
                 DOMElements.loginError.textContent = 'شناسه کاربری یا رمز عبور اشتباه است.';
             }
         }
-        
+
         async function handlePublicKeyUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -219,16 +268,30 @@
                 DOMElements.validationStatus.innerHTML = '<span class="error">❌ لطفاً ابتدا کلید عمومی را آپلود کنید.</span>';
                 return;
             }
-            DOMElements.validationStatus.innerHTML = '⏳ در حال آماده‌سازی و اسکن تصویر...';
+            DOMElements.validationStatus.innerHTML = '<span class="info">⏳ در حال آماده‌سازی تصویر...</span>';
             DOMElements.chargeConfirmation.style.display = 'none';
             try {
-                const payload = await findQrAndGetPayload(file);
-                DOMElements.validationStatus.innerHTML = '<span class="success">✅ QR کد پیدا شد. در حال اعتبارسنجی...</span>';
+                const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
+                const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
+                const imageData = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width; canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        resolve(ctx.getImageData(0, 0, img.width, img.height));
+                    };
+                    img.onerror = reject;
+                    img.src = processedDataUrl;
+                });
+                const payload = await decodeQrGrid(imageData, DOMElements.validationStatus);
+                DOMElements.validationStatus.innerHTML = '<span class="success">✅ تمام بخش‌ها اسکن شد. در حال اعتبارسنجی نهایی...</span>';
                 const banknoteData = parseUnifiedVerificationPayload(payload);
                 const isSigOneValid = await BankCrypto.verifySignature(banknoteData.s1, getStandardizedDataForSigning(banknoteData), banknoteData.epk, state.falconApi);
-                if (!isSigOneValid) throw new Error("امضای اول نامعتبر است (جعل داخلی).");
+                if (!isSigOneValid) throw new Error("امضای اول نامعتبر است.");
                 const isSigTwoValid = await BankCrypto.verifySignature(banknoteData.s2, getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
-                if (!isSigTwoValid) throw new Error("امضای اصلی با کلید عمومی مطابقت ندارد.");
+                if (!isSigTwoValid) throw new Error("امضای اصلی نامعتبر است.");
                 DOMElements.validationStatus.innerHTML = '<span class="success">✅ اسکناس معتبر است!</span>';
                 DOMElements.validatedAmount.textContent = `${banknoteData.a.toLocaleString('fa-IR')} تومان`;
                 DOMElements.chargeConfirmation.dataset.amount = banknoteData.a;
@@ -238,29 +301,6 @@
             } finally {
                 event.target.value = '';
             }
-        }
-        
-        async function findQrAndGetPayload(file) {
-            const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
-            const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
-            const imageData = await new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width; canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    resolve(ctx.getImageData(0, 0, img.width, img.height));
-                };
-                img.onerror = reject;
-                img.src = processedDataUrl;
-            });
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (!code) throw new Error("هیچ QR کدی در تصویر پیدا نشد.");
-            if (!code.data.startsWith(Constants.VALIDATION_PREFIX)) throw new Error("این QR کد مربوط به اسکناس سادات نیست.");
-            const match = code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
-            if (match && match[3]) return match[3];
-            throw new Error("فرمت QR کد نامعتبر است.");
         }
 
         function confirmCharge() {
