@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>کیف پول دیجیتال سادات (نسخه داینامیک)</title>
+    <title>کیف پول دیجیتال سادات (اسکنر هوشمند)</title>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; direction: rtl; }
@@ -29,46 +29,17 @@
 </head>
 <body>
 
-    <div id="login-view" class="view active">
-        <div class="card"><h1>ورود به کیف پول</h1><input type="text" id="uid-input" value="ABCDEFGHIJ"><input type="password" id="password-input" value="12345"><button id="login-button">ورود</button><p id="login-error" class="error-message"></p></div>
-    </div>
-    <div id="wallet-view" class="view">
-        <div class="card"><h2>کیف پول شما</h2><p>موجودی:</p><h1 id="balance-display">۰ تومان</h1><div class="button-group"><button id="show-charge-view-button">شارژ کیف پول</button><button id="show-send-view-button">ارسال وجه</button><button id="show-receive-view-button">دریافت وجه</button></div></div>
-    </div>
-    <div id="charge-view" class="view">
-        <div class="card">
-            <h2>شارژ کیف پول</h2>
-            
-            <div class="upload-step">
-                <h3>مرحله ۱: بارگذاری کلید عمومی</h3>
-                <input type="file" id="public-key-input" accept=".json">
-                <div id="key-status"></div>
-            </div>
-
-            <div class="upload-step">
-                <h3>مرحله ۲: اعتبارسنجی اسکناس</h3>
-                <input type="file" id="banknote-image-input" accept="image/*" disabled>
-                <div id="validation-status"></div>
-            </div>
-
-            <div id="charge-confirmation" style="display:none;">
-                <p>اسکناس معتبر است. مبلغ: <b id="validated-amount"></b></p>
-                <button id="confirm-charge-button">افزودن به موجودی</button>
-            </div>
-            <button class="back-button">بازگشت</button>
-        </div>
-    </div>
+    <div id="login-view" class="view active"><div class="card"><h1>ورود به کیف پول</h1><input type="text" id="uid-input" value="ABCDEFGHIJ"><input type="password" id="password-input" value="12345"><button id="login-button">ورود</button><p id="login-error" class="error-message"></p></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>کیف پول شما</h2><p>موجودی:</p><h1 id="balance-display">۰ تومان</h1><div class="button-group"><button id="show-charge-view-button">شارژ کیف پول</button><button id="show-send-view-button">ارسال وجه</button><button id="show-receive-view-button">دریافت وجه</button></div></div></div>
+    <div id="charge-view" class="view"><div class="card"><h2>شارژ کیف پول</h2><div class="upload-step"><h3>مرحله ۱: بارگذاری کلید عمومی</h3><input type="file" id="public-key-input" accept=".json"><div id="key-status"></div></div><div class="upload-step"><h3>مرحله ۲: اعتبارسنجی اسکناس</h3><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status"></div></div><div id="charge-confirmation" style="display:none;"><p>اسکناس معتبر است. مبلغ: <b id="validated-amount"></b></p><button id="confirm-charge-button">افزودن به موجودی</button></div><button class="back-button">بازگشت</button></div></div>
     <div id="send-view" class="view"><div class="card"><h2>ارسال وجه</h2><p>این بخش در حال توسعه است.</p><button class="back-button">بازگشت</button></div></div>
-    <div id="receive-view" class="view">
-        <div class="card"><h2>دریافت وجه</h2><p>این QR Code را برای فرستنده ارسال کنید.</p><div id="my-qr-code"></div><a id="download-qr-link" download="My-Wallet-QR.png"><button>دانلود QR Code</button></a><button class="back-button">بازگشت</button></div>
-    </div>
+    <div id="receive-view" class="view"><div class="card"><h2>دریافت وجه</h2><p>این QR Code را برای فرستنده ارسال کنید.</p><div id="my-qr-code"></div><a id="download-qr-link" download="My-Wallet-QR.png"><button>دانلود QR Code</button></a><button class="back-button">بازگشت</button></div></div>
 
     <script type="module">
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-        // کلید عمومی از کد حذف شد
-        const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART" };
+        const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000 };
         const Utils = {
             base64ToUint8Array: (base64) => {
                 const binaryString = atob(base64);
@@ -79,9 +50,55 @@
                 }
                 return bytes;
             },
+            // *** تابع جدید برای پیش‌پردازش تصویر ***
+            preprocessImage: (dataUrl) => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        // فیلترهای کلیدی برای افزایش کیفیت اسکن
+                        ctx.filter = 'grayscale(1) contrast(2.5) brightness(1.1)';
+                        ctx.drawImage(img, 0, 0);
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    img.onerror = reject;
+                    img.src = dataUrl;
+                });
+            },
+            // *** تابع جدید برای تغییر اندازه تصویر ***
+            resizeImage: (file, maxSize) => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let { width, height } = img;
+                            if (width > height) {
+                                if (width > maxSize) { height *= maxSize / width; width = maxSize; }
+                            } else {
+                                if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg'));
+                        };
+                        img.onerror = reject;
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            },
         };
+        
         const BankCrypto = (() => {
-            const hash = (message) => new Uint8Array(shake256.digest(message, 1536)); // اصلاح جزئی برای سازگاری
+            const hash = (message) => new Uint8Array(shake256.digest(message, 1536));
             return {
                 async verifySignature(signature, data, publicKey, falconApi) {
                     const dataHash = hash(data);
@@ -89,7 +106,7 @@
                 }
             };
         })();
-
+        
         const getStandardizedDataForSigning = (d) => JSON.stringify({t:d.timestamp, s:d.serial},['t','s']);
         const getStandardizedDataForMasterSig = (d) => {
             const t = {e:btoa(String.fromCharCode.apply(null, d.ephemeralPublicKey)), s:btoa(String.fromCharCode.apply(null, d.signatureOne))};
@@ -109,8 +126,6 @@
             loginError: document.getElementById('login-error'),
             balanceDisplay: document.getElementById('balance-display'),
             showChargeViewButton: document.getElementById('show-charge-view-button'),
-            showSendViewButton: document.getElementById('show-send-view-button'),
-            showReceiveViewButton: document.getElementById('show-receive-view-button'),
             publicKeyInput: document.getElementById('public-key-input'),
             keyStatus: document.getElementById('key-status'),
             banknoteImageInput: document.getElementById('banknote-image-input'),
@@ -118,13 +133,8 @@
             chargeConfirmation: document.getElementById('charge-confirmation'),
             validatedAmount: document.getElementById('validated-amount'),
             confirmChargeButton: document.getElementById('confirm-charge-button'),
-            myQrCodeContainer: document.getElementById('my-qr-code'),
-            downloadQrLink: document.getElementById('download-qr-link'),
             backButtons: document.querySelectorAll('.back-button'),
         };
-
-        function showView(id) { DOMElements.views.forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
-        function updateBalanceDisplay() { DOMElements.balanceDisplay.textContent = `${state.balance.toLocaleString('fa-IR')} تومان`; }
 
         async function initializeApp() {
             try {
@@ -140,22 +150,17 @@
         async function handlePublicKeyUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
             DOMElements.keyStatus.textContent = '⏳ در حال پردازش کلید...';
             DOMElements.banknoteImageInput.disabled = true;
             state.masterPublicKey = null;
-
             try {
-                const fileText = await file.text();
-                const keyData = JSON.parse(fileText);
-                if (!keyData.masterPublicKey) {
-                    throw new Error("فایل JSON معتبر نیست یا فاقد کلید masterPublicKey است.");
-                }
+                const keyData = JSON.parse(await file.text());
+                if (!keyData.masterPublicKey) throw new Error("فایل JSON فاقد کلید masterPublicKey است.");
                 state.masterPublicKey = Utils.base64ToUint8Array(keyData.masterPublicKey);
-                DOMElements.keyStatus.innerHTML = '<span class="success">✅ کلید عمومی با موفقیت بارگذاری شد.</span>';
+                DOMElements.keyStatus.innerHTML = '<span class="success">✅ کلید عمومی بارگذاری شد.</span>';
                 DOMElements.banknoteImageInput.disabled = false;
             } catch (err) {
-                DOMElements.keyStatus.innerHTML = `<span class="error">❌ خطا در بارگذاری کلید: ${err.message}</span>`;
+                DOMElements.keyStatus.innerHTML = `<span class="error">❌ خطا: ${err.message}</span>`;
                 state.masterPublicKey = null;
             }
         }
@@ -163,28 +168,20 @@
         async function handleBanknoteValidation(event) {
             const file = event.target.files[0];
             if (!file) return;
-
-            // بررسی اولیه برای وجود کلید عمومی
             if (!state.masterPublicKey) {
-                DOMElements.validationStatus.innerHTML = '<span class="error">❌ لطفاً ابتدا یک فایل کلید عمومی معتبر آپلود کنید.</span>';
+                DOMElements.validationStatus.innerHTML = '<span class="error">❌ لطفاً ابتدا کلید عمومی را آپلود کنید.</span>';
                 return;
             }
-
-            DOMElements.validationStatus.innerHTML = '⏳ در حال پردازش تصویر...';
+            DOMElements.validationStatus.innerHTML = '⏳ در حال آماده‌سازی و اسکن تصویر...';
             DOMElements.chargeConfirmation.style.display = 'none';
-
             try {
                 const payload = await findQrAndGetPayload(file);
                 DOMElements.validationStatus.innerHTML = '<span class="success">✅ QR کد پیدا شد. در حال اعتبارسنجی...</span>';
-                
                 const banknoteData = parseUnifiedVerificationPayload(payload);
-
                 const isSigOneValid = await BankCrypto.verifySignature(banknoteData.s1, getStandardizedDataForSigning(banknoteData), banknoteData.epk, state.falconApi);
                 if (!isSigOneValid) throw new Error("امضای اول نامعتبر است (جعل داخلی).");
-
                 const isSigTwoValid = await BankCrypto.verifySignature(banknoteData.s2, getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
-                if (!isSigTwoValid) throw new Error("امضای اصلی با کلید عمومی آپلود شده مطابقت ندارد.");
-
+                if (!isSigTwoValid) throw new Error("امضای اصلی با کلید عمومی مطابقت ندارد.");
                 DOMElements.validationStatus.innerHTML = '<span class="success">✅ اسکناس معتبر است!</span>';
                 DOMElements.validatedAmount.textContent = `${banknoteData.a.toLocaleString('fa-IR')} تومان`;
                 DOMElements.chargeConfirmation.dataset.amount = banknoteData.a;
@@ -196,35 +193,81 @@
             }
         }
         
-        // بقیه توابع بدون تغییر
-        function handleLogin() {
-            const uid = document.getElementById('uid-input').value;
-            const password = document.getElementById('password-input').value;
-            if(uid === 'ABCDEFGHIJ' && password === '12345') {
-                state.currentUser = {uid: uid};
-                updateBalanceDisplay();
-                showView('wallet-view');
-            } else {
-                DOMElements.loginError.textContent = 'شناسه کاربری یا رمز عبور اشتباه است.';
-            }
-        }
+        // *** تابع اصلی اسکن که حالا از پیش‌پردازش استفاده می‌کند ***
         async function findQrAndGetPayload(file) {
-            const imageData = await readImageForJsQR(file);
+            // مرحله ۱: تغییر اندازه و پیش‌پردازش تصویر
+            const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
+            const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
+
+            // مرحله ۲: تبدیل تصویر پردازش‌شده به داده‌های قابل اسکن
+            const imageData = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve(ctx.getImageData(0, 0, img.width, img.height));
+                };
+                img.onerror = reject;
+                img.src = processedDataUrl;
+            });
+            
+            // مرحله ۳: اسکن تصویر تمیز شده
             const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (!code) throw new Error("هیچ QR کدی در تصویر پیدا نشد.");
+            if (!code) throw new Error("هیچ QR کدی در تصویر پیدا نشد. (نکته: عکس باکیفیت‌تر و صاف‌تری امتحان کنید)");
+
             if (!code.data.startsWith(Constants.VALIDATION_PREFIX)) throw new Error("این QR کد مربوط به اسکناس سادات نیست.");
             const match = code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
             if (match && match[3]) return match[3];
             throw new Error("فرمت QR کد نامعتبر است.");
+        }
+
+        // بقیه توابع بدون تغییر زیاد
+        function setupEventListeners() {
+            DOMElements.loginButton.addEventListener('click', handleLogin);
+            DOMElements.showChargeViewButton.addEventListener('click', () => showView('charge-view'));
+            DOMElements.publicKeyInput.addEventListener('change', handlePublicKeyUpload);
+            DOMElements.banknoteImageInput.addEventListener('change', handleBanknoteValidation);
+            DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
+            DOMElements.backButtons.forEach(b => b.addEventListener('click', () => {
+                DOMElements.keyStatus.innerHTML = '';
+                DOMElements.validationStatus.innerHTML = '';
+                DOMElements.publicKeyInput.value = '';
+                DOMElements.banknoteImageInput.value = '';
+                DOMElements.banknoteImageInput.disabled = true;
+                state.masterPublicKey = null;
+                showView('wallet-view');
+            }));
+        }
+        function handleLogin() {
+            const uid = document.getElementById('uid-input').value;
+            if(uid === 'ABCDEFGHIJ' && document.getElementById('password-input').value === '12345') {
+                state.currentUser = {uid: uid};
+                updateBalanceDisplay();
+                showView('wallet-view');
+            } else { DOMElements.loginError.textContent = 'شناسه کاربری یا رمز عبور اشتباه است.'; }
         }
         function confirmCharge() {
             const amount = parseInt(DOMElements.chargeConfirmation.dataset.amount, 10);
             if(amount > 0) {
                 state.balance += amount;
                 updateBalanceDisplay();
-                alert(`مبلغ ${amount.toLocaleString('fa-IR')} تومان با موفقیت به کیف پول اضافه شد.`);
+                alert(`مبلغ ${amount.toLocaleString('fa-IR')} تومان با موفقیت اضافه شد.`);
                 showView('wallet-view');
             }
+        }
+
+        // توابع مربوط به صفحه دریافت که در اینجا لازم نیستند اما برای کامل بودن آورده شده‌اند
+        DOMElements.showReceiveViewButton = document.querySelector('#show-receive-view-button');
+        DOMElements.myQrCodeContainer = document.querySelector('#my-qr-code');
+        DOMElements.downloadQrLink = document.querySelector('#download-qr-link');
+        if (DOMElements.showReceiveViewButton) {
+            DOMElements.showReceiveViewButton.addEventListener('click', () => {
+                generateReceiveQrCode();
+                showView('receive-view');
+            });
         }
         function generateReceiveQrCode() {
             DOMElements.myQrCodeContainer.innerHTML = '';
@@ -239,47 +282,7 @@
             canvas.getContext('2d').drawImage(img, 0, 0);
             DOMElements.downloadQrLink.href = canvas.toDataURL('image/png');
         }
-        function setupEventListeners() {
-            DOMElements.loginButton.addEventListener('click', handleLogin);
-            DOMElements.showChargeViewButton.addEventListener('click', () => showView('charge-view'));
-            DOMElements.showSendViewButton.addEventListener('click', () => showView('send-view'));
-            DOMElements.showReceiveViewButton.addEventListener('click', () => { generateReceiveQrCode(); showView('receive-view'); });
-            
-            // Event listener های جدید
-            DOMElements.publicKeyInput.addEventListener('change', handlePublicKeyUpload);
-            DOMElements.banknoteImageInput.addEventListener('change', handleBanknoteValidation);
 
-            DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
-            DOMElements.backButtons.forEach(b => b.addEventListener('click', () => {
-                // Reset charge view on back
-                DOMElements.keyStatus.innerHTML = '';
-                DOMElements.validationStatus.innerHTML = '';
-                DOMElements.publicKeyInput.value = '';
-                DOMElements.banknoteImageInput.value = '';
-                DOMElements.banknoteImageInput.disabled = true;
-                state.masterPublicKey = null;
-                showView('wallet-view');
-            }));
-        }
-        function readImageForJsQR(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = event => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width; canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-                        resolve(ctx.getImageData(0, 0, canvas.width, canvas.height));
-                    };
-                    img.onerror = reject;
-                    img.src = event.target.result;
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
         document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
