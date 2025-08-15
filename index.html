@@ -1,593 +1,243 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote - Validator</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <title>کیف پول دیجیتال سادات (نسخه محلی)</title>
     
     <style>
-        :root {
-            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
-            --mono-font: 'Roboto Mono', monospace;
-            --dark-bg: #10101a;
-            --medium-bg: #1a1a2e;
-            --light-bg: #2a2a3e;
-            --accent-color-1: #e040fb;
-            --accent-color-2: #7c4dff;
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0c0;
-            --success-color: #00e676;
-            --error-color: #ff5252;
-            --info-color: #40c4ff;
-            --warning-color: #ffab40;
-            --border-color: rgba(124, 77, 255, 0.2);
-        }
-        body { 
-            margin: 0;
-            font-family: var(--primary-font); 
-            background-color: var(--dark-bg); 
-            background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%);
-            color: var(--text-color); 
-            text-align: center; 
-            padding: 24px; 
-        }
-        .container { 
-            max-width: 1200px;
-            margin: 0 auto; 
-            background: rgba(26, 26, 46, 0.7); 
-            backdrop-filter: blur(12px); 
-            padding: 24px; 
-            border-radius: 24px; 
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); 
-        }
-        .header { 
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 16px; 
-            margin-bottom: 24px; 
-        }
-        h1 { 
-            font-size: 2.5rem; 
-            font-weight: 600; 
-            color: #fff;
-            margin: 0 0 8px 0; 
-            letter-spacing: 1px; 
-            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); 
-            -webkit-background-clip: text; 
-            -webkit-text-fill-color: transparent;
-        }
-        .header p { 
-            font-size: 1rem; 
-            color: var(--text-muted); 
-            margin: 0;
-        }
-        canvas#noteCanvas { 
-            border-radius: 16px; 
-            margin-top: 24px; 
-            background: #050508; 
-            cursor: default;
-            box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); 
-            width: 100%; 
-            max-width: 790px; 
-            height: auto; 
-            border: 1px solid var(--border-color);
-        }
-        input, button, label { 
-            padding: 14px 22px; 
-            font-size: 16px; 
-            font-family: var(--primary-font);
-            border-radius: 12px; 
-            margin: 8px 5px; 
-            border: 1px solid var(--border-color); 
-            background: var(--medium-bg); 
-            color: #fff; 
-            transition: all 0.3s ease; 
-            cursor: pointer;
-            outline: none; 
-            display: inline-flex; 
-            align-items: center; 
-            justify-content: center; 
-            gap: 8px;
-        }
-        button:not([disabled]), label.button:not([disabled]) { 
-            font-weight: 600; 
-            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); 
-            border: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
-        }
-        button.sub-button, label.button.sub-button { 
-            background: var(--light-bg);
-            border: 1px solid var(--border-color); 
-        }
-        button:hover:not([disabled]), label.button:hover:not([disabled]) { 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); 
-        }
-        .section { 
-            background: rgba(16, 16, 26, 0.5);
-            padding: 20px; 
-            margin-top: 30px; 
-            border-radius: 16px; 
-            border: 1px solid var(--border-color);
-        }
-        h2 { 
-            font-size: 1.5rem; 
-            color: var(--text-color); 
-            margin-top: 0; 
-            margin-bottom: 20px; 
-            font-weight: 600;
-            border-bottom: 1px solid var(--border-color); 
-            padding-bottom: 10px; 
-        }
-        .controls-grid { 
-            display: flex; 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
             justify-content: center;
-            align-items: center; 
-            flex-wrap: wrap; 
-            gap: 16px; 
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            direction: rtl;
         }
-        .status-box { 
-            margin-top: 20px; 
-            font-size: 13px;
-            font-weight: normal; 
-            min-height: 50px; 
-            line-height: 1.6; 
-            text-align: left; 
-            background: var(--dark-bg); 
-            padding: 15px 20px; 
-            border-radius: 12px; 
-            white-space: pre-wrap; 
-            font-family: var(--mono-font);
-            border: 1px solid var(--border-color); 
-            transition: all 0.3s ease; 
+        .view { display: none; }
+        .view.active { display: block; }
+        .card {
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 350px;
+            text-align: center;
         }
-        .valid { color: var(--success-color); } 
-        .invalid { color: var(--error-color); } 
-        .info { color: var(--info-color); } 
-        .warning { color: var(--warning-color); }
-        .pill { 
-            background-color: var(--border-color); 
-            color: var(--accent-color-1); 
-            padding: 5px 15px;
-            border-radius: 20px; 
-            font-size: 14px; 
-            font-weight: 600; 
-            margin: 5px; 
-            display: inline-block;
+        input[type="text"], input[type="password"], input[type="file"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
         }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(90deg, #4b6cb7, #182848);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: translateY(-2px); }
+        .button-group button { margin-top: 10px; }
+        .back-button { background: #6c757d; margin-top: 20px; }
+        .error-message { color: #d93025; }
+        #validation-status .error { color: #d93025; }
+        #validation-status .success { color: #1e8e3e; }
+        #my-qr-code img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header"><h1>Sadat Banknote Validator</h1><p>An offline tool to verify the authenticity of Sadat Digital Banknotes.</p></div>
-    
-    <div class="section">
-        <h2><span class="pill">Step 1</span> Load the Guardian's Public Key</h2>
-        <div class="controls-grid">
-            <label for="import-public-key" class="button sub-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Load Public Key File
-            </label>
-            <input type="file" id="import-public-key" accept=".json" style="display: none;">
-        </div>
-        <div id="key-gen-status" class="status-box">
-            <span class="info">ℹ️ Welcome. Please load the Master Public Key file (`.json`) to begin validation.</span>
+
+    <div id="login-view" class="view active">
+        <div class="card">
+            <h1>ورود به کیف پول</h1>
+            <input type="text" id="uid-input" value="ABCDEFGHIJ">
+            <input type="password" id="password-input" value="12345">
+            <button id="login-button">ورود</button>
+            <p id="login-error" class="error-message"></p>
         </div>
     </div>
-    
-    <div class="section" id="validator-section">
-        <h2><span class="pill">Step 2</span> Verify Banknote Authenticity</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">
-            To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>.
-            The system will find and validate all QR Codes.
-        </p>
-        <label for="validator-input" class="button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            Select Banknote Image for Validation
-        </label>
-        <input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;">
-        <div id="validation-result" class="status-box">Awaiting banknote for validation...</div>
-        <canvas id="noteCanvas" width="790" height="790"></canvas>
+    <div id="wallet-view" class="view">
+        <div class="card">
+            <h2>کیف پول شما</h2>
+            <p>موجودی:</p>
+            <h1 id="balance-display">۰ تومان</h1>
+            <div class="button-group">
+                <button id="show-charge-view-button">شارژ کیف پول</button>
+                <button id="show-send-view-button">ارسال وجه</button>
+                <button id="show-receive-view-button">دریافت وجه</button>
+            </div>
+        </div>
     </div>
-</div>
+    <div id="charge-view" class="view">
+        <div class="card">
+            <h2>شارژ کیف پول</h2>
+            <p>لطفاً تصویر کامل اسکناس دیجیتال را آپلود کنید.</p>
+            <input type="file" id="banknote-image-input" accept="image/*">
+            <div id="validation-status"></div>
+            <div id="charge-confirmation" style="display:none;">
+                <p>اسکناس معتبر است. مبلغ: <b id="validated-amount"></b></p>
+                <button id="confirm-charge-button">افزودن به موجودی</button>
+            </div>
+            <button class="back-button">بازگشت</button>
+        </div>
+    </div>
+    <div id="send-view" class="view">
+        <div class="card">
+            <h2>ارسال وجه</h2>
+            <p>QR Code گیرنده را آپلود کنید.</p>
+            <input type="file" id="recipient-qr-input" accept="image/*">
+            <button class="back-button">بازگشت</button>
+        </div>
+    </div>
+    <div id="receive-view" class="view">
+        <div class="card">
+            <h2>دریافت وجه</h2>
+            <p>این QR Code را برای فرستنده ارسال کنید.</p>
+            <div id="my-qr-code"></div>
+            <a id="download-qr-link" download="My-Wallet-QR.png"><button>دانلود QR Code</button></a>
+            <button class="back-button">بازگشت</button>
+        </div>
+    </div>
 
-<script>
-// --- INLINED LIBRARIES ---
-// The full minified code for pako.js, jsQR.js, js-sha3.js, and pqc-sign-falcon-1024.js
-// would be pasted here. For brevity in this example, they are linked via CDN,
-// but a true single-file version would have the ~150KB of library code here.
-// In a real-world single file, the following four <script> tags would be replaced by their actual code content.
-</script>
-<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/js-sha3@0.9.3/build/sha3.min.js"></script>
-<script src="https://unpkg.com/pqc-sign-falcon-1024@1.0.3/pqc-sign-falcon-1024.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://cdn.skypack.dev/js-sha3"></script>
 
-<script>
-// --- MAIN APPLICATION LOGIC ---
-(async function() {
-    // --- Global State ---
-    const state = {
-        falconApi: null,
-        masterPublicKey: null,
-    };
+    <script type="module">
+        // **تغییر اصلی:** وارد کردن ماژول فالکون به صورت محلی
+        import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
 
-    // --- CONSTANTS ---
-    const Constants = {
-        EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-        VALIDATION_PREFIX: "SADAT_V2_PART",
-        NUM_QR_CODES: 9, 
-        MAX_IMAGE_DIMENSION: 2000
-    };
+        // ==========================================================
+        // بقیه کد جاوااسکریپت بدون تغییر باقی می‌ماند
+        // ==========================================================
+        const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", NUM_QR_CODES: 9 };
+        const Utils = {
+            arrayBufferToBase64: (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer))),
+            base64ToUint8Array: (base64) => {
+                const b = atob(base64); const l = b.length; const u = new Uint8Array(l);
+                while(l--) u[l] = b.charCodeAt(l); return u;
+            },
+            hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
+        };
+        const BankCrypto = (() => {
+            const h = (m) => Utils.hexToUint8Array(shake256(m, 1536));
+            return { async verifySignature(sig, data, pk, api) { return api.verify(sig, h(data), pk); } };
+        })();
+        const getStandardizedDataForSigning = (d) => JSON.stringify({t:d.timestamp, s:d.serial},['t','s']);
+        const getStandardizedDataForMasterSig = (d) => {
+            const t = {e:Utils.arrayBufferToBase64(d.ephemeralPublicKey), s:Utils.arrayBufferToBase64(d.signatureOne)};
+            return JSON.stringify(t, Object.keys(t).sort());
+        };
+        const parseUnifiedVerificationPayload = (b) => {
+            const c = Utils.base64ToUint8Array(b); const j = pako.inflate(c,{to:'string'}); const p=JSON.parse(j);
+            return {a:p.a, s:p.s, t:p.t, epk:Utils.base64ToUint8Array(p.epk), s1:Utils.base64ToUint8Array(p.s1), s2:Utils.base64ToUint8Array(p.s2)};
+        };
 
-    // --- DOM Elements ---
-    const DOMElements = {
-        importPublicKey: document.getElementById('import-public-key'),
-        keyGenStatus: document.getElementById('key-gen-status'),
-        noteCanvas: document.getElementById('noteCanvas'),
-        validatorInput: document.getElementById('validator-input'),
-        validationResult: document.getElementById('validation-result'),
-    };
+        const MASTER_PUBLIC_KEY_B64 = "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";
 
-    // --- Utility Functions ---
-    const Utils = {
-        base64ToUint8Array: (base64) => {
-            const binaryString = atob(base64);
-            const len = binaryString.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-            return bytes;
-        },
-        hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
-        updateStatus: (element, message, type = 'info') => {
-            element.innerHTML = `<span class="${type}">${message}</span>`;
-        },
-        log: (message, type = 'info') => {
-            const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
-            console.log(`[Sadat System] ${icon} ${message}`);
-        },
-        async preprocessImage(dataUrl) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.filter = 'grayscale(1) contrast(2.5) brightness(1.1)';
-                    ctx.drawImage(img, 0, 0);
-                    resolve(canvas.toDataURL('image/jpeg'));
-                };
-                img.onerror = reject;
-                img.src = dataUrl;
+        const state = { falconApi: null, masterPublicKey: null, currentUser: null, balance: 0 };
+        const DOMElements = {
+            views: document.querySelectorAll('.view'),
+            walletView: document.getElementById('wallet-view'),
+            loginButton: document.getElementById('login-button'),
+            loginError: document.getElementById('login-error'),
+            balanceDisplay: document.getElementById('balance-display'),
+            showChargeViewButton: document.getElementById('show-charge-view-button'),
+            showSendViewButton: document.getElementById('show-send-view-button'),
+            showReceiveViewButton: document.getElementById('show-receive-view-button'),
+            banknoteImageInput: document.getElementById('banknote-image-input'),
+            validationStatus: document.getElementById('validation-status'),
+            chargeConfirmation: document.getElementById('charge-confirmation'),
+            validatedAmount: document.getElementById('validated-amount'),
+            confirmChargeButton: document.getElementById('confirm-charge-button'),
+            myQrCodeContainer: document.getElementById('my-qr-code'),
+            downloadQrLink: document.getElementById('download-qr-link'),
+            backButtons: document.querySelectorAll('.back-button'),
+        };
+
+        function showView(id) { DOMElements.views.forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+        function updateBalanceDisplay() { DOMElements.balanceDisplay.textContent = `${state.balance.toLocaleString('fa-IR')} تومان`; }
+
+        async function initializeApp() {
+            try {
+                // اجرا و آماده‌سازی کتابخانه فالکون که در ابتدای اسکریپت import شد
+                state.falconApi = await pqcSignFalcon1024();
+                console.log("ماژول Falcon با موفقیت لود شد.");
+                state.masterPublicKey = Utils.base64ToUint8Array(MASTER_PUBLIC_KEY_B64);
+                console.log("کلید عمومی با موفقیت آماده شد.");
+                setupEventListeners();
+            } catch (e) {
+                alert("خطای حیاتی در راه‌اندازی برنامه: " + e.message + "\n\nمطمئن شوید پروژه را از طریق یک وب سرور محلی اجرا می‌کنید.");
+                console.error(e);
+            }
+        }
+        function handleLogin() {
+            const u = document.getElementById('uid-input').value;
+            const p = document.getElementById('password-input').value;
+            if(u === 'ABCDEFGHIJ' && p === '12345') { state.currentUser = {uid:u}; updateBalanceDisplay(); showView('wallet-view'); }
+            else { DOMElements.loginError.textContent = 'شناسه کاربری یا رمز عبور اشتباه است.'; }
+        }
+        async function handleBanknoteValidation(e) {
+            const f = e.target.files[0]; if (!f) return;
+            DOMElements.validationStatus.innerHTML = '⏳ در حال پردازش...'; DOMElements.chargeConfirmation.style.display = 'none';
+            try {
+                const p = await findAllQrParts(f);
+                DOMElements.validationStatus.innerHTML = '<span class="success">✅ QR کد پیدا شد. در حال اعتبارسنجی...</span>';
+                const d = parseUnifiedVerificationPayload(p);
+                if(!await BankCrypto.verifySignature(d.s1, getStandardizedDataForSigning(d), d.epk, state.falconApi)) throw new Error("امضای اول نامعتبر است. اسکناس جعلی است.");
+                if(!await BankCrypto.verifySignature(d.s2, getStandardizedDataForMasterSig(d), state.masterPublicKey, state.falconApi)) throw new Error("امضای اصلی نامعتبر است.");
+                DOMElements.validationStatus.innerHTML = '<span class="success">✅ اسکناس معتبر است!</span>';
+                DOMElements.validatedAmount.textContent = `${d.a.toLocaleString('fa-IR')} تومان`;
+                DOMElements.chargeConfirmation.dataset.amount = d.a; DOMElements.chargeConfirmation.style.display = 'block';
+            } catch (err) { DOMElements.validationStatus.innerHTML = `<span class="error">❌ خطا: ${err.message}</span>`; }
+            finally { e.target.value = ''; }
+        }
+        async function findAllQrParts(f) {
+            const i = await readImageForJsQR(f); const c = jsQR(i.data, i.width, i.height);
+            if (!c) throw new Error("هیچ QR کدی پیدا نشد.");
+            if (!c.data.startsWith(Constants.VALIDATION_PREFIX)) throw new Error("این QR کد مربوط به اسکناس سادات نیست.");
+            const m = c.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
+            if (m) return m[3];
+            throw new Error("فرمت QR کد نامعتبر است.");
+        }
+        function confirmCharge() {
+            const a = parseInt(DOMElements.chargeConfirmation.dataset.amount, 10);
+            if(a > 0) { state.balance += a; updateBalanceDisplay(); alert(`مبلغ ${a.toLocaleString('fa-IR')} تومان اضافه شد.`); showView('wallet-view'); }
+        }
+        function generateReceiveQrCode() {
+            DOMElements.myQrCodeContainer.innerHTML = ''; const p = JSON.stringify({type:"SADAT_WALLET_ADDRESS", uid:state.currentUser.uid});
+            const qr = qrcode(0,'L'); qr.addData(p); qr.make();
+            DOMElements.myQrCodeContainer.innerHTML = qr.createImgTag(6,10);
+            const i = DOMElements.myQrCodeContainer.querySelector('img'); const c = document.createElement('canvas');
+            c.width=i.width; c.height=i.height; c.getContext('2d').drawImage(i,0,0);
+            DOMElements.downloadQrLink.href = c.toDataURL('image/png');
+        }
+        function setupEventListeners() {
+            DOMElements.loginButton.addEventListener('click', handleLogin);
+            DOMElements.showChargeViewButton.addEventListener('click', () => showView('charge-view'));
+            DOMElements.showSendViewButton.addEventListener('click', () => showView('send-view'));
+            DOMElements.showReceiveViewButton.addEventListener('click', () => { generateReceiveQrCode(); showView('receive-view'); });
+            DOMElements.banknoteImageInput.addEventListener('change', handleBanknoteValidation);
+            DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
+            DOMElements.backButtons.forEach(b => b.addEventListener('click', () => showView('wallet-view')));
+        }
+        function readImageForJsQR(f) {
+            return new Promise((res, rej) => {
+                const r = new FileReader(); r.onload = e => { const i = new Image(); i.onload = () => {
+                    const c = document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.drawImage(i,0,0); res(x.getImageData(0,0,c.width,c.height));
+                }; i.onerror=rej; i.src=e.target.result; }; r.onerror=rej; r.readAsDataURL(f);
             });
-        },
-        async resizeImage(file, maxSize) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let { width, height } = img;
-                        if (width > height) {
-                            if (width > maxSize) {
-                                height *= maxSize / width;
-                                width = maxSize;
-                            }
-                        } else {
-                            if (height > maxSize) {
-                                width *= maxSize / height;
-                                height = maxSize;
-                            }
-                        }
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        resolve(canvas.toDataURL('image/jpeg'));
-                    };
-                    img.onerror = reject;
-                    img.src = e.target.result;
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        },
-        async decodeQrCodeFromImage(file) {
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height);
-                    if (code) {
-                        resolve(code.data);
-                    } else {
-                        reject(new Error("QR Code not found."));
-                    }
-                };
-                img.src = event.target.result;
-            };
-            reader.onerror = () => reject(new Error("FileReader failed."));
-            reader.readAsDataURL(file);
-          });
         }
-    };
-
-    // --- CORE CRYPTO ENGINE ---
-    const BankCrypto = (() => {
-        function hashMessageForSigning(message) { 
-            // MODIFICATION: Using the global sha3 object from the inlined library
-            return Utils.hexToUint8Array(sha3.shake256(message, 1536)); 
-        }
-        return {
-            async verifySignature(signature, data, publicKey) {
-                if (!publicKey || !state.falconApi) throw new Error("Verification prerequisites not met.");
-                const dataHash = hashMessageForSigning(data);
-                return state.falconApi.verify(signature, dataHash, publicKey);
-            }
-        };
-    })();
-
-    // --- UI EVENT HANDLERS ---
-    const UIHandlers = (() => {
-        return {
-            handleImportPublicKey: async (event) => { 
-                const file = event.target.files[0];
-                if (!file) return; 
-                try { 
-                    const data = JSON.parse(await file.text()); 
-                    if (!data.masterPublicKey) throw new Error("Invalid public key file format.");
-                    state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey); 
-                    Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported. Ready to validate banknotes.', 'success'); 
-                } catch (error) { 
-                    Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error importing public key: ${error.message}`, 'error'); 
-                } 
-                event.target.value = '';
-            }
-        };
-    })();
-
-    // --- BANKNOTE LOGIC ---
-    const BanknoteLogic = (() => {
-        const getStandardizedDataForSigning = (noteData) => JSON.stringify({ timestamp: noteData.timestamp, serial: noteData.serial, }, ['timestamp', 'serial']);
-        
-        const getStandardizedDataForMasterSig = (noteData) => {
-            const tempNoteData = { 
-                ephemeralPublicKey: btoa(String.fromCharCode(...noteData.ephemeralPublicKey)), 
-                signatureOne: btoa(String.fromCharCode(...noteData.signatureOne)) 
-            };
-            return JSON.stringify(tempNoteData, Object.keys(tempNoteData).sort());
-        };
-        
-        const parseUnifiedVerificationPayload = (base64CompressedString) => {
-            const compressedData = Utils.base64ToUint8Array(base64CompressedString);
-            // MODIFICATION: Using the global pako object
-            const jsonString = pako.inflate(compressedData, { to: 'string' });
-            const p = JSON.parse(jsonString);
-            return { 
-                amount: p.a, 
-                serial: p.s, 
-                timestamp: p.t, 
-                ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), 
-                signatureOne: Utils.base64ToUint8Array(p.s1), 
-                signatureTwo: Utils.base64ToUint8Array(p.s2) 
-            };
-        };
-
-        async function decodeAllQrCodesFromImage(processedDataUrl, banknoteImage) {
-            const mainCanvas = document.createElement('canvas');
-            mainCanvas.width = banknoteImage.width;
-            mainCanvas.height = banknoteImage.height;
-            const mainCtx = mainCanvas.getContext('2d');
-            mainCtx.drawImage(banknoteImage, 0, 0);
-
-            const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
-            const scanResults = [];
-            for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-                Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
-                const row = Math.floor(i / 3);
-                const col = i % 3;
-                const regionX = col * (layout.qrSize + layout.xSpacing);
-                const regionY = row * (layout.qrSize + layout.ySpacing);
-                const regionSize = layout.qrSize;
-                
-                const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
-                // MODIFICATION: Using the global jsQR function
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                
-                const result = { x: regionX, y: regionY, size: regionSize, data: null, success: false };
-                if (code && code.data) {
-                    result.data = code.data;
-                    result.success = true;
-                } else {
-                     console.warn(`Could not decode QR in zone ${i + 1}.`);
-                }
-                scanResults.push(result);
-            }
-            
-            if (scanResults.every(r => !r.success)) {
-                 throw new Error("Validation Failed. No QR codes found at exact locations. Tip: Use a flat, well-lit photo.");
-            }
-            return scanResults;
-        }
-
-        return {
-            handleFileSelectForValidation: async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                if (!state.masterPublicKey) { 
-                    Utils.updateStatus(DOMElements.validationResult, '❌ Load a Master Public Key in Step 1 before validating.', 'error'); 
-                    return;
-                }
-                
-                const resultDiv = DOMElements.validationResult;
-                const noteCanvas = DOMElements.noteCanvas;
-                const noteCtx = noteCanvas.getContext('2d');
-                Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
-                
-                try {
-                    const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
-                    const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
-                    
-                    const banknoteImage = await new Promise((resolve, reject) => {
-                        const img = new Image();
-                        img.onload = () => resolve(img);
-                        img.onerror = () => reject('Could not load banknote image');
-                        img.src = processedDataUrl;
-                    });
-                    
-                    noteCanvas.width = banknoteImage.width;
-                    noteCanvas.height = banknoteImage.height;
-                    noteCtx.drawImage(banknoteImage, 0, 0);
-
-                    const scanResults = await decodeAllQrCodesFromImage(processedDataUrl, banknoteImage);
-                    scanResults.forEach(result => {
-                        if (result.success) {
-                            noteCtx.font = `bold ${result.size * 0.8}px sans-serif`;
-                            noteCtx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-                            noteCtx.textAlign = 'center';
-                            noteCtx.textBaseline = 'middle';
-                            noteCtx.fillText('✔', result.x + result.size / 2, result.y + result.size / 2);
-                        } else {
-                            noteCtx.font = `bold ${result.size * 0.8}px sans-serif`;
-                            noteCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-                            noteCtx.textAlign = 'center';
-                            noteCtx.textBaseline = 'middle';
-                            noteCtx.fillText('✖', result.x + result.size / 2, result.y + result.size / 2);
-                        }
-                    });
-                    
-                    const decodedCodes = scanResults.filter(r => r.success);
-                    let resultHTML = `<span class="info">Found ${decodedCodes.length}/${Constants.NUM_QR_CODES} QR code(s). Assembling payload...</span>\n`;
-                    resultDiv.innerHTML = resultHTML;
-                    
-                    let expectedTotalParts = Constants.NUM_QR_CODES;
-                    const receivedParts = {};
-                    let uniqueCodes = 0;
-                    for (const code of decodedCodes) {
-                        if (code.data.startsWith(Constants.VALIDATION_PREFIX)) {
-                            const payload = code.data.substring(Constants.VALIDATION_PREFIX.length);
-                            const match = payload.match(/^(\d+)\/(\d+):(.*)$/s);
-                            if (match) {
-                                const partNum = parseInt(match[1], 10);
-                                if (!receivedParts[partNum]) {
-                                    receivedParts[partNum] = match[3];
-                                    uniqueCodes++;
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (uniqueCodes < expectedTotalParts) {
-                        Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required QR codes. The banknote may be damaged or fake.`, 'error');
-                        return;
-                    }
-
-                    let fullPayloadString = '';
-                    for (let i = 1; i <= expectedTotalParts; i++) {
-                        fullPayloadString += receivedParts[i];
-                    }
-
-                    resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
-                    resultDiv.innerHTML = resultHTML;
-                    
-                    const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
-                    
-                    resultHTML += `<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>\n`;
-                    resultDiv.innerHTML = resultHTML;
-                    const dataForSigOne = getStandardizedDataForSigning(parsedData);
-                    const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                    if (!isSigOneValid) { 
-                        resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; 
-                        resultDiv.innerHTML = resultHTML; 
-                        return;
-                    }
-                    
-                    resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
-                    resultHTML += `<span class="info">ℹ️ Verifying Master Signature (Sig 2)...</span>\n`;
-                    resultDiv.innerHTML = resultHTML;
-                    const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
-                    const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                    
-                    if (!isSigTwoValid) { 
-                        resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY (Not issued by this Guardian)</span>';
-                        resultDiv.innerHTML = resultHTML; 
-                        return; 
-                    }
-                    
-                    resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
-                    resultDiv.innerHTML = resultHTML;
-                } catch (e) {
-                    if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
-                         Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The QR code data is corrupt or invalid.`, 'error');
-                    } else {
-                         Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}`, 'error');
-                    }
-                    console.error(e);
-                } finally {
-                    event.target.value = '';
-                }
-            }
-        };
-    })();
-
-    // --- BANKNOTE DRAWER ---
-    const BanknoteDrawer = (() => {
-        return {
-            getLayout: (width, height) => {
-                const qrSize = 250;
-                const xSpacing = 20;
-                const ySpacing = 20;
-                const totalGridWidth = (qrSize * 3) + (xSpacing * 2);
-                const totalGridHeight = (qrSize * 3) + (ySpacing * 2);
-                return { qrSize, xSpacing, ySpacing, totalGridWidth, totalGridHeight };
-            }
-        };
-    })();
-
-    // --- APPLICATION INITIALIZATION ---
-    async function main() {
-        Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Module...', 'info');
-        try {
-            // MODIFICATION: Using the global pqcSignFalcon1024 function
-            state.falconApi = await pqcSignFalcon1024();
-            Utils.updateStatus(DOMElements.keyGenStatus, '✅ Module loaded. Please import the public key to begin.', 'success');
-            Utils.log("Cryptographic module initialized successfully.", 'success');
-        } catch (e) {
-            Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
-            Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
-            alert("Error: Failed to load a required cryptographic module. The application cannot run.");
-            return;
-        }
-        
-        DOMElements.importPublicKey.addEventListener('change', UIHandlers.handleImportPublicKey);
-        DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
-        
-        const canvas = DOMElements.noteCanvas;
-        const ctx = canvas.getContext('2d');
-        const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        bgGradient.addColorStop(0, `hsl(250, 50%, 6%)`);
-        bgGradient.addColorStop(1, `hsl(260, 40%, 4%)`);
-        ctx.fillStyle = bgGradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = `bold 30px 'Poppins'`;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.fillText("Validated banknote image will appear here", canvas.width/2, canvas.height/2);
-    }
-
-    main();
-})();
-</script>
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
 </body>
 </html>
