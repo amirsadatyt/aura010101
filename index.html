@@ -25,7 +25,7 @@
         label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
         label.qr-upload-label:hover { background-color: #f9f9f9; }
         input[type="file"] { display: none; }
-        #network-status { font-size: 12px; color: var(--dark-gray); position: fixed; bottom: 10px; right: 10px; background-color: rgba(255,255,255,0.8); padding: 5px 10px; border-radius: 5px; }
+        .network-status { font-size: 0.8em; color: #555; margin-top: 15px; padding: 5px; background: #f0f2f5; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -40,7 +40,7 @@
     
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><div id="wfn-status" class="network-status">Witness Network: Offline</div><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button><div id="mining-status-charge" class="status-box info" style="margin-top: 10px;"></div></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
     <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal QR Code</button><div id="send-status" class="status-box"></div><div id="mining-status-send" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
@@ -48,23 +48,21 @@
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back to Wallet</button></div></div>
     <div id="scan-proposal-view" class="view"><div class="card"><h2>Receive Funds (Step 2 of 2)</h2><label class="qr-upload-label" for="scan-proposal-input">To receive funds, scan the sender's "Proposal" QR code</label><input type="file" id="scan-proposal-input" accept="image/*"><div id="proposal-status" class="status-box"></div><div id="mining-status-proposal" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
 
-    <div id="network-status">Network: Disconnected</div>
+    <script src="webtorrent.min.js"></script>
+    <script src="bloomfilter.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-    <script src="./webtorrent.min.js"></script>
-    <script src="./bloomfilter.min.js"></script>
-
-
+    
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-        
+
         // ===================================================================================
-        // CORE BANKNOTE VALIDATION LOGIC (Unchanged)
+        // CORE BANKNOTE VALIDATION LOGIC (No changes here)
         // ===================================================================================
         const CoreLogic = (() => {
             const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
@@ -99,28 +97,36 @@
         })();
 
         // ===================================================================================
-        // PROOF OF WORK & BLOCKCHAIN CORE LOGIC (Unchanged)
+        // PROOF OF WORK & BLOCKCHAIN CORE LOGIC (No changes here)
         // ===================================================================================
         const PoW = {
-            DIFFICULTY: 3, 
+            DIFFICULTY: 3,
             async createSHA256Hash(string) {
                 const textAsBuffer = new TextEncoder().encode(string); const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             },
             async mineBlock(blockData, statusCallback) {
                 let nonce = 0; let hash = ''; const target = '0'.repeat(this.DIFFICULTY);
                 while (!hash.startsWith(target)) {
-                    nonce++; const dataToHash = JSON.stringify(blockData) + nonce; hash = await this.createSHA256Hash(dataToHash);
-                    if (nonce % 1000 === 0) { statusCallback(`Mining... Attempt #${nonce}`); await new Promise(resolve => setTimeout(resolve, 0)); }
+                    nonce++; const dataToHash = JSON.stringify(blockData) + nonce;
+                    hash = await this.createSHA256Hash(dataToHash);
+                    if (nonce % 1000 === 0) {
+                        statusCallback(`Mining... Attempt #${nonce}`);
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
                 }
-                statusCallback(`Block mined successfully! Nonce: ${nonce}`); return { nonce, hash };
+                statusCallback(`Block mined successfully! Nonce: ${nonce}`);
+                return { nonce, hash };
             },
             async verifyChain(chain) {
                 const target = '0'.repeat(this.DIFFICULTY);
                 for (let i = 1; i < chain.length; i++) {
-                    const currentBlock = chain[i]; const previousBlock = chain[i - 1]; const blockDataForHash = { ...currentBlock };
+                    const currentBlock = chain[i]; const previousBlock = chain[i - 1];
+                    const blockDataForHash = { ...currentBlock };
                     delete blockDataForHash.hash; delete blockDataForHash.nonce;
-                    const dataToHash = JSON.stringify(blockDataForHash) + currentBlock.nonce; const recalculatedHash = await this.createSHA256Hash(dataToHash);
+                    const dataToHash = JSON.stringify(blockDataForHash) + currentBlock.nonce;
+                    const recalculatedHash = await this.createSHA256Hash(dataToHash);
                     if (currentBlock.hash !== recalculatedHash || !currentBlock.hash.startsWith(target) || currentBlock.prevHash !== previousBlock.hash) {
                         console.error("Chain verification failed at block:", currentBlock); return false;
                     }
@@ -128,7 +134,7 @@
                 console.log("Chain verification successful."); return true;
             }
         };
-        
+
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
         // ===================================================================================
@@ -138,163 +144,129 @@
             masterPublicKey: null,
             userStore: null,
             falconApi: null, 
-            wfnClient: null, // WebTorrent client
-            wfnSwarm: null,  // WebTorrent swarm connection
         };
 
-        const WitnessFloodNetwork = {
-            LEDGER_KEY: 'aura_witness_ledger_bloom',
-            // A unique identifier for our app's communication channel
-            MAGNET_URI: 'magnet:?xt=urn:btih:e6b6c72b8f8885b524a802796e6a39b36df31584&dn=AuraWitnessFloodNetwork&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com',
-            bloomFilter: null,
+        // WFN INTEGRATION: New Witness Flood Network powered by WebTorrent
+        const WitnessFloodNetwork = (() => {
+            const TORRENT_ID = 'aura-witness-flood-network-p2p-channel-v1'; // Unique ID for our swarm
+            let client;
+            let spentItems = new Set();
+            let walletRef;
 
-            initialize: () => {
-                const storedFilter = localStorage.getItem(WitnessFloodNetwork.LEDGER_KEY);
-                if (storedFilter) {
-                    const data = JSON.parse(storedFilter);
-                    WitnessFloodNetwork.bloomFilter = new bloom.BloomFilter(data.buckets, data.k);
-                } else {
-                    // Create a new Bloom Filter. Sizing: 32k buckets (4KB), 5 hash functions.
-                    // Good for ~8000 items at a 1% false positive rate.
-                    WitnessFloodNetwork.bloomFilter = new bloom.BloomFilter(32768, 5);
+            const updateStatus = (torrent) => {
+                const statusEl = document.getElementById('wfn-status');
+                if (statusEl) {
+                    const peerCount = torrent ? torrent.numPeers : 0;
+                    statusEl.textContent = `Witness Network: Connected (${peerCount} peers)`;
+                    statusEl.style.color = 'green';
                 }
-                console.log("Witness Network Initialized.");
-            },
-            
-            save: () => {
-                const data = {
-                    buckets: Array.from(WitnessFloodNetwork.bloomFilter.buckets),
-                    k: WitnessFloodNetwork.bloomFilter.k
-                };
-                localStorage.setItem(WitnessFloodNetwork.LEDGER_KEY, JSON.stringify(data));
-            },
+            };
 
-            hasBeenSpent: (id) => {
-                return WitnessFloodNetwork.bloomFilter.test(id);
-            },
-
-            markAsSpent: (id) => {
-                if (!WitnessFloodNetwork.bloomFilter.test(id)) {
-                    WitnessFloodNetwork.bloomFilter.add(id);
-                    WitnessFloodNetwork.save();
-                    console.log(`Witness Network: Marked ${id} as spent locally.`);
-                    return true;
-                }
-                return false;
-            },
-
-            connect: async () => {
-                if (state.wfnClient) return; // Already connected or connecting
+            const processInvalidation = (message) => {
+                if (!message || !message.id || !message.signature) return;
                 
-                state.wfnClient = new WebTorrent();
-                const networkStatusEl = document.getElementById('network-status');
-                networkStatusEl.textContent = 'Network: Connecting...';
-                
-                state.wfnClient.on('error', err => console.error('WFN Error:', err));
+                const { id, type, signature } = message;
+                const expectedSigner = message.signerAddress;
 
-                state.wfnSwarm = state.wfnClient.add(WitnessFloodNetwork.MAGNET_URI, (torrent) => {
-                    console.log('Successfully joined the Witness Flood Network!');
-                    networkStatusEl.textContent = `Network: Connected (${torrent.numPeers + 1} users)`;
+                const messageToVerify = JSON.stringify({ id, type });
+                const signerAddress = ethers.verifyMessage(messageToVerify, signature);
 
-                    torrent.on('wire', (wire) => {
-                         console.log('Connected to a new peer:', wire.peerId);
-                         networkStatusEl.textContent = `Network: Connected (${torrent.numPeers + 1} users)`;
-                         
-                         // Simple sync: on new connection, broadcast our filter
-                         // A more robust system would request filters from others
-                         const filterData = JSON.stringify(WitnessFloodNetwork.bloomFilter.buckets);
-                         wire.extended('aura_sync', { filter: filterData });
-                    });
-
-                    torrent.on('dht', () => {
-                        networkStatusEl.textContent = `Network: Connected (${torrent.numPeers + 1} users)`;
-                    });
-
-                    // Listen for custom messages from peers
-                    torrent.on('extended', (peer, name, data) => {
-                        if (name === 'aura_invalidate') {
-                            WitnessFloodNetwork.handleInvalidationMessage(data.toString());
-                        }
-                        if (name === 'aura_sync') {
-                            const remoteBuckets = JSON.parse(data.toString()).filter;
-                            WitnessFloodNetwork.bloomFilter.buckets = WitnessFloodNetwork.bloomFilter.buckets.map((v, i) => v || remoteBuckets[i]);
-                            WitnessFloodNetwork.save();
-                            console.log("Synced ledger with a peer.");
-                        }
-                    });
-                });
-            },
-            
-            disconnect: () => {
-                 if (state.wfnClient) {
-                    state.wfnClient.destroy(() => {
-                        state.wfnClient = null;
-                        state.wfnSwarm = null;
-                        document.getElementById('network-status').textContent = 'Network: Disconnected';
-                        console.log('Disconnected from WFN.');
-                    });
-                }
-            },
-
-            broadcastInvalidation: async (serial) => {
-                if (!state.wfnSwarm || !state.wallet) return;
-
-                const message = JSON.stringify({ serial: serial, timestamp: Date.now() });
-                const signature = await state.wallet.signMessage(message);
-                const payload = JSON.stringify({ message, signature });
-
-                state.wfnSwarm.wires.forEach(wire => {
-                    if (wire.extended) {
-                        wire.extended('aura_invalidate', payload);
+                if (signerAddress === expectedSigner) {
+                    if (!spentItems.has(id)) {
+                        spentItems.add(id);
+                        console.log(`WFN: Verified and recorded invalidation for ${type}: ${id}`);
                     }
-                });
-                console.log(`Broadcasted invalidation for ${serial}`);
-            },
-
-            handleInvalidationMessage: async (payload) => {
-                try {
-                    const { message, signature } = JSON.parse(payload);
-                    const { serial } = JSON.parse(message);
-
-                    // Basic check to prevent processing our own messages if echoed
-                    if (WitnessFloodNetwork.hasBeenSpent(serial)) return;
-                    
-                    const signerAddress = ethers.verifyMessage(message, signature);
-                    // A more robust system would check the signer address against a list of known/trusted peers
-                    // For now, we accept any validly signed message to update the ledger.
-                    console.log(`Received valid invalidation for ${serial} from ${signerAddress}`);
-                    WitnessFloodNetwork.markAsSpent(serial);
-
-                } catch (e) {
-                    console.error('Failed to handle invalidation message:', e);
+                } else {
+                    console.warn('WFN: Received invalid signature for message:', message);
                 }
-            }
-        };
+            };
+
+            return {
+                init: (wallet) => {
+                    if (client || !wallet) return;
+                    walletRef = wallet;
+                    client = new WebTorrent();
+
+                    client.on('error', err => console.error('WebTorrent Client Error:', err));
+
+                    console.log('WFN: Connecting to the witness network...');
+                    client.add(TORRENT_ID, (torrent) => {
+                        console.log('WFN: Successfully joined the swarm.');
+                        updateStatus(torrent);
+
+                        torrent.on('wire', (wire, addr) => {
+                            console.log('WFN: Connected to a new peer:', wire.peerId);
+                            updateStatus(torrent);
+                            wire.on('close', () => updateStatus(torrent));
+
+                            // Setup our custom protocol extension
+                            wire.extended('aura_wfn', {
+                                invalidation: (message) => {
+                                    processInvalidation(message);
+                                }
+                            });
+                        });
+                    });
+                },
+                broadcast: async (id, type) => {
+                    if (!client || !walletRef) return;
+                    
+                    const torrent = client.get(TORRENT_ID);
+                    if (!torrent) return;
+
+                    const messageToSign = JSON.stringify({ id, type });
+                    const signature = await walletRef.signMessage(messageToSign);
+
+                    const invalidationMessage = {
+                        id,
+                        type,
+                        signerAddress: walletRef.address,
+                        signature
+                    };
+                    
+                    spentItems.add(id); // Mark as spent locally immediately
+                    console.log(`WFN: Broadcasting invalidation for ${type}: ${id}`);
+                    torrent.wires.forEach(wire => {
+                        wire.extended('aura_wfn', { invalidation: invalidationMessage });
+                    });
+                },
+                hasBeenSpent: (id) => spentItems.has(id),
+                destroy: () => {
+                    if (client) {
+                        client.destroy();
+                        client = null;
+                        spentItems.clear();
+                        walletRef = null;
+                        const statusEl = document.getElementById('wfn-status');
+                        if (statusEl) {
+                           statusEl.textContent = 'Witness Network: Offline';
+                           statusEl.style.color = 'red';
+                        }
+                        console.log('WFN: Disconnected and destroyed.');
+                    }
+                }
+            };
+        })();
 
 
         const WalletLogic = {
             createWallet: (password) => {
                 const wallet = ethers.Wallet.createRandom();
                 const userStore = {
-                    publicKey: wallet.publicKey,
-                    address: wallet.address,
-                    encryptedJson: wallet.encryptSync(password),
+                    publicKey: wallet.publicKey, address: wallet.address, encryptedJson: wallet.encryptSync(password),
                     chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                WitnessFloodNetwork.initialize(); // Init ledger for new wallet
                 return { mnemonic: wallet.mnemonic.phrase };
             },
             restoreWallet: (mnemonic, password) => {
                 try {
                     const wallet = ethers.Wallet.fromPhrase(mnemonic);
                     const userStore = {
-                        publicKey: wallet.publicKey, address: wallet.address,
-                        encryptedJson: wallet.encryptSync(password),
+                        publicKey: wallet.publicKey, address: wallet.address, encryptedJson: wallet.encryptSync(password),
                         chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                     };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                    WitnessFloodNetwork.initialize(); // Init ledger for restored wallet
                     return true;
                 } catch (e) { console.error("Restore failed:", e); return false; }
             },
@@ -309,15 +281,16 @@
                     if (!isChainValid) {
                         alert("WARNING: Your local transaction history appears to be corrupted! Integrity check failed.");
                     }
-                    WitnessFloodNetwork.initialize();
-                    WitnessFloodNetwork.connect(); // Connect to the P2P network on login
+                    // WFN INTEGRATION: Initialize the network on login
+                    WitnessFloodNetwork.init(state.wallet);
                     return true;
                 } catch (e) { console.error("Login failed:", e); return false; }
             },
             logout: () => { 
                 state.wallet = null; 
                 state.userStore = null;
-                WitnessFloodNetwork.disconnect(); // Disconnect from P2P network on logout
+                // WFN INTEGRATION: Disconnect from the network on logout
+                WitnessFloodNetwork.destroy();
             },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: async (txData, statusCallback) => {
@@ -350,10 +323,6 @@
                 const receiptTx = await WalletLogic.addToChain({ type: 'receive', amount: proposal.amount, from: proposal.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: proposal.txHash }, statusCallback);
                 const receipt = { type: 'AURA_RECEIPT', receiverAddress: state.wallet.address, txHash: receiptTx.hash, linkedTxHash: proposal.txHash };
                 receipt.signature = await state.wallet.signMessage(JSON.stringify(receipt));
-                // In a transaction, both parties should mark the originating hash as spent
-                if (WitnessFloodNetwork.markAsSpent(proposal.txHash)) {
-                    await WitnessFloodNetwork.broadcastInvalidation(proposal.txHash);
-                }
                 return receipt;
             },
             verifyAndFinalize: async (receipt) => {
@@ -361,13 +330,9 @@
                 if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') {
                     throw new Error("Associated send transaction not found or already completed.");
                 }
-                ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
+                const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
                 state.userStore.chain[senderTxIndex].status = 'completed';
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                // Mark the transaction as spent to prevent replay
-                if (WitnessFloodNetwork.markAsSpent(receipt.linkedTxHash)) {
-                   await WitnessFloodNetwork.broadcastInvalidation(receipt.linkedTxHash);
-                }
                 return true;
             }
         };
@@ -381,11 +346,8 @@
             document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`;
         }
         function generateQrCode(data, containerId) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = '';
-            const qr = qrcode(0, 'L');
-            qr.addData(JSON.stringify(data));
-            qr.make();
+            const container = document.getElementById(containerId); container.innerHTML = '';
+            const qr = qrcode(0, 'L'); qr.addData(JSON.stringify(data)); qr.make();
             container.innerHTML = qr.createImgTag(6, 10);
         }
         async function decodeQrFromFile(file) {
@@ -410,11 +372,9 @@
         }
         async function initializeApp() {
             try {
-                state.falconApi = await pqcSignFalcon1024();
-                console.log("Falcon API Initialized.");
+                state.falconApi = await pqcSignFalcon1024(); console.log("Falcon API Initialized.");
             } catch (e) {
-                alert(`Critical error initializing Falcon: ${e.message}`);
-                return;
+                alert(`Critical error initializing Falcon: ${e.message}`); return;
             }
             if (localStorage.getItem('aura_user_store')) { showView('login-view'); } 
             else { showView('onboarding-view'); }
@@ -466,7 +426,7 @@
             document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
-                    localStorage.removeItem(WitnessFloodNetwork.LEDGER_KEY);
+                    WitnessFloodNetwork.destroy(); // WFN INTEGRATION: Also clear network state
                     location.reload();
                 }
             });
@@ -480,14 +440,11 @@
                 const confirmBtn = event.target;
                 const statusEl = document.getElementById('mining-status-charge');
                 confirmBtn.disabled = true;
-                
+  
                 await WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
+                // WFN INTEGRATION: Broadcast that this banknote has been spent
+                await WitnessFloodNetwork.broadcast(serial, 'banknote');
                 
-                // Mark as spent LOCALLY first, then broadcast
-                if (WitnessFloodNetwork.markAsSpent(serial)) {
-                    await WitnessFloodNetwork.broadcastInvalidation(serial);
-                }
-
                 updateBalanceDisplay();
                 setTimeout(() => {
                     alert(`$${amount.toFixed(2)} added successfully.`);
@@ -525,6 +482,9 @@
                     const receipt = await decodeQrFromFile(file);
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
                     await WalletLogic.verifyAndFinalize(receipt);
+                    // WFN INTEGRATION: Broadcast that this transaction has been finalized
+                    await WitnessFloodNetwork.broadcast(receipt.linkedTxHash, 'transaction');
+   
                     statusEl.textContent = 'Transaction finalized successfully!';
                     updateBalanceDisplay();
                     setTimeout(() => showView('wallet-view'), 2000);
@@ -543,7 +503,10 @@
                     const message = JSON.stringify({ ...proposal, signature: undefined });
                     const signerAddress = ethers.verifyMessage(message, proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
+                    
+                    // WFN INTEGRATION: Check the live network for double spending
                     if (WitnessFloodNetwork.hasBeenSpent(proposal.txHash)) throw new Error('This transaction has already been processed.');
+
                     statusEl.textContent = 'Proposal valid. Creating and mining receipt block...';
                     const receipt = await WalletLogic.createReceipt(proposal, (msg) => miningStatusEl.textContent = msg);
                     generateQrCode(receipt, 'qr-display-box');
@@ -553,7 +516,10 @@
                     showView('qr-display-view');
                     updateBalanceDisplay();
                 } catch (err) { statusEl.textContent = `Error: ${err.message}`; } 
-                finally { event.target.value = ''; miningStatusEl.textContent = ''; }
+                finally {
+                    event.target.value = '';
+                    miningStatusEl.textContent = '';
+                }
             });
             document.getElementById('public-key-input').addEventListener('change', async (event) => {
                 const file = event.target.files[0];
@@ -576,6 +542,7 @@
                 const statusEl = document.getElementById('validation-status');
                 const confirmSection = document.getElementById('charge-confirmation');
                 confirmSection.style.display = 'none';
+   
                 if (!state.masterPublicKey) { statusEl.textContent = 'Error: Please load the bank\'s public key first.'; return; }
                 statusEl.textContent = 'Preparing image...';
                 try {
@@ -586,16 +553,13 @@
                     statusEl.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
                     
-                    // CRITICAL: Check against the live network ledger
-                    if (WitnessFloodNetwork.hasBeenSpent(banknoteData.serial)) {
-                        throw new Error("This banknote has already been spent according to the network ledger.");
-                    }
+                    // WFN INTEGRATION: Check the live network for double spending
+                    if (WitnessFloodNetwork.hasBeenSpent(banknoteData.serial)) throw new Error("This banknote has already been spent.");
 
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
                     const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
                     if (!isSigTwoValid) throw new Error("Signature 2 is invalid (does not match public key).");
-                    
                     statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
                     document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
                     const confirmBtn = document.getElementById('confirm-charge-button');
