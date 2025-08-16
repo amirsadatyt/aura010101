@@ -59,9 +59,6 @@
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-        // ===================================================================================
-        // CORE BANKNOTE VALIDATION LOGIC
-        // ===================================================================================
         const CoreLogic = (() => {
             const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
             const Utils = {
@@ -94,9 +91,6 @@
             return { Constants, Utils, Crypto, Banknote };
         })();
 
-        // ===================================================================================
-        // PROOF OF WORK & BLOCKCHAIN CORE LOGIC
-        // ===================================================================================
         const PoW = {
             DIFFICULTY: 3, 
             async createSHA256Hash(string) {
@@ -136,14 +130,9 @@
                         return false;
                     }
                 }
-                console.log("Chain verification successful.");
                 return true;
             }
         };
-        
-        // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
-        // ===================================================================================
         
         let state = {
             wallet: null,
@@ -152,9 +141,6 @@
             falconApi: null, 
         };
 
-        // ===================================================================================
-        // P2P WITNESS NETWORK LOGIC (FIXED)
-        // ===================================================================================
         const P2P_Network = {
             peers: {},
             socket: null,
@@ -182,36 +168,34 @@
                 if(P2P_Network.peers[userId]) return;
                 const peer = new SimplePeer({ initiator, trickle: false });
                 P2P_Network.peers[userId] = peer;
-
                 peer.on('signal', signal => P2P_Network.socket.emit('signal', { to: userId, from: P2P_Network.socket.id, signal }));
-                
                 peer.on('connect', () => {
                     console.log('Connected to peer:', userId);
-                    // **FIX**: Request ledger history from the new peer upon connection.
                     peer.send(JSON.stringify({ type: 'GET_LEDGER' }));
                 });
-
                 peer.on('data', (data) => {
                     try {
                         const message = JSON.parse(data.toString());
-                        // **FIX**: Handle different message types from peers.
                         switch(message.type) {
                             case 'SPEND_EVENT':
-                                console.log(`Witness event from peer: Marking ${message.id} as spent.`);
                                 WitnessNetwork.markAsSpentLocally(message.id, message.spendType);
                                 break;
                             case 'GET_LEDGER':
-                                console.log('Peer requested ledger. Sending...');
                                 peer.send(JSON.stringify({ type: 'SYNC_LEDGER', ledger: WitnessNetwork.getLedger() }));
                                 break;
                             case 'SYNC_LEDGER':
-                                console.log('Received ledger from peer. Syncing...');
                                 WitnessNetwork.syncLedger(message.ledger);
+                                break;
+                            // FIX: Handle lock messages
+                            case 'REQUEST_LOCK':
+                                WitnessNetwork.handleLockRequest(message.id);
+                                break;
+                            case 'RELEASE_LOCK':
+                                WitnessNetwork.handleReleaseLock(message.id);
                                 break;
                         }
                     } catch(e) { console.error("Error processing peer data", e); }
                 });
-                
                 peer.on('close', () => delete P2P_Network.peers[userId]);
                 peer.on('error', err => {
                     console.error(`Peer error for ${userId}:`, err);
@@ -219,26 +203,27 @@
                 });
             },
 
-            broadcastSpendEvent: (id, type) => {
-                const message = JSON.stringify({ type: 'SPEND_EVENT', id: id, spendType: type });
+            broadcast: (message) => {
+                const packedMessage = JSON.stringify(message);
                 for (const peerId in P2P_Network.peers) {
-                    if (P2P_Network.peers[peerId].connected) P2P_Network.peers[peerId].send(message);
+                    if (P2P_Network.peers[peerId].connected) P2P_Network.peers[peerId].send(packedMessage);
                 }
             }
         };
 
         const WitnessNetwork = {
             LEDGER_KEY: 'aura_witness_ledger',
+            locks: new Set(), // FIX: In-memory set to hold temporary locks
             getLedger: () => JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {},
             saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
-            hasBeenSpent: (id) => !!WitnessNetwork.getLedger()[id],
             
-            // **FIX**: New function to merge remote ledger with local ledger.
+            // FIX: Check both permanent ledger and temporary locks
+            isUnavailable: (id) => WitnessNetwork.getLedger()[id] || WitnessNetwork.locks.has(id),
+            
             syncLedger: (remoteLedger) => {
                 const localLedger = WitnessNetwork.getLedger();
                 const mergedLedger = { ...localLedger, ...remoteLedger };
                 WitnessNetwork.saveLedger(mergedLedger);
-                console.log("Ledger synchronized.");
             },
             
             markAsSpentLocally: (id, type) => {
@@ -250,7 +235,33 @@
 
             markAsSpent: (id, type) => {
                 WitnessNetwork.markAsSpentLocally(id, type);
-                P2P_Network.broadcastSpendEvent(id, type);
+                P2P_Network.broadcast({ type: 'SPEND_EVENT', id, spendType: type });
+                WitnessNetwork.releaseLock(id); // Release lock once spent
+            },
+
+            // FIX: New functions for handling locks
+            requestLock: (id) => {
+                if (WitnessNetwork.isUnavailable(id)) return false;
+                WitnessNetwork.locks.add(id);
+                P2P_Network.broadcast({ type: 'REQUEST_LOCK', id });
+                console.log(`Lock requested for ${id}`);
+                return true;
+            },
+            releaseLock: (id) => {
+                if (!WitnessNetwork.locks.has(id)) return;
+                WitnessNetwork.locks.delete(id);
+                P2P_Network.broadcast({ type: 'RELEASE_LOCK', id });
+                console.log(`Lock released for ${id}`);
+            },
+            handleLockRequest: (id) => {
+                if (WitnessNetwork.locks.has(id)) return;
+                WitnessNetwork.locks.add(id);
+                console.log(`Lock from peer acquired for ${id}`);
+            },
+            handleReleaseLock: (id) => {
+                if (!WitnessNetwork.locks.has(id)) return;
+                WitnessNetwork.locks.delete(id);
+                console.log(`Lock from peer released for ${id}`);
             }
         };
 
@@ -285,8 +296,7 @@
                 try {
                     state.userStore = JSON.parse(userStoreJson);
                     state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
-                    const isChainValid = await PoW.verifyChain(state.userStore.chain);
-                    if (!isChainValid) alert("WARNING: Your local transaction history appears to be corrupted!");
+                    if (!await PoW.verifyChain(state.userStore.chain)) alert("WARNING: Your local transaction history appears to be corrupted!");
                     return true;
                 } catch (e) { console.error("Login failed:", e); return false; }
             },
@@ -376,7 +386,7 @@
         async function initializeApp() {
             try {
                 state.falconApi = await pqcSignFalcon1024();
-                P2P_Network.initialize(); // <-- INITIALIZE P2P NETWORK
+                P2P_Network.initialize();
             } catch (e) {
                 alert(`Critical error initializing dependencies: ${e.message}`);
                 return;
@@ -449,8 +459,16 @@
                 const confirmBtn = event.target;
                 const statusEl = document.getElementById('mining-status-charge');
                 confirmBtn.disabled = true;
+                
+                // FIX: Re-check availability right before mining
+                if (WitnessNetwork.isUnavailable(serial)) {
+                    alert("Error: This banknote was spent by another user while you were confirming.");
+                    showView('wallet-view');
+                    return;
+                }
+
                 await WalletLogic.addToChain({ type: 'charge', amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
-                WitnessNetwork.markAsSpent(serial, 'banknote');
+                WitnessNetwork.markAsSpent(serial, 'banknote'); // This now also releases the lock
                 updateBalanceDisplay();
                 setTimeout(() => {
                     alert(`$${amount.toFixed(2)} added successfully.`);
@@ -489,7 +507,7 @@
                     statusEl.textContent = 'Processing receipt...';
                     const receipt = await decodeQrFromFile(file);
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
-                    if (WitnessNetwork.hasBeenSpent(receipt.linkedTxHash)) throw new Error('This transaction has already been finalized.');
+                    if (WitnessNetwork.isUnavailable(receipt.linkedTxHash)) throw new Error('This transaction has already been finalized.');
                     await WalletLogic.verifyAndFinalize(receipt);
                     WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
                     statusEl.textContent = 'Transaction finalized successfully!';
@@ -512,7 +530,7 @@
                     delete message.signature;
                     const signerAddress = ethers.verifyMessage(JSON.stringify(message), proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
-                    if (WitnessNetwork.hasBeenSpent(proposal.txHash)) throw new Error('This transaction has already been processed.');
+                    if (WitnessNetwork.isUnavailable(proposal.txHash)) throw new Error('This transaction has already been processed.');
                     statusEl.textContent = 'Proposal valid. Creating and mining receipt block...';
                     const receipt = await WalletLogic.createReceipt(proposal, (msg) => miningStatusEl.textContent = msg);
                     generateQrCode(receipt, 'qr-display-box');
@@ -559,19 +577,35 @@
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
                     statusEl.innerHTML = '<span class="success">Scan complete. Verifying...</span>';
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
-                    // This check is now robust, as our ledger is synced with the network.
-                    if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) throw new Error("This banknote has already been spent.");
+                    
+                    // FIX: GENIUS FIX - Check for lock first, then request lock
+                    if (WitnessNetwork.isUnavailable(banknoteData.serial)) {
+                        throw new Error("Banknote is already spent or is being processed by another user.");
+                    }
+                    if (!WitnessNetwork.requestLock(banknoteData.serial)) {
+                        throw new Error("Failed to acquire network lock for this banknote.");
+                    }
+                    
+                    statusEl.innerHTML = '<span class="info">Acquired network lock. Verifying signatures...</span>';
+
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
                     const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
                     if (!isSigTwoValid) throw new Error("Signature 2 is invalid (does not match public key).");
-                    statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
+                    
+                    statusEl.innerHTML = '<span class="success">Banknote is valid! Ready to charge.</span>';
                     document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
                     const confirmBtn = document.getElementById('confirm-charge-button');
                     confirmBtn.dataset.amount = banknoteData.amount;
                     confirmBtn.dataset.serial = banknoteData.serial;
                     confirmSection.style.display = 'block';
-                } catch (err) { statusEl.textContent = `Error: ${err.message}`; } 
+
+                } catch (err) {
+                    statusEl.textContent = `Error: ${err.message}`;
+                    // If something fails, release the lock so others can try.
+                    const serial = document.getElementById('confirm-charge-button').dataset.serial;
+                    if(serial) WitnessNetwork.releaseLock(serial);
+                } 
                 finally { event.target.value = ''; }
             });
         }
