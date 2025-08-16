@@ -48,9 +48,8 @@
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back to Wallet</button></div></div>
     <div id="scan-proposal-view" class="view"><div class="card"><h2>Receive Funds (Step 2 of 2)</h2><label class="qr-upload-label" for="scan-proposal-input">To receive funds, scan the sender's "Proposal" QR code</label><input type="file" id="scan-proposal-input" accept="image/*"><div id="proposal-status" class="status-box"></div><div id="mining-status-proposal" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
 
-    <script src="webtorrent.min.js"></script>
-    <script src="bloomfilter.min.js"></script>
-
+    <script src="./webtorrent.min.js"></script>
+    <script src="./bloomfilter.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -61,9 +60,6 @@
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-        // ===================================================================================
-        // CORE BANKNOTE VALIDATION LOGIC (No changes here)
-        // ===================================================================================
         const CoreLogic = (() => {
             const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
             const Utils = {
@@ -96,9 +92,6 @@
             return { Constants, Utils, Crypto, Banknote };
         })();
 
-        // ===================================================================================
-        // PROOF OF WORK & BLOCKCHAIN CORE LOGIC (No changes here)
-        // ===================================================================================
         const PoW = {
             DIFFICULTY: 3,
             async createSHA256Hash(string) {
@@ -134,21 +127,18 @@
                 console.log("Chain verification successful."); return true;
             }
         };
-
-        // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
-        // ===================================================================================
         
         let state = {
             wallet: null,
             masterPublicKey: null,
             userStore: null,
             falconApi: null, 
+            // FIX: Add a temporary state variable to hold the password during creation
+            temporaryPassword: null 
         };
 
-        // WFN INTEGRATION: New Witness Flood Network powered by WebTorrent
         const WitnessFloodNetwork = (() => {
-            const TORRENT_ID = 'aura-witness-flood-network-p2p-channel-v1'; // Unique ID for our swarm
+            const TORRENT_ID = 'aura-witness-flood-network-p2p-channel-v1';
             let client;
             let spentItems = new Set();
             let walletRef;
@@ -186,45 +176,29 @@
                     if (client || !wallet) return;
                     walletRef = wallet;
                     client = new WebTorrent();
-
                     client.on('error', err => console.error('WebTorrent Client Error:', err));
-
                     console.log('WFN: Connecting to the witness network...');
                     client.add(TORRENT_ID, (torrent) => {
                         console.log('WFN: Successfully joined the swarm.');
                         updateStatus(torrent);
-
                         torrent.on('wire', (wire, addr) => {
                             console.log('WFN: Connected to a new peer:', wire.peerId);
                             updateStatus(torrent);
                             wire.on('close', () => updateStatus(torrent));
-
-                            // Setup our custom protocol extension
                             wire.extended('aura_wfn', {
-                                invalidation: (message) => {
-                                    processInvalidation(message);
-                                }
+                                invalidation: (message) => processInvalidation(message)
                             });
                         });
                     });
                 },
                 broadcast: async (id, type) => {
                     if (!client || !walletRef) return;
-                    
                     const torrent = client.get(TORRENT_ID);
                     if (!torrent) return;
-
                     const messageToSign = JSON.stringify({ id, type });
                     const signature = await walletRef.signMessage(messageToSign);
-
-                    const invalidationMessage = {
-                        id,
-                        type,
-                        signerAddress: walletRef.address,
-                        signature
-                    };
-                    
-                    spentItems.add(id); // Mark as spent locally immediately
+                    const invalidationMessage = { id, type, signerAddress: walletRef.address, signature };
+                    spentItems.add(id);
                     console.log(`WFN: Broadcasting invalidation for ${type}: ${id}`);
                     torrent.wires.forEach(wire => {
                         wire.extended('aura_wfn', { invalidation: invalidationMessage });
@@ -234,9 +208,7 @@
                 destroy: () => {
                     if (client) {
                         client.destroy();
-                        client = null;
-                        spentItems.clear();
-                        walletRef = null;
+                        client = null; spentItems.clear(); walletRef = null;
                         const statusEl = document.getElementById('wfn-status');
                         if (statusEl) {
                            statusEl.textContent = 'Witness Network: Offline';
@@ -247,7 +219,6 @@
                 }
             };
         })();
-
 
         const WalletLogic = {
             createWallet: (password) => {
@@ -281,15 +252,14 @@
                     if (!isChainValid) {
                         alert("WARNING: Your local transaction history appears to be corrupted! Integrity check failed.");
                     }
-                    // WFN INTEGRATION: Initialize the network on login
                     WitnessFloodNetwork.init(state.wallet);
                     return true;
                 } catch (e) { console.error("Login failed:", e); return false; }
             },
             logout: () => { 
-                state.wallet = null; 
-                state.userStore = null;
-                // WFN INTEGRATION: Disconnect from the network on logout
+                state.wallet = null; state.userStore = null;
+                // FIX: Clear temporary password on logout for security
+                state.temporaryPassword = null;
                 WitnessFloodNetwork.destroy();
             },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
@@ -390,15 +360,38 @@
                 const confirmPass = document.getElementById('confirm-password-input').value;
                 if (pass.length < 8) { document.getElementById('create-status').textContent = 'Password must be at least 8 characters.'; return; }
                 if (pass !== confirmPass) { document.getElementById('create-status').textContent = 'Passwords do not match.'; return; }
+                
+                // FIX: Store the password in the temporary state variable
+                state.temporaryPassword = pass;
+                
                 const { mnemonic } = WalletLogic.createWallet(pass);
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
+
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                const pass = document.getElementById('create-password-input').value;
-                if (await WalletLogic.login(pass)) { updateBalanceDisplay(); showView('wallet-view'); } 
-                else { alert('Auto-login failed. Please log in manually.'); showView('login-view'); }
+                // FIX: Use the password from the state variable, not the DOM
+                const pass = state.temporaryPassword;
+                if (!pass) {
+                    alert('An unexpected error occurred. Please log in manually.');
+                    showView('login-view');
+                    return;
+                }
+
+                try {
+                    if (await WalletLogic.login(pass)) { 
+                        updateBalanceDisplay(); 
+                        showView('wallet-view'); 
+                    } else { 
+                        alert('Auto-login failed. Please log in manually.'); 
+                        showView('login-view'); 
+                    }
+                } finally {
+                    // FIX: Clear the temporary password from memory immediately after use
+                    state.temporaryPassword = null;
+                }
             });
+
             document.getElementById('restore-wallet-button').addEventListener('click', () => {
                 const mnemonic = document.getElementById('restore-seed-input').value.trim();
                 const pass = document.getElementById('restore-password-input').value;
@@ -426,7 +419,9 @@
             document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
-                    WitnessFloodNetwork.destroy(); // WFN INTEGRATION: Also clear network state
+                    WitnessFloodNetwork.destroy();
+                    // FIX: Clear temporary password on reset for security
+                    state.temporaryPassword = null;
                     location.reload();
                 }
             });
@@ -440,11 +435,8 @@
                 const confirmBtn = event.target;
                 const statusEl = document.getElementById('mining-status-charge');
                 confirmBtn.disabled = true;
-  
                 await WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
-                // WFN INTEGRATION: Broadcast that this banknote has been spent
                 await WitnessFloodNetwork.broadcast(serial, 'banknote');
-                
                 updateBalanceDisplay();
                 setTimeout(() => {
                     alert(`$${amount.toFixed(2)} added successfully.`);
@@ -482,9 +474,7 @@
                     const receipt = await decodeQrFromFile(file);
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
                     await WalletLogic.verifyAndFinalize(receipt);
-                    // WFN INTEGRATION: Broadcast that this transaction has been finalized
                     await WitnessFloodNetwork.broadcast(receipt.linkedTxHash, 'transaction');
-   
                     statusEl.textContent = 'Transaction finalized successfully!';
                     updateBalanceDisplay();
                     setTimeout(() => showView('wallet-view'), 2000);
@@ -503,10 +493,7 @@
                     const message = JSON.stringify({ ...proposal, signature: undefined });
                     const signerAddress = ethers.verifyMessage(message, proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
-                    
-                    // WFN INTEGRATION: Check the live network for double spending
                     if (WitnessFloodNetwork.hasBeenSpent(proposal.txHash)) throw new Error('This transaction has already been processed.');
-
                     statusEl.textContent = 'Proposal valid. Creating and mining receipt block...';
                     const receipt = await WalletLogic.createReceipt(proposal, (msg) => miningStatusEl.textContent = msg);
                     generateQrCode(receipt, 'qr-display-box');
@@ -542,7 +529,6 @@
                 const statusEl = document.getElementById('validation-status');
                 const confirmSection = document.getElementById('charge-confirmation');
                 confirmSection.style.display = 'none';
-   
                 if (!state.masterPublicKey) { statusEl.textContent = 'Error: Please load the bank\'s public key first.'; return; }
                 statusEl.textContent = 'Preparing image...';
                 try {
@@ -552,10 +538,7 @@
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
                     statusEl.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
-                    
-                    // WFN INTEGRATION: Check the live network for double spending
                     if (WitnessFloodNetwork.hasBeenSpent(banknoteData.serial)) throw new Error("This banknote has already been spent.");
-
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
                     const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
