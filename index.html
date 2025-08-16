@@ -219,22 +219,26 @@
         })();
 
         const WalletLogic = {
-            // DEBUGGER'S FIX: Modify createWallet to return the full wallet object, not just the mnemonic.
             createWallet: (password) => {
                 const wallet = ethers.Wallet.createRandom();
                 const userStore = {
-                    publicKey: wallet.publicKey, address: wallet.address, encryptedJson: wallet.encryptSync(password),
+                    publicKey: wallet.publicKey,
+                    address: wallet.address,
+                    // THE DEFINITIVE FIX: Parse the encrypted JSON string into an object before saving.
+                    encryptedJson: JSON.parse(wallet.encryptSync(password)),
                     chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                // Return the full, live wallet object along with the mnemonic.
-                return { wallet, mnemonic: wallet.mnemonic.phrase };
+                return { mnemonic: wallet.mnemonic.phrase };
             },
             restoreWallet: (mnemonic, password) => {
                 try {
                     const wallet = ethers.Wallet.fromPhrase(mnemonic);
                     const userStore = {
-                        publicKey: wallet.publicKey, address: wallet.address, encryptedJson: wallet.encryptSync(password),
+                        publicKey: wallet.publicKey,
+                        address: wallet.address,
+                        // THE DEFINITIVE FIX: Also apply the fix here for consistency.
+                        encryptedJson: JSON.parse(wallet.encryptSync(password)),
                         chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                     };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
@@ -246,6 +250,7 @@
                 if (!userStoreJson) return null;
                 try {
                     state.userStore = JSON.parse(userStoreJson);
+                    // The original login code now works because the data in userStore.encryptedJson is a proper object.
                     state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
                     console.log("Verifying local blockchain integrity...");
                     const isChainValid = await PoW.verifyChain(state.userStore.chain);
@@ -358,29 +363,17 @@
                 const confirmPass = document.getElementById('confirm-password-input').value;
                 if (pass.length < 8) { document.getElementById('create-status').textContent = 'Password must be at least 8 characters.'; return; }
                 if (pass !== confirmPass) { document.getElementById('create-status').textContent = 'Passwords do not match.'; return; }
-                
-                // DEBUGGER'S FIX: Capture the returned live wallet object and store it in the state.
-                const { wallet, mnemonic } = WalletLogic.createWallet(pass);
-                state.wallet = wallet; 
-                
+                const { mnemonic } = WalletLogic.createWallet(pass);
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
-            
-            // DEBUGGER'S FIX: Instead of trying to log in, just use the live wallet object from the previous step.
-            document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                if (state.wallet) {
-                    // We already have the live, decrypted wallet in memory, so we can proceed directly.
-                    // We need the userStore from localStorage to get the chain data.
-                    state.userStore = JSON.parse(localStorage.getItem('aura_user_store'));
-                    WitnessFloodNetwork.init(state.wallet);
-                    updateBalanceDisplay();
-                    showView('wallet-view');
-                } else {
-                    // This should not happen in this flow, but as a fallback, send to login.
-                    alert('An unexpected error occurred. Please log in manually.');
-                    showView('login-view');
-                }
+
+            document.getElementById('seed-phrase-confirm-button').addEventListener('click', () => {
+                document.getElementById('create-password-input').value = '';
+                document.getElementById('confirm-password-input').value = '';
+                const statusEl = document.getElementById('login-status');
+                statusEl.innerHTML = '<span class="success">Wallet created successfully! Please log in.</span>';
+                showView('login-view');
             });
 
             document.getElementById('restore-wallet-button').addEventListener('click', () => {
