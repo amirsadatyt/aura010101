@@ -5,7 +5,7 @@
     <title>Aura Decentralized Wallet (PoW Edition)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-        :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --light-gray: #f0f2f5; --dark-gray: #6c757d; }
+        :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --success-color: #1e8e3e; --warning-color: #f0ad4e; --light-gray: #f0f2f5; --dark-gray: #6c757d; }
         body { font-family: 'Roboto', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .view { display: none; }
         .view.active { display: block; }
@@ -19,7 +19,7 @@
         .logout-button { background: var(--danger-color); margin-top: 10px; }
         .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; }
         .status-box { font-weight: bold; min-height: 20px; margin-top: 10px; word-wrap: break-word; }
-        .error { color: #d93025; } .success { color: #1e8e3e; } .info { color: #007bff; }
+        .error { color: #d93025; } .success { color: var(--success-color); } .info { color: #007bff; }
         .seed-phrase-box { padding: 15px; border: 1px dashed var(--danger-color); border-radius: 8px; margin: 20px 0; background-color: #fff8f8; color: #333; font-size: 18px; letter-spacing: 1px; }
         #qr-display-box img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
         label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; transition: background-color 0.2s; }
@@ -27,6 +27,7 @@
         input[type="file"] { display: none; }
         .spinner { border: 3px solid rgba(255, 255, 255, 0.3); width: 18px; height: 18px; border-radius: 50%; border-left-color: #fff; animation: spin 1s ease infinite; margin-left: 10px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #network-status { margin-top: 15px; padding: 8px; border-radius: 6px; font-size: 14px; font-weight: bold; transition: color 0.3s, background-color 0.3s; }
     </style>
 </head>
 <body>
@@ -41,7 +42,7 @@
     
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><button id="login-button">Unlock</button><div id="login-status" class="status-box error"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Create Proposal)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Scan Proposal)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><div id="network-status"></div><button id="show-charge-view-button" style="margin-top:10px;">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Create Proposal)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Scan Proposal)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button><div id="mining-status-charge" class="status-box info" style="margin-top: 10px;"></div></div>
     <button id="charge-view-back-button" class="back-button">Back</button>
@@ -96,14 +97,8 @@
             return { Constants, Utils, Crypto, Banknote };
         })();
 
-        /**
-         * @object PoW (Proof-of-Work)
-         * @description Handles the creation and verification of the user's local blockchain.
-         * Mining new blocks requires computational effort (finding a hash with a specific number
-         * of leading zeros), which secures the user's personal transaction history from tampering.
-         */
         const PoW = {
-            DIFFICULTY: 3, // Number of leading zeros required in the hash
+            DIFFICULTY: 3,
             async createSHA256Hash(string) {
                 const textAsBuffer = new TextEncoder().encode(string);
                 const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
@@ -120,7 +115,7 @@
                     hash = await this.createSHA256Hash(dataToHashPrefix + nonce);
                     if (nonce % 1000 === 0) {
                         statusCallback(`Mining... (Attempt #${nonce})`);
-                        await new Promise(resolve => setTimeout(resolve, 0)); // Prevent browser freezing
+                        await new Promise(resolve => setTimeout(resolve, 0));
                     }
                 }
                 statusCallback(`Block Mined! Nonce: ${nonce}`);
@@ -152,21 +147,34 @@
             falconApi: null, 
         };
 
-        /**
-         * @object P2P_Network
-         * @description Manages the WebRTC peer-to-peer connections between all active users.
-         * It uses a signaling server to bootstrap connections. Once connected, peers can
-         * communicate directly to share ledger updates and transaction locks, forming the
-         * backbone of the decentralized WitnessNetwork.
-         */
         const P2P_Network = {
             peers: {},
             socket: null,
             SIGNALING_SERVER: 'https://aura-p2p-signal.glitch.me/',
             
+            updateNetworkStatus: () => {
+                const statusEl = document.getElementById('network-status');
+                if (!statusEl) return;
+                const peerCount = Object.values(P2P_Network.peers).filter(p => p.connected).length;
+                if (!P2P_Network.socket || !P2P_Network.socket.connected) {
+                    statusEl.textContent = 'Network: Disconnected';
+                    statusEl.style.color = 'var(--danger-color)';
+                } else if (peerCount > 0) {
+                    statusEl.textContent = `Network: Connected to ${peerCount} peer(s)`;
+                    statusEl.style.color = 'var(--success-color)';
+                } else {
+                    statusEl.textContent = 'Network: Connected (Searching for peers...)';
+                    statusEl.style.color = 'var(--warning-color)';
+                }
+            },
+
             initialize: () => {
                 P2P_Network.socket = io(P2P_Network.SIGNALING_SERVER);
-                P2P_Network.socket.on('connect', () => console.log("Connected to Signaling Server with ID:", P2P_Network.socket.id));
+                P2P_Network.socket.on('connect', () => {
+                    console.log("Connected to Signaling Server with ID:", P2P_Network.socket.id);
+                    P2P_Network.updateNetworkStatus();
+                });
+                 P2P_Network.socket.on('disconnect', P2P_Network.updateNetworkStatus);
                 P2P_Network.socket.on('signal', (data) => {
                     if (P2P_Network.peers[data.from]) P2P_Network.peers[data.from].signal(data.signal);
                 });
@@ -178,6 +186,7 @@
                     if (P2P_Network.peers[userId]) {
                         P2P_Network.peers[userId].destroy();
                         delete P2P_Network.peers[userId];
+                        P2P_Network.updateNetworkStatus();
                     }
                 });
             },
@@ -189,6 +198,7 @@
                 peer.on('signal', signal => P2P_Network.socket.emit('signal', { to: userId, from: P2P_Network.socket.id, signal }));
                 peer.on('connect', () => {
                     console.log('Connected to peer:', userId);
+                    P2P_Network.updateNetworkStatus();
                     peer.send(JSON.stringify({ type: 'GET_LEDGER' }));
                 });
                 peer.on('data', (data) => {
@@ -198,15 +208,20 @@
                             case 'SPEND_EVENT': WitnessNetwork.markAsSpentLocally(message.id, message.spendType); break;
                             case 'GET_LEDGER': peer.send(JSON.stringify({ type: 'SYNC_LEDGER', ledger: WitnessNetwork.getLedgerAsObject() })); break;
                             case 'SYNC_LEDGER': WitnessNetwork.syncLedger(message.ledger); break;
-                            case 'REQUEST_LOCK': WitnessNetwork.handleLockRequest(message.id); break;
-                            case 'RELEASE_LOCK': WitnessNetwork.handleReleaseLock(message.id); break;
+                            case 'REQUEST_LOCK': WitnessNetwork.handleLockRequest(message.id, message.requesterAddress); break;
+                            case 'RELEASE_LOCK': WitnessNetwork.handleLockRelease(message.id); break;
+                            case 'LOCK_DENIAL': WitnessNetwork.handleLockDenial(message.id); break;
                         }
                     } catch(e) { console.error("Error processing peer data", e); }
                 });
-                peer.on('close', () => delete P2P_Network.peers[userId]);
+                peer.on('close', () => {
+                    delete P2P_Network.peers[userId];
+                    P2P_Network.updateNetworkStatus();
+                });
                 peer.on('error', err => {
                     console.error(`Peer error for ${userId}:`, err);
                     delete P2P_Network.peers[userId];
+                    P2P_Network.updateNetworkStatus();
                 });
             },
 
@@ -218,17 +233,11 @@
             }
         };
 
-        /**
-         * @object WitnessNetwork
-         * @description Manages a decentralized, shared ledger to prevent the double-spending of assets
-         * (e.g., banknotes). Each client maintains and syncs a copy of this ledger. When an asset is spent,
-         * the event is broadcast over the P2P network, ensuring all users have an up-to-date record of
-         * used assets, effectively blocking their re-use across the entire network.
-         */
         const WitnessNetwork = {
             LEDGER_KEY: 'aura_global_spent_ledger',
-            spentLedger: new Map(), // In-memory Map for fast, efficient lookups.
-            locks: new Set(),      // Temporary locks for in-progress transactions to prevent race conditions.
+            spentLedger: new Map(),
+            locks: new Map(), // Stores id -> requesterAddress
+            denialListener: null,
 
             initialize: () => {
                 const storedLedger = JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {};
@@ -242,19 +251,77 @@
                 localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(WitnessNetwork.getLedgerAsObject()));
             },
             
-            /**
-             * Checks if an asset ID (e.g., banknote serial) is unavailable for use.
-             * An asset is unavailable if:
-             * 1. It has been officially spent and recorded in the shared global ledger.
-             * 2. It is currently locked by a peer for a pending transaction.
-             * 3. It has already been spent and recorded in the user's local blockchain.
-             * This provides multiple layers of security against re-use.
-             */
             isUnavailable: (id) => {
                 const isSpentInLedger = WitnessNetwork.spentLedger.has(id);
                 const isLocked = WitnessNetwork.locks.has(id);
                 const isInMyChain = WalletLogic.isBanknoteSerialInChain(id);
                 return isSpentInLedger || isLocked || isInMyChain;
+            },
+
+            acquireLockOrThrow: (id) => {
+                return new Promise((resolve, reject) => {
+                    if (WitnessNetwork.spentLedger.has(id) || WalletLogic.isBanknoteSerialInChain(id)) {
+                        return reject(new Error("This banknote has already been spent."));
+                    }
+                    if (WitnessNetwork.locks.has(id)) {
+                        return reject(new Error("This banknote is currently being processed."));
+                    }
+                    
+                    const cleanup = (timer) => {
+                        clearTimeout(timer);
+                        WitnessNetwork.denialListener = null;
+                    };
+                    
+                    WitnessNetwork.denialListener = (deniedId) => {
+                        if (deniedId === id) {
+                            cleanup(timeout);
+                            WitnessNetwork.locks.delete(id); // remove our optimistic lock
+                            reject(new Error("Lock failed. Another user was faster. Please try again."));
+                        }
+                    };
+                    
+                    const timeout = setTimeout(() => {
+                        cleanup(timeout);
+                        console.log(`Lock acquired for ${id} after waiting period.`);
+                        resolve();
+                    }, 2000); // 2-second listening window for denials
+
+                    console.log(`Requesting lock for ${id}...`);
+                    WitnessNetwork.locks.set(id, state.wallet.address); // Optimistically lock it for ourselves
+                    P2P_Network.broadcast({ type: 'REQUEST_LOCK', id: id, requesterAddress: state.wallet.address });
+                });
+            },
+
+            releaseLock: (id) => {
+                if (!WitnessNetwork.locks.has(id)) return;
+                WitnessNetwork.locks.delete(id);
+                P2P_Network.broadcast({ type: 'RELEASE_LOCK', id });
+                console.log(`Lock released for ${id}`);
+            },
+
+            handleLockRequest: (id, requesterAddress) => {
+                if (WitnessNetwork.locks.has(id)) {
+                    if (WitnessNetwork.locks.get(id) !== requesterAddress) {
+                        console.log(`DENYING lock for ${id}. Requester: ${requesterAddress}. Holder: ${WitnessNetwork.locks.get(id)}.`);
+                        P2P_Network.broadcast({ type: 'LOCK_DENIAL', id: id });
+                    }
+                } else {
+                    console.log(`Peer lock granted for ${id} to ${requesterAddress}`);
+                    WitnessNetwork.locks.set(id, requesterAddress);
+                }
+            },
+
+            handleLockRelease: (id) => {
+                if (WitnessNetwork.locks.has(id)) {
+                    console.log(`Peer lock released for ${id}`);
+                    WitnessNetwork.locks.delete(id);
+                }
+            },
+            
+            handleLockDenial: (id) => {
+                if (WitnessNetwork.denialListener) {
+                    WitnessNetwork.denialListener(id);
+                }
             },
             
             syncLedger: (remoteLedgerObject) => {
@@ -272,44 +339,16 @@
             },
             
             markAsSpentLocally: (id, type) => {
-                if (WitnessNetwork.spentLedger.has(id)) return; // Already marked
+                if (WitnessNetwork.spentLedger.has(id)) return;
                 WitnessNetwork.spentLedger.set(id, { type, timestamp: Date.now() });
                 WitnessNetwork.saveLedger();
             },
 
-            /**
-             * Marks an asset as spent, saves it to the local ledger, and broadcasts the event
-             * to all peers on the network to ensure the global state is updated.
-             */
             markAsSpent: (id, type) => {
                 WitnessNetwork.markAsSpentLocally(id, type);
                 P2P_Network.broadcast({ type: 'SPEND_EVENT', id, spendType: type });
                 WitnessNetwork.releaseLock(id);
             },
-
-            requestLock: (id) => {
-                if (WitnessNetwork.isUnavailable(id)) return false;
-                WitnessNetwork.locks.add(id);
-                P2P_Network.broadcast({ type: 'REQUEST_LOCK', id });
-                console.log(`Lock requested for ${id}`);
-                return true;
-            },
-            releaseLock: (id) => {
-                if (!WitnessNetwork.locks.has(id)) return;
-                WitnessNetwork.locks.delete(id);
-                P2P_Network.broadcast({ type: 'RELEASE_LOCK', id });
-                console.log(`Lock released for ${id}`);
-            },
-            handleLockRequest: (id) => {
-                if (WitnessNetwork.locks.has(id)) return;
-                WitnessNetwork.locks.add(id);
-                console.log(`Lock from peer acquired for ${id}`);
-            },
-            handleReleaseLock: (id) => {
-                if (!WitnessNetwork.locks.has(id)) return;
-                WitnessNetwork.locks.delete(id);
-                console.log(`Lock from peer released for ${id}`);
-            }
         };
 
         const WalletLogic = {
@@ -351,7 +390,7 @@
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: async (txData, statusCallback) => {
                 statusCallback("Preparing to mine new block...");
-                await new Promise(r => setTimeout(r, 50)); // UI update tick
+                await new Promise(r => setTimeout(r, 50));
                 const prevTx = WalletLogic.getLastTransaction();
                 const newBlockData = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() };
                 const { nonce, hash } = await PoW.mineBlock(newBlockData, statusCallback);
@@ -403,6 +442,7 @@
         function showView(id) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active');
+            if (id === 'wallet-view') P2P_Network.updateNetworkStatus();
         }
         function updateBalanceDisplay() {
             const balance = WalletLogic.calculateBalance();
@@ -451,8 +491,8 @@
         async function initializeApp() {
             try {
                 state.falconApi = await pqcSignFalcon1024();
-                WitnessNetwork.initialize(); // Load the global spent ledger
-                P2P_Network.initialize();    // Connect to the peer network
+                WitnessNetwork.initialize();
+                P2P_Network.initialize();
             } catch (e) {
                 alert(`Critical error initializing dependencies: ${e.message}`);
                 return;
@@ -503,7 +543,7 @@
                 btn.disabled = true;
                 btn.innerHTML = 'Unlocking <span class="spinner"></span>';
                 statusEl.textContent = 'Decrypting & Verifying Chain...';
-                await new Promise(r => setTimeout(r, 50)); // UI update
+                await new Promise(r => setTimeout(r, 50));
                 
                 if (await WalletLogic.login(pass)) {
                     updateBalanceDisplay();
@@ -599,7 +639,7 @@
                     statusEl.innerHTML = '<span class="info">Processing receipt...</span>';
                     const receipt = await decodeQrFromFile(file);
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
-                    if (WitnessNetwork.isUnavailable(receipt.linkedTxHash)) throw new Error('This transaction has already been finalized.');
+                    if (WitnessNetwork.spentLedger.has(receipt.linkedTxHash)) throw new Error('This transaction has already been finalized.');
                     
                     await WalletLogic.verifyAndFinalize(receipt);
                     WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
@@ -623,7 +663,7 @@
                     delete message.signature;
                     const signerAddress = ethers.verifyMessage(JSON.stringify(message), proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
-                    if (WitnessNetwork.isUnavailable(proposal.txHash)) throw new Error('This transaction has already been processed.');
+                    if (WitnessNetwork.spentLedger.has(proposal.txHash)) throw new Error('This transaction has already been processed.');
                     
                     statusEl.innerHTML = '<span class="info">Proposal valid. Creating and mining receipt block...</span>';
                     const receipt = await WalletLogic.createReceipt(proposal, (msg) => miningStatusEl.textContent = msg);
@@ -671,19 +711,14 @@
                     const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
                     const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying authenticity...</span>';
+                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying...</span>';
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
                     lockedSerial = banknoteData.serial;
                     
-                    if (WitnessNetwork.isUnavailable(lockedSerial)) {
-                        throw new Error("This banknote is already spent or is being processed by another user.");
-                    }
-                    if (!WitnessNetwork.requestLock(lockedSerial)) {
-                        throw new Error("Failed to acquire network lock for this banknote. Please try again.");
-                    }
+                    statusEl.innerHTML = '<span class="info">Acquiring exclusive network lock...</span>';
+                    await WitnessNetwork.acquireLockOrThrow(lockedSerial);
                     
-                    statusEl.innerHTML = '<span class="info">Acquired network lock. Verifying signatures...</span>';
-
+                    statusEl.innerHTML = '<span class="info">Lock acquired. Verifying signatures...</span>';
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Banknote validation failed (Signature 1 invalid). Possible data tampering.");
                     const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
@@ -692,12 +727,12 @@
                     statusEl.innerHTML = '<span class="success">Banknote is valid! Ready to charge.</span>';
                     document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
                     confirmBtn.dataset.amount = banknoteData.amount;
-                    confirmBtn.dataset.serial = lockedSerial;
+                    confirmBtn.dataset.serial = lockedSerial; // Keep the locked serial
                     confirmSection.style.display = 'block';
 
                 } catch (err) {
                     statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-                    if(lockedSerial) WitnessNetwork.releaseLock(lockedSerial);
+                    if(lockedSerial) WitnessNetwork.releaseLock(lockedSerial); // Release lock on failure
                 } 
                 finally { event.target.value = ''; }
             });
