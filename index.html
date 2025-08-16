@@ -218,7 +218,15 @@
             getLedger: () => JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {},
             saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
             
-            isUnavailable: (id) => WitnessNetwork.getLedger()[id] || WitnessNetwork.locks.has(id),
+            // --- FIXED ---
+            // The isUnavailable check now also queries the user's local blockchain,
+            // making the check much more robust against double-spending.
+            isUnavailable: (id) => {
+                const isSpentInLedger = !!WitnessNetwork.getLedger()[id];
+                const isLocked = WitnessNetwork.locks.has(id);
+                const isInMyChain = WalletLogic.isBanknoteSerialInChain(id);
+                return isSpentInLedger || isLocked || isInMyChain;
+            },
             
             syncLedger: (remoteLedger) => {
                 const localLedger = WitnessNetwork.getLedger();
@@ -321,6 +329,12 @@
                     return balance;
                 }, 0);
             },
+            // --- NEW ---
+            // This new helper function checks the local blockchain for a given serial number.
+            isBanknoteSerialInChain: (serial) => {
+                if (!state.userStore || !state.userStore.chain) return false;
+                return state.userStore.chain.some(tx => tx.type === 'charge' && tx.banknoteSerial === serial);
+            },
             createProposal: async (amount, statusCallback) => {
                 const proposalTx = await WalletLogic.addToChain({ type: 'send', amount, from: state.wallet.address, to: '', status: 'pending' }, statusCallback);
                 const proposal = { type: 'AURA_PROPOSAL', senderAddress: state.wallet.address, senderPublicKey: state.wallet.publicKey, txHash: proposalTx.hash, amount };
@@ -340,6 +354,7 @@
                 }
                 ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
                 state.userStore.chain[senderTxIndex].status = 'completed';
+                state.userStore.chain[senderTxIndex].to = receipt.receiverAddress; // Record the receiver
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                 return true;
             }
@@ -452,14 +467,11 @@
             document.getElementById('show-send-view-button').addEventListener('click', () => showView('send-view'));
             document.getElementById('show-receive-view-button').addEventListener('click', () => showView('scan-proposal-view'));
             
-            // FIX: Dedicated listener for the back button on the charge view to release locks.
             document.getElementById('charge-view-back-button').addEventListener('click', () => {
                 const confirmBtn = document.getElementById('confirm-charge-button');
                 const serial = confirmBtn.dataset.serial;
-                // If a serial is set, it means a lock is active that needs to be released.
                 if (serial) {
                     WitnessNetwork.releaseLock(serial);
-                    // Clean up state
                     delete confirmBtn.dataset.serial;
                     delete confirmBtn.dataset.amount;
                 }
@@ -473,12 +485,16 @@
                 const statusEl = document.getElementById('mining-status-charge');
                 confirmBtn.disabled = true;
 
-                await WalletLogic.addToChain({ type: 'charge', amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
+                // --- FIXED ---
+                // The banknote's serial number is now included in the transaction data,
+                // creating a permanent record on the local blockchain.
+                await WalletLogic.addToChain({ type: 'charge', amount, banknoteSerial: serial, status: 'completed' }, (msg) => statusEl.textContent = msg);
                 WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 setTimeout(() => {
                     alert(`$${amount.toFixed(2)} added successfully.`);
                     showView('wallet-view');
+                    document.getElementById('charge-confirmation').style.display = 'none';
                     confirmBtn.disabled = false;
                     statusEl.textContent = '';
                 }, 1500);
