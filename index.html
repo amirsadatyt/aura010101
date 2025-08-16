@@ -153,45 +153,25 @@
         };
 
         // ===================================================================================
-        // P2P WITNESS NETWORK LOGIC (UPDATED)
+        // P2P WITNESS NETWORK LOGIC (FIXED)
         // ===================================================================================
         const P2P_Network = {
             peers: {},
             socket: null,
-            SIGNALING_SERVER: 'https://aura-p2p-signal.glitch.me/', // A simple, free signaling server
+            SIGNALING_SERVER: 'https://aura-p2p-signal.glitch.me/',
             
             initialize: () => {
-                console.log("Initializing P2P Witness Network...");
                 P2P_Network.socket = io(P2P_Network.SIGNALING_SERVER);
-
-                P2P_Network.socket.on('connect', () => {
-                    console.log("Connected to Signaling Server with ID:", P2P_Network.socket.id);
-                });
-
+                P2P_Network.socket.on('connect', () => console.log("Connected to Signaling Server with ID:", P2P_Network.socket.id));
                 P2P_Network.socket.on('signal', (data) => {
-                    if (P2P_Network.peers[data.from]) {
-                        P2P_Network.peers[data.from].signal(data.signal);
-                    } else {
-                        // If a signal arrives from an unknown peer, create one
-                        P2P_Network.createPeer(data.from, false);
-                        // Queue the signal to be processed once the peer is ready
-                        setTimeout(() => {
-                           if(P2P_Network.peers[data.from]) {
-                                P2P_Network.peers[data.from].signal(data.signal);
-                           }
-                        }, 500);
-                    }
+                    if (P2P_Network.peers[data.from]) P2P_Network.peers[data.from].signal(data.signal);
                 });
-
                 P2P_Network.socket.on('user-joined', (userId) => {
                     if (userId === P2P_Network.socket.id) return;
-                    console.log("A new user joined:", userId, "Creating peer connection.");
                     P2P_Network.createPeer(userId, true);
                 });
-                
                 P2P_Network.socket.on('user-left', (userId) => {
                     if (P2P_Network.peers[userId]) {
-                        console.log("User left:", userId);
                         P2P_Network.peers[userId].destroy();
                         delete P2P_Network.peers[userId];
                     }
@@ -199,53 +179,50 @@
             },
 
             createPeer: (userId, initiator = false) => {
-                if(P2P_Network.peers[userId]) {
-                    console.log("Peer already exists for:", userId);
-                    return;
-                }
-                const peer = new SimplePeer({ initiator: initiator, trickle: false });
-                P2P_Network.peers[userId] = peer; // Add peer to list immediately
+                if(P2P_Network.peers[userId]) return;
+                const peer = new SimplePeer({ initiator, trickle: false });
+                P2P_Network.peers[userId] = peer;
 
-                peer.on('signal', (signal) => {
-                    P2P_Network.socket.emit('signal', { to: userId, from: P2P_Network.socket.id, signal });
-                });
-
+                peer.on('signal', signal => P2P_Network.socket.emit('signal', { to: userId, from: P2P_Network.socket.id, signal }));
+                
                 peer.on('connect', () => {
                     console.log('Connected to peer:', userId);
+                    // **FIX**: Request ledger history from the new peer upon connection.
+                    peer.send(JSON.stringify({ type: 'GET_LEDGER' }));
                 });
 
                 peer.on('data', (data) => {
                     try {
                         const message = JSON.parse(data.toString());
-                        console.log("Received data from peer:", message);
-                        if (message.type === 'SPEND_EVENT') {
-                            WitnessNetwork.markAsSpentLocally(message.id, message.spendType);
-                            console.log(`Witness event from peer: Marked ${message.id} as spent.`);
+                        // **FIX**: Handle different message types from peers.
+                        switch(message.type) {
+                            case 'SPEND_EVENT':
+                                console.log(`Witness event from peer: Marking ${message.id} as spent.`);
+                                WitnessNetwork.markAsSpentLocally(message.id, message.spendType);
+                                break;
+                            case 'GET_LEDGER':
+                                console.log('Peer requested ledger. Sending...');
+                                peer.send(JSON.stringify({ type: 'SYNC_LEDGER', ledger: WitnessNetwork.getLedger() }));
+                                break;
+                            case 'SYNC_LEDGER':
+                                console.log('Received ledger from peer. Syncing...');
+                                WitnessNetwork.syncLedger(message.ledger);
+                                break;
                         }
                     } catch(e) { console.error("Error processing peer data", e); }
                 });
                 
-                peer.on('close', () => {
+                peer.on('close', () => delete P2P_Network.peers[userId]);
+                peer.on('error', err => {
+                    console.error(`Peer error for ${userId}:`, err);
                     delete P2P_Network.peers[userId];
-                    console.log("Connection closed with peer:", userId);
-                });
-                
-                peer.on('error', (err) => {
-                    console.error('Peer error for ' + userId + ':', err);
-                    if (P2P_Network.peers[userId]) {
-                        P2P_Network.peers[userId].destroy();
-                        delete P2P_Network.peers[userId];
-                    }
                 });
             },
 
             broadcastSpendEvent: (id, type) => {
                 const message = JSON.stringify({ type: 'SPEND_EVENT', id: id, spendType: type });
-                console.log("Broadcasting spend event:", message);
                 for (const peerId in P2P_Network.peers) {
-                    if (P2P_Network.peers[peerId].connected) {
-                       P2P_Network.peers[peerId].send(message);
-                    }
+                    if (P2P_Network.peers[peerId].connected) P2P_Network.peers[peerId].send(message);
                 }
             }
         };
@@ -256,17 +233,24 @@
             saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
             hasBeenSpent: (id) => !!WitnessNetwork.getLedger()[id],
             
+            // **FIX**: New function to merge remote ledger with local ledger.
+            syncLedger: (remoteLedger) => {
+                const localLedger = WitnessNetwork.getLedger();
+                const mergedLedger = { ...localLedger, ...remoteLedger };
+                WitnessNetwork.saveLedger(mergedLedger);
+                console.log("Ledger synchronized.");
+            },
+            
             markAsSpentLocally: (id, type) => {
                 const ledger = WitnessNetwork.getLedger();
-                if (ledger[id]) return; // Don't mark it again if it already exists
-                ledger[id] = { type: type, timestamp: Date.now() };
+                if (ledger[id]) return;
+                ledger[id] = { type, timestamp: Date.now() };
                 WitnessNetwork.saveLedger(ledger);
             },
 
             markAsSpent: (id, type) => {
                 WitnessNetwork.markAsSpentLocally(id, type);
                 P2P_Network.broadcastSpendEvent(id, type);
-                console.log(`Witness Network: Marked ${id} as spent and broadcasted to peers.`);
             }
         };
 
@@ -277,12 +261,7 @@
                     publicKey: wallet.publicKey,
                     address: wallet.address,
                     encryptedJson: wallet.encryptSync(password),
-                    chain: [{ 
-                        hash: '0'.repeat(64), // Genesis block hash
-                        nonce: 0,
-                        type: 'creation', 
-                        timestamp: Date.now() 
-                    }]
+                    chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                 return { mnemonic: wallet.mnemonic.phrase };
@@ -294,12 +273,7 @@
                         publicKey: wallet.publicKey,
                         address: wallet.address,
                         encryptedJson: wallet.encryptSync(password),
-                        chain: [{ 
-                            hash: '0'.repeat(64), // Genesis block hash
-                            nonce: 0,
-                            type: 'creation', 
-                            timestamp: Date.now() 
-                        }]
+                        chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                     };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                     return true;
@@ -311,11 +285,8 @@
                 try {
                     state.userStore = JSON.parse(userStoreJson);
                     state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
-                    console.log("Verifying local blockchain integrity...");
                     const isChainValid = await PoW.verifyChain(state.userStore.chain);
-                    if (!isChainValid) {
-                        alert("WARNING: Your local transaction history appears to be corrupted! Integrity check failed.");
-                    }
+                    if (!isChainValid) alert("WARNING: Your local transaction history appears to be corrupted!");
                     return true;
                 } catch (e) { console.error("Login failed:", e); return false; }
             },
@@ -342,8 +313,8 @@
                 }, 0);
             },
             createProposal: async (amount, statusCallback) => {
-                const proposalTx = await WalletLogic.addToChain({ type: 'send', amount: amount, from: state.wallet.address, to: '', status: 'pending' }, statusCallback);
-                const proposal = { type: 'AURA_PROPOSAL', senderAddress: state.wallet.address, senderPublicKey: state.wallet.publicKey, txHash: proposalTx.hash, amount: amount };
+                const proposalTx = await WalletLogic.addToChain({ type: 'send', amount, from: state.wallet.address, to: '', status: 'pending' }, statusCallback);
+                const proposal = { type: 'AURA_PROPOSAL', senderAddress: state.wallet.address, senderPublicKey: state.wallet.publicKey, txHash: proposalTx.hash, amount };
                 proposal.signature = await state.wallet.signMessage(JSON.stringify(proposal));
                 return proposal;
             },
@@ -358,7 +329,7 @@
                 if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') {
                     throw new Error("Associated send transaction not found or already completed.");
                 }
-                const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
+                ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
                 state.userStore.chain[senderTxIndex].status = 'completed';
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                 return true;
@@ -394,13 +365,8 @@
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const code = jsQR(imageData.data, imageData.width, imageData.height);
                         if (code) { 
-                            try {
-                                resolve(JSON.parse(code.data)); 
-                            } catch(e) {
-                                reject(new Error("QR Code data is not valid JSON."));
-                            }
-                        } 
-                        else { reject(new Error("QR Code not found or invalid.")); }
+                            try { resolve(JSON.parse(code.data)); } catch(e) { reject(new Error("QR data is not valid JSON.")); }
+                        } else { reject(new Error("QR Code not found or invalid.")); }
                     };
                     image.src = e.target.result;
                 };
@@ -410,7 +376,6 @@
         async function initializeApp() {
             try {
                 state.falconApi = await pqcSignFalcon1024();
-                console.log("Falcon API Initialized.");
                 P2P_Network.initialize(); // <-- INITIALIZE P2P NETWORK
             } catch (e) {
                 alert(`Critical error initializing dependencies: ${e.message}`);
@@ -447,9 +412,9 @@
                 if (mnemonic.split(' ').length !== 12) { document.getElementById('restore-status').textContent = 'Recovery phrase must be 12 words.'; return; }
                 if (pass.length < 8) { document.getElementById('restore-status').textContent = 'Password must be at least 8 characters.'; return; }
                 if (WalletLogic.restoreWallet(mnemonic, pass)) {
-                    document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.';
+                    document.getElementById('restore-status').textContent = 'Wallet restored! Please log in.';
                     setTimeout(() => showView('login-view'), 2000);
-                } else { document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.'; }
+                } else { document.getElementById('restore-status').textContent = 'Restore failed.'; }
             });
 
             document.getElementById('login-button').addEventListener('click', async () => {
@@ -484,7 +449,7 @@
                 const confirmBtn = event.target;
                 const statusEl = document.getElementById('mining-status-charge');
                 confirmBtn.disabled = true;
-                await WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
+                await WalletLogic.addToChain({ type: 'charge', amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
                 WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 setTimeout(() => {
@@ -592,8 +557,9 @@
                     const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
                     const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
+                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying...</span>';
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                    // This check is now robust, as our ledger is synced with the network.
                     if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) throw new Error("This banknote has already been spent.");
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
