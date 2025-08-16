@@ -97,9 +97,10 @@
         })();
 
         /**
-         * PoW (Proof-of-Work) Object
-         * Handles the creation and verification of blockchain data integrity.
-         * Mining new blocks requires computational effort, securing the transaction history.
+         * @object PoW (Proof-of-Work)
+         * @description Handles the creation and verification of the user's local blockchain.
+         * Mining new blocks requires computational effort (finding a hash with a specific number
+         * of leading zeros), which secures the user's personal transaction history from tampering.
          */
         const PoW = {
             DIFFICULTY: 3, // Number of leading zeros required in the hash
@@ -151,6 +152,13 @@
             falconApi: null, 
         };
 
+        /**
+         * @object P2P_Network
+         * @description Manages the WebRTC peer-to-peer connections between all active users.
+         * It uses a signaling server to bootstrap connections. Once connected, peers can
+         * communicate directly to share ledger updates and transaction locks, forming the
+         * backbone of the decentralized WitnessNetwork.
+         */
         const P2P_Network = {
             peers: {},
             socket: null,
@@ -188,7 +196,7 @@
                         const message = JSON.parse(data.toString());
                         switch(message.type) {
                             case 'SPEND_EVENT': WitnessNetwork.markAsSpentLocally(message.id, message.spendType); break;
-                            case 'GET_LEDGER': peer.send(JSON.stringify({ type: 'SYNC_LEDGER', ledger: WitnessNetwork.getLedger() })); break;
+                            case 'GET_LEDGER': peer.send(JSON.stringify({ type: 'SYNC_LEDGER', ledger: WitnessNetwork.getLedgerAsObject() })); break;
                             case 'SYNC_LEDGER': WitnessNetwork.syncLedger(message.ledger); break;
                             case 'REQUEST_LOCK': WitnessNetwork.handleLockRequest(message.id); break;
                             case 'RELEASE_LOCK': WitnessNetwork.handleReleaseLock(message.id); break;
@@ -211,36 +219,68 @@
         };
 
         /**
-         * WitnessNetwork Object
-         * Manages the decentralized ledger for double-spend prevention. It uses a P2P network
-         * to broadcast and record spent banknotes/transactions, ensuring all clients are aware.
+         * @object WitnessNetwork
+         * @description Manages a decentralized, shared ledger to prevent the double-spending of assets
+         * (e.g., banknotes). Each client maintains and syncs a copy of this ledger. When an asset is spent,
+         * the event is broadcast over the P2P network, ensuring all users have an up-to-date record of
+         * used assets, effectively blocking their re-use across the entire network.
          */
         const WitnessNetwork = {
-            LEDGER_KEY: 'aura_witness_ledger',
-            locks: new Set(),
-            getLedger: () => JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {},
-            saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
+            LEDGER_KEY: 'aura_global_spent_ledger',
+            spentLedger: new Map(), // In-memory Map for fast, efficient lookups.
+            locks: new Set(),      // Temporary locks for in-progress transactions to prevent race conditions.
+
+            initialize: () => {
+                const storedLedger = JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {};
+                WitnessNetwork.spentLedger = new Map(Object.entries(storedLedger));
+                console.log(`Witness Ledger initialized with ${WitnessNetwork.spentLedger.size} entries.`);
+            },
             
+            getLedgerAsObject: () => Object.fromEntries(WitnessNetwork.spentLedger),
+            
+            saveLedger: () => {
+                localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(WitnessNetwork.getLedgerAsObject()));
+            },
+            
+            /**
+             * Checks if an asset ID (e.g., banknote serial) is unavailable for use.
+             * An asset is unavailable if:
+             * 1. It has been officially spent and recorded in the shared global ledger.
+             * 2. It is currently locked by a peer for a pending transaction.
+             * 3. It has already been spent and recorded in the user's local blockchain.
+             * This provides multiple layers of security against re-use.
+             */
             isUnavailable: (id) => {
-                const isSpentInLedger = !!WitnessNetwork.getLedger()[id];
+                const isSpentInLedger = WitnessNetwork.spentLedger.has(id);
                 const isLocked = WitnessNetwork.locks.has(id);
                 const isInMyChain = WalletLogic.isBanknoteSerialInChain(id);
                 return isSpentInLedger || isLocked || isInMyChain;
             },
             
-            syncLedger: (remoteLedger) => {
-                const localLedger = WitnessNetwork.getLedger();
-                const mergedLedger = { ...localLedger, ...remoteLedger };
-                WitnessNetwork.saveLedger(mergedLedger);
+            syncLedger: (remoteLedgerObject) => {
+                let updated = false;
+                for (const [key, value] of Object.entries(remoteLedgerObject)) {
+                    if (!WitnessNetwork.spentLedger.has(key)) {
+                        WitnessNetwork.spentLedger.set(key, value);
+                        updated = true;
+                    }
+                }
+                if (updated) {
+                    WitnessNetwork.saveLedger();
+                    console.log("Witness Ledger synced with peer. New size:", WitnessNetwork.spentLedger.size);
+                }
             },
             
             markAsSpentLocally: (id, type) => {
-                const ledger = WitnessNetwork.getLedger();
-                if (ledger[id]) return;
-                ledger[id] = { type, timestamp: Date.now() };
-                WitnessNetwork.saveLedger(ledger);
+                if (WitnessNetwork.spentLedger.has(id)) return; // Already marked
+                WitnessNetwork.spentLedger.set(id, { type, timestamp: Date.now() });
+                WitnessNetwork.saveLedger();
             },
 
+            /**
+             * Marks an asset as spent, saves it to the local ledger, and broadcasts the event
+             * to all peers on the network to ensure the global state is updated.
+             */
             markAsSpent: (id, type) => {
                 WitnessNetwork.markAsSpentLocally(id, type);
                 P2P_Network.broadcast({ type: 'SPEND_EVENT', id, spendType: type });
@@ -411,7 +451,8 @@
         async function initializeApp() {
             try {
                 state.falconApi = await pqcSignFalcon1024();
-                P2P_Network.initialize();
+                WitnessNetwork.initialize(); // Load the global spent ledger
+                P2P_Network.initialize();    // Connect to the peer network
             } catch (e) {
                 alert(`Critical error initializing dependencies: ${e.message}`);
                 return;
