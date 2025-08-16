@@ -48,8 +48,8 @@
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back to Wallet</button></div></div>
     <div id="scan-proposal-view" class="view"><div class="card"><h2>Receive Funds (Step 2 of 2)</h2><label class="qr-upload-label" for="scan-proposal-input">To receive funds, scan the sender's "Proposal" QR code</label><input type="file" id="scan-proposal-input" accept="image/*"><div id="proposal-status" class="status-box"></div><div id="mining-status-proposal" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
 
-    <script src="./webtorrent.min.js"></script>
-    <script src="./bloomfilter.min.js"></script>
+    <script src="webtorrent.min.js"></script>
+    <script src="bloomfilter.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
@@ -133,8 +133,6 @@
             masterPublicKey: null,
             userStore: null,
             falconApi: null, 
-            // FIX: Add a temporary state variable to hold the password during creation
-            temporaryPassword: null 
         };
 
         const WitnessFloodNetwork = (() => {
@@ -221,6 +219,7 @@
         })();
 
         const WalletLogic = {
+            // DEBUGGER'S FIX: Modify createWallet to return the full wallet object, not just the mnemonic.
             createWallet: (password) => {
                 const wallet = ethers.Wallet.createRandom();
                 const userStore = {
@@ -228,7 +227,8 @@
                     chain: [{ hash: '0'.repeat(64), nonce: 0, type: 'creation', timestamp: Date.now() }]
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                return { mnemonic: wallet.mnemonic.phrase };
+                // Return the full, live wallet object along with the mnemonic.
+                return { wallet, mnemonic: wallet.mnemonic.phrase };
             },
             restoreWallet: (mnemonic, password) => {
                 try {
@@ -258,8 +258,6 @@
             },
             logout: () => { 
                 state.wallet = null; state.userStore = null;
-                // FIX: Clear temporary password on logout for security
-                state.temporaryPassword = null;
                 WitnessFloodNetwork.destroy();
             },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
@@ -361,34 +359,27 @@
                 if (pass.length < 8) { document.getElementById('create-status').textContent = 'Password must be at least 8 characters.'; return; }
                 if (pass !== confirmPass) { document.getElementById('create-status').textContent = 'Passwords do not match.'; return; }
                 
-                // FIX: Store the password in the temporary state variable
-                state.temporaryPassword = pass;
+                // DEBUGGER'S FIX: Capture the returned live wallet object and store it in the state.
+                const { wallet, mnemonic } = WalletLogic.createWallet(pass);
+                state.wallet = wallet; 
                 
-                const { mnemonic } = WalletLogic.createWallet(pass);
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
-
+            
+            // DEBUGGER'S FIX: Instead of trying to log in, just use the live wallet object from the previous step.
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                // FIX: Use the password from the state variable, not the DOM
-                const pass = state.temporaryPassword;
-                if (!pass) {
+                if (state.wallet) {
+                    // We already have the live, decrypted wallet in memory, so we can proceed directly.
+                    // We need the userStore from localStorage to get the chain data.
+                    state.userStore = JSON.parse(localStorage.getItem('aura_user_store'));
+                    WitnessFloodNetwork.init(state.wallet);
+                    updateBalanceDisplay();
+                    showView('wallet-view');
+                } else {
+                    // This should not happen in this flow, but as a fallback, send to login.
                     alert('An unexpected error occurred. Please log in manually.');
                     showView('login-view');
-                    return;
-                }
-
-                try {
-                    if (await WalletLogic.login(pass)) { 
-                        updateBalanceDisplay(); 
-                        showView('wallet-view'); 
-                    } else { 
-                        alert('Auto-login failed. Please log in manually.'); 
-                        showView('login-view'); 
-                    }
-                } finally {
-                    // FIX: Clear the temporary password from memory immediately after use
-                    state.temporaryPassword = null;
                 }
             });
 
@@ -402,16 +393,20 @@
                     setTimeout(() => showView('login-view'), 2000);
                 } else { document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.'; }
             });
+
             document.getElementById('login-button').addEventListener('click', async () => {
                 const pass = document.getElementById('login-password-input').value;
                 const statusEl = document.getElementById('login-status');
-                statusEl.textContent = 'Decrypting & Verifying...';
+                statusEl.innerHTML = '<span class="info">Decrypting & Verifying...</span>';
+
                 if (await WalletLogic.login(pass)) {
                     updateBalanceDisplay();
                     showView('wallet-view');
                     document.getElementById('login-password-input').value = '';
                     statusEl.textContent = '';
-                } else { statusEl.textContent = 'Invalid password.'; }
+                } else { 
+                    statusEl.innerHTML = '<span class="error">Invalid password.</span>'; 
+                }
             });
             
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
@@ -420,8 +415,6 @@
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
                     WitnessFloodNetwork.destroy();
-                    // FIX: Clear temporary password on reset for security
-                    state.temporaryPassword = null;
                     location.reload();
                 }
             });
