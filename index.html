@@ -1,340 +1,278 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Aura-Genius Wallet</title>
+    <title>Aura Decentralized Wallet (PoW Edition)</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap');
-        :root { --primary-color: #007aff; --secondary-color: #00458b; --danger-color: #ff3b30; --success-color: #34c759; --light-gray: #f2f2f7; --dark-gray: #8e8e93; }
-        body { font-family: 'Vazirmatn', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --light-gray: #f0f2f5; --dark-gray: #6c757d; }
+        body { font-family: 'Roboto', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .view { display: none; }
         .view.active { display: block; }
-        .card { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 400px; text-align: center; border-top: 5px solid var(--primary-color); }
-        h1, h2 { color: var(--secondary-color); }
-        p { color: #333; line-height: 1.6; }
-        input, textarea { width: calc(100% - 22px); padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; text-align: center; font-family: 'Vazirmatn', sans-serif; transition: border-color 0.2s; }
-        input:focus, textarea:focus { border-color: var(--primary-color); outline: none; }
+        .card { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 380px; text-align: center; border-top: 5px solid var(--primary-color); }
+        input, textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center; font-family: 'Roboto', sans-serif; }
         textarea { resize: vertical; height: 80px; }
-        button { width: 100%; padding: 14px; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.2s; margin-top: 10px; }
-        button:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-        button:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
-        .back-button { background: var(--dark-gray); }
-        .logout-button { background: var(--danger-color); }
-        .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; margin-top: 0; }
-        .status-box { font-weight: bold; min-height: 20px; margin-top: 15px; word-wrap: break-word; }
-        .error { color: var(--danger-color); } .success { color: var(--success-color); } .info { color: var(--primary-color); }
-        .seed-phrase-box { padding: 20px; border: 2px dashed var(--danger-color); border-radius: 8px; margin: 20px 0; background-color: #fff8f8; color: #333; font-size: 18px; letter-spacing: 1.5px; line-height: 2; user-select: text; }
-        label.file-upload-label { cursor: pointer; display: block; margin: 15px 0; padding: 15px; border: 2px dashed #ccc; border-radius: 8px; transition: background-color 0.2s; }
-        label.file-upload-label:hover { background-color: #f9f9f9; }
+        button { width: 100%; padding: 12px; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: all 0.2s; }
+        button:hover { opacity: 0.9; transform: translateY(-2px); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: translateY(0); }
+        .back-button { background: var(--dark-gray); margin-top: 10px; }
+        .logout-button { background: var(--danger-color); margin-top: 10px; }
+        .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; }
+        .status-box { font-weight: bold; min-height: 20px; margin-top: 10px; word-wrap: break-word; }
+        .error { color: #d93025; } .success { color: #1e8e3e; } .info { color: #007bff; }
+        .seed-phrase-box { padding: 15px; border: 1px dashed var(--danger-color); border-radius: 8px; margin: 20px 0; background-color: #fff8f8; color: #333; font-size: 18px; letter-spacing: 1px; }
+        #my-qr-code img, #qr-display-box img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
+        label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
+        label.qr-upload-label:hover { background-color: #f9f9f9; }
         input[type="file"] { display: none; }
-        #balance-display { font-size: 3em; color: var(--secondary-color); margin: 10px 0; }
-        .tx-history-item { border-bottom: 1px solid #eee; padding: 10px; text-align: right; }
-        .tx-history-item:last-child { border-bottom: none; }
-        .tx-amount { font-weight: bold; }
-        .tx-amount.sent { color: var(--danger-color); }
-        .tx-amount.received { color: var(--success-color); }
     </style>
 </head>
 <body>
 
-    <div id="onboarding-view" class="view active"><div class="card"><h1>کیف پول Aura-Genius</h1><p>نسل جدید امنیت و کنترل دارایی. ضد کوانتوم، فوق سریع و کاملاً غیرمتمرکز.</p><button id="go-to-create-wallet">ایجاد کیف پول جدید</button><button id="go-to-restore-wallet" class="back-button">بازیابی کیف پول</button></div></div>
+    <div id="onboarding-view" class="view active"><div class="card"><h1>Aura Wallet</h1><p>A new generation of asset security and control</p><button id="go-to-create-wallet">Create a New Wallet</button><button id="go-to-restore-wallet" class="back-button">Restore Wallet</button></div></div>
     
-    <div id="create-wallet-view" class="view"><div class="card"><h2>انتخاب رمز عبور</h2><p>یک رمز عبور قدرتمند برای رمزنگاری کلیدهای کوانتومی خود انتخاب کنید. این رمز قابل بازیابی نیست.</p><input type="password" id="create-password-input" placeholder="رمز عبور"><input type="password" id="confirm-password-input" placeholder="تکرار رمز عبور"><button id="create-wallet-button" disabled>در حال ساخت کلید...</button><div id="create-status" class="status-box"></div><button class="back-button" onclick="showView('onboarding-view')">بازگشت</button></div></div>
+    <div id="create-wallet-view" class="view"><div class="card"><h2>Create Password</h2><p>Choose a strong password to encrypt your wallet. This password cannot be recovered.</p><input type="password" id="create-password-input" placeholder="Password"><input type="password" id="confirm-password-input" placeholder="Confirm Password"><button id="create-wallet-button">Create Wallet</button><div id="create-status" class="status-box"></div><button class="back-button" onclick="showView('onboarding-view')">Back</button></div></div>
 
-    <div id="seed-phrase-view" class="view"><div class="card"><h2>عبارت بازیابی شما</h2><p class="error">این ۱۲ کلمه را در یک جای امن و آفلاین یادداشت کنید. این تنها راه بازیابی دارایی شماست.</p><div id="seed-phrase-display" class="seed-phrase-box"></div><button id="seed-phrase-confirm-button">متوجه شدم، مرا به کیف پولم ببر</button></div></div>
+    <div id="seed-phrase-view" class="view"><div class="card"><h2>Your Recovery Phrase</h2><p class="error">Write down these 12 words in a safe, offline place. This is the only way to recover your wallet.</p><div id="seed-phrase-display" class="seed-phrase-box"></div><button id="seed-phrase-confirm-button">I Understand, Take Me to My Wallet</button></div></div>
 
-    <div id="restore-wallet-view" class="view"><div class="card"><h2>بازیابی کیف پول</h2><p>عبارت بازیابی ۱۲ کلمه‌ای خود را وارد کنید.</p><textarea id="restore-seed-input" placeholder="کلمات را با فاصله وارد کنید..."></textarea><p>یک رمز عبور جدید برای این دستگاه انتخاب کنید.</p><input type="password" id="restore-password-input" placeholder="رمز عبور جدید"><button id="restore-wallet-button">بازیابی</button><hr><p>یا فایل پشتیبان را وارد کنید:</p><label for="import-backup-input" class="file-upload-label">انتخاب فایل پشتیبان (.json)</label><input type="file" id="import-backup-input" accept=".json"><input type="password" id="import-backup-password" placeholder="رمز عبور پشتیبان" style="display:none;"><button id="import-backup-button" style="display:none;">وارد کردن پشتیبان</button><div id="restore-status" class="status-box"></div><button class="back-button" onclick="showView('onboarding-view')">بازگشت</button></div></div>
+    <div id="restore-wallet-view" class="view"><div class="card"><h2>Restore Wallet</h2><p>Enter your 12-word recovery phrase.</p><textarea id="restore-seed-input" placeholder="Enter words separated by spaces..."></textarea><p>Choose a new password for this device.</p><input type="password" id="restore-password-input" placeholder="New Password"><button id="restore-wallet-button">Restore</button><div id="restore-status" class="status-box"></div><button class="back-button" onclick="showView('onboarding-view')">Back</button></div></div>
     
-    <div id="login-view" class="view"><div class="card"><h1>بازگشایی کیف پول</h1><p>برای رمزگشایی، رمز عبور خود را وارد کنید.</p><input type="password" id="login-password-input" placeholder="رمز عبور"><button id="login-button">ورود</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">می‌خواهید از یک کیف پول دیگر استفاده کنید؟ <button class="link-button" id="reset-app-button">پاک کردن همه چیز و شروع مجدد</button></p></div></div>
+    <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>کیف پول شما</h2><p>موجودی:</p><h1 id="balance-display">۰.۰۰ $</h1><button id="show-send-view-button">ارسال وجه</button><button id="show-receive-view-button" style="margin-top:10px;">دریافت وجه</button><button onclick="showView('history-view')" style="margin-top:10px; background: var(--dark-gray);">تاریخچه تراکنش‌ها (کاوشگر)</button><button id="logout-button" class="logout-button">خروج (قفل کردن)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
-    <div id="send-view" class="view"><div class="card"><h2>ارسال وجه</h2><p>مبلغ و روش ارسال را انتخاب کنید.</p><input type="number" id="send-amount-input" placeholder="مبلغ"><hr><h3>روش آفلاین (QR Code)</h3><button id="create-proposal-qr-button">ساخت کد QR پیشنهاد</button><hr><h3>روش آنلاین (بدون سرور)</h3><p>یک کد اتصال بسازید و برای گیرنده بفرستید.</p><button id="create-webrtc-offer-button">ساخت کد اتصال</button><textarea id="webrtc-offer-display" readonly placeholder="کد اتصال در اینجا نمایش داده می‌شود..." style="margin-top:10px;"></textarea><div id="send-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">بازگشت</button></div></div>
-    
-    <div id="receive-view" class="view"><div class="card"><h2>دریافت وجه</h2><hr><h3>روش آفلاین (QR Code)</h3><label for="scan-proposal-input" class="file-upload-label">اسکن کد QR پیشنهاد فرستنده</label><input type="file" id="scan-proposal-input" accept="image/*"><hr><h3>روش آنلاین (بدون سرور)</h3><p>کد اتصال دریافتی از فرستنده را اینجا وارد کنید.</p><textarea id="webrtc-answer-input" placeholder="کد اتصال فرستنده را وارد کنید..."></textarea><button id="connect-webrtc-button">اتصال</button><div id="receive-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">بازگشت</button></div></div>
-    
-    <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box" style="padding: 10px; background: white; border-radius: 8px; margin: auto; width: fit-content;"></div><label id="scan-receipt-label" class="file-upload-label" for="scan-receipt-input" style="display: none; margin-top: 20px;">برای نهایی‌سازی، کد QR رسید را اسکن کنید</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">بازگشت به کیف پول</button></div></div>
-    
-    <div id="history-view" class="view"><div class="card"><h2>کاوشگر تراکنش‌ها</h2><div id="history-list" style="max-height: 400px; overflow-y: auto; text-align: right;"></div><hr><button id="export-backup-button">صادرات نسخه پشتیبان رمزنگاری شده</button><button class="back-button" onclick="showView('wallet-view')">بازگشت</button></div></div>
+    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button><div id="mining-status-charge" class="status-box info" style="margin-top: 10px;"></div></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal QR Code</button><div id="send-status" class="status-box"></div><div id="mining-status-send" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    <div id="receive-view" class="view"><div class="card"><h2>Receive Funds (Step 1 of 2)</h2><p>Show this QR code to the sender for them to scan.</p><div id="my-qr-code"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back to Wallet</button></div></div>
+    <div id="scan-proposal-view" class="view"><div class="card"><h2>Receive Funds (Step 2 of 2)</h2><label class="qr-upload-label" for="scan-proposal-input">To receive funds, scan the sender's "Proposal" QR code</label><input type="file" id="scan-proposal-input" accept="image/*"><div id="proposal-status" class="status-box"></div><div id="mining-status-proposal" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bip39@3.1.0/build/bip39.min.js"></script>
     <script type="module">
-        // WORKER SCRIPT as a BLOB - Runs intensive tasks in background
-        const workerScript = `
-            importScripts("https://cdn.jsdelivr.net/npm/bip39@3.1.0/build/bip39.min.js", "./pqc-sign-falcon-1024.min.js");
-            let falconApi;
-            
-            const init = async () => {
-                if (!falconApi) {
-                    falconApi = await pqcSignFalcon1024();
-                }
-                return !!falconApi;
+        import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
+        import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+        import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+
+        // ===================================================================================
+        // CORE BANKNOTE VALIDATION LOGIC
+        // ===================================================================================
+        const CoreLogic = (() => {
+            const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
+            const Utils = {
+                arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
+                base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; },
+                hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
+                preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }),
+                resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}),
             };
-
-            const base64ToUint8Array = (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; };
-            const arrayBufferToBase64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b)));
-
-            self.onmessage = async (e) => {
-                const { id, action, payload } = e.data;
-                try {
-                    await init();
-                    let result;
-                    switch (action) {
-                        case 'generateWallet': {
-                            const mnemonic = bip39.generateMnemonic();
-                            const seed = bip39.mnemonicToSeedSync(mnemonic);
-                            const keyPair = await falconApi.keyPair(seed.slice(0, 32));
-                            result = { 
-                                mnemonic,
-                                publicKey: arrayBufferToBase64(keyPair.publicKey),
-                                privateKey: arrayBufferToBase64(keyPair.privateKey)
-                            };
-                            break;
-                        }
-                        case 'restoreWallet': {
-                            const { mnemonic } = payload;
-                            const seed = bip39.mnemonicToSeedSync(mnemonic);
-                            const keyPair = await falconApi.keyPair(seed.slice(0, 32));
-                             result = { 
-                                publicKey: arrayBufferToBase64(keyPair.publicKey),
-                                privateKey: arrayBufferToBase64(keyPair.privateKey)
-                            };
-                            break;
-                        }
-                        case 'sign': {
-                            const { privateKey, message } = payload;
-                            const signature = await falconApi.sign(message, base64ToUint8Array(privateKey));
-                            result = arrayBufferToBase64(signature);
-                            break;
-                        }
-                         case 'verify': {
-                            const { publicKey, signature, message } = payload;
-                            result = await falconApi.verify(base64ToUint8Array(signature), message, base64ToUint8Array(publicKey));
-                            break;
-                        }
+            const Crypto = {
+                hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)),
+                async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); }
+            };
+            const Banknote = {
+                getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']),
+                getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); },
+                parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; },
+                getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; },
+                decodeQrGrid: async (imgData, statusEl) => {
+                    const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0);
+                    for(let i=0;i<Constants.NUM_QR_CODES;i++){
+                        statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5));
+                        const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height);
+                        if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}}
                     }
-                    self.postMessage({ id, success: true, payload: result });
-                } catch (error) {
-                    self.postMessage({ id, success: false, error: error.message });
+                    if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);}
+                    let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload;
                 }
             };
-        `;
-        const workerBlob = new Blob([workerScript.replace("importScripts", "self.importScripts")], { type: 'application/javascript' });
-        const worker = new Worker(URL.createObjectURL(workerBlob));
-        
-        // ===================================================================================
-        // AURA-GENIUS PROTOCOL
-        // ===================================================================================
-        let state = { wallet: null, userStore: null };
-        let peerConnection;
-        let dataChannel;
+            return { Constants, Utils, Crypto, Banknote };
+        })();
 
-        const CryptoWorker = {
-            _requestId: 0,
-            _promises: {},
-            
-            call(action, payload) {
-                const id = this._requestId++;
-                return new Promise((resolve, reject) => {
-                    this._promises[id] = { resolve, reject };
-                    worker.postMessage({ id, action, payload });
-                });
+        // ===================================================================================
+        // PROOF OF WORK & BLOCKCHAIN CORE LOGIC
+        // ===================================================================================
+        const PoW = {
+            DIFFICULTY: 3, // Set a global difficulty. Increase for more work.
+            async createSHA256Hash(string) {
+                const textAsBuffer = new TextEncoder().encode(string);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             },
-
-            init() {
-                worker.onmessage = (e) => {
-                    const { id, success, payload, error } = e.data;
-                    if (this._promises[id]) {
-                        if (success) {
-                            this._promises[id].resolve(payload);
-                        } else {
-                            this._promises[id].reject(new Error(error));
-                        }
-                        delete this._promises[id];
+            async mineBlock(blockData, statusCallback) {
+                let nonce = 0;
+                let hash = '';
+                const target = '0'.repeat(this.DIFFICULTY);
+                while (!hash.startsWith(target)) {
+                    nonce++;
+                    const dataToHash = JSON.stringify(blockData) + nonce;
+                    hash = await this.createSHA256Hash(dataToHash);
+                    if (nonce % 1000 === 0) {
+                        statusCallback(`Mining... Attempt #${nonce}`);
+                        await new Promise(resolve => setTimeout(resolve, 0));
                     }
-                };
+                }
+                statusCallback(`Block mined successfully! Nonce: ${nonce}`);
+                return { nonce, hash };
+            },
+            async verifyChain(chain) {
+                const target = '0'.repeat(this.DIFFICULTY);
+                for (let i = 1; i < chain.length; i++) {
+                    const currentBlock = chain[i];
+                    const previousBlock = chain[i - 1];
+                    const blockDataForHash = { ...currentBlock };
+                    delete blockDataForHash.hash;
+                    delete blockDataForHash.nonce;
+                    const dataToHash = JSON.stringify(blockDataForHash) + currentBlock.nonce;
+                    const recalculatedHash = await this.createSHA256Hash(dataToHash);
+                    if (currentBlock.hash !== recalculatedHash || !currentBlock.hash.startsWith(target) || currentBlock.prevHash !== previousBlock.hash) {
+                        console.error("Chain verification failed at block:", currentBlock);
+                        return false;
+                    }
+                }
+                console.log("Chain verification successful.");
+                return true;
             }
         };
-        CryptoWorker.init();
+
+        // ===================================================================================
+        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
+        // ===================================================================================
+        
+        let state = {
+            wallet: null,
+            masterPublicKey: null,
+            userStore: null,
+            falconApi: null, 
+        };
+
+        const WitnessNetwork = {
+            LEDGER_KEY: 'aura_witness_ledger',
+            getLedger: () => JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {},
+            saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
+            hasBeenSpent: (id) => !!WitnessNetwork.getLedger()[id],
+            markAsSpent: (id, type) => {
+                const ledger = WitnessNetwork.getLedger();
+                ledger[id] = { type: type, timestamp: Date.now() };
+                WitnessNetwork.saveLedger(ledger);
+                console.log(`Witness Network: Marked ${id} as spent.`);
+            }
+        };
 
         const WalletLogic = {
-            async createWallet(password) {
-                const { mnemonic, publicKey, privateKey } = await CryptoWorker.call('generateWallet');
-                const encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, password).toString();
-                const address = CryptoJS.SHA256(publicKey).toString().slice(0, 24);
-
-                state.userStore = {
-                    publicKey, address, encryptedPrivateKey,
-                    chain: [{ hash: CryptoJS.SHA256("GENESIS_BLOCK").toString(), type: 'creation', timestamp: Date.now() }]
+            createWallet: (password) => {
+                const wallet = ethers.Wallet.createRandom();
+                const userStore = {
+                    publicKey: wallet.publicKey,
+                    address: wallet.address,
+                    encryptedJson: wallet.encryptSync(password),
+                    chain: [{ 
+                        hash: '0'.repeat(64), // Genesis block hash
+                        nonce: 0,
+                        type: 'creation', 
+                        timestamp: Date.now() 
+                    }]
                 };
-                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                return { mnemonic };
+                localStorage.setItem('aura_user_store', JSON.stringify(userStore));
+                return { mnemonic: wallet.mnemonic.phrase };
             },
-
-            async restoreWallet(mnemonic, password) {
+            restoreWallet: (mnemonic, password) => {
                 try {
-                    const { publicKey, privateKey } = await CryptoWorker.call('restoreWallet', { mnemonic });
-                    const encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, password).toString();
-                    const address = CryptoJS.SHA256(publicKey).toString().slice(0, 24);
-
-                    state.userStore = {
-                        publicKey, address, encryptedPrivateKey,
-                        chain: [{ hash: CryptoJS.SHA256("GENESIS_BLOCK").toString(), type: 'creation', timestamp: Date.now() }]
+                    const wallet = ethers.Wallet.fromPhrase(mnemonic);
+                    const userStore = {
+                        publicKey: wallet.publicKey,
+                        address: wallet.address,
+                        encryptedJson: wallet.encryptSync(password),
+                        chain: [{ 
+                            hash: '0'.repeat(64), // Genesis block hash
+                            nonce: 0,
+                            type: 'creation', 
+                            timestamp: Date.now() 
+                        }]
                     };
-                    localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
+                    localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                     return true;
                 } catch (e) { console.error("Restore failed:", e); return false; }
             },
-
-            login(password) {
+            login: async (password) => {
                 const userStoreJson = localStorage.getItem('aura_user_store');
-                if (!userStoreJson) return false;
-                
+                if (!userStoreJson) return null;
                 try {
                     state.userStore = JSON.parse(userStoreJson);
-                    const privateKeyBytes = CryptoJS.AES.decrypt(state.userStore.encryptedPrivateKey, password);
-                    const privateKey = privateKeyBytes.toString(CryptoJS.enc.Utf8);
-                    if (!privateKey) throw new Error("Invalid password");
-                    state.wallet = { publicKey: state.userStore.publicKey, privateKey };
+                    state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
+                    console.log("Verifying local blockchain integrity...");
+                    const isChainValid = await PoW.verifyChain(state.userStore.chain);
+                    if (!isChainValid) {
+                        alert("WARNING: Your local transaction history appears to be corrupted! Integrity check failed.");
+                    }
                     return true;
-                } catch (e) {
-                    console.error("Login failed:", e);
-                    state.userStore = null;
-                    return false;
-                }
+                } catch (e) { console.error("Login failed:", e); return false; }
             },
-            
-            logout() { state.wallet = null; },
-
-            getLastTransaction() { return state.userStore.chain[state.userStore.chain.length - 1]; },
-
-            addToChain(txData) {
-                const prevTx = this.getLastTransaction();
-                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() };
-                newTx.hash = CryptoJS.SHA256(JSON.stringify(newTx)).toString();
-                state.userStore.chain.push(newTx);
+            logout: () => { state.wallet = null; state.userStore = null; },
+            getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
+            addToChain: async (txData, statusCallback) => {
+                statusCallback("Preparing to mine new block...");
+                const prevTx = WalletLogic.getLastTransaction();
+                const newBlockData = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() };
+                const { nonce, hash } = await PoW.mineBlock(newBlockData, statusCallback);
+                const finalBlock = { ...newBlockData, nonce, hash };
+                state.userStore.chain.push(finalBlock);
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                return newTx;
+                statusCallback("Block added to chain successfully!");
+                return finalBlock;
             },
-
-            calculateBalance() {
+            calculateBalance: () => {
                 if (!state.userStore) return 0.0;
                 return state.userStore.chain.reduce((balance, tx) => {
                     if (tx.status !== 'completed') return balance;
-                    if (tx.type === 'receive') return balance + (tx.amount || 0);
+                    if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0);
                     if (tx.type === 'send') return balance - (tx.amount || 0);
                     return balance;
                 }, 0);
             },
-            
-            async createProposal(amount) {
-                const senderLastTx = this.getLastTransaction();
-                const proposal = { 
-                    type: 'AURA_PROPOSAL', 
-                    amount,
-                    senderAddress: state.userStore.address,
-                    senderPublicKey: state.wallet.publicKey,
-                    senderPrevHash: senderLastTx.hash,
-                    timestamp: Date.now()
-                };
-                proposal.signature = await CryptoWorker.call('sign', {
-                    privateKey: state.wallet.privateKey,
-                    message: JSON.stringify(proposal)
-                });
+            createProposal: async (amount, statusCallback) => {
+                const proposalTx = await WalletLogic.addToChain({ type: 'send', amount: amount, from: state.wallet.address, to: '', status: 'pending' }, statusCallback);
+                const proposal = { type: 'AURA_PROPOSAL', senderAddress: state.wallet.address, senderPublicKey: state.wallet.publicKey, txHash: proposalTx.hash, amount: amount };
+                proposal.signature = await state.wallet.signMessage(JSON.stringify(proposal));
                 return proposal;
             },
-
-            async createReceipt(proposal) {
-                const receiverLastTx = this.getLastTransaction();
-                const receiptTx = this.addToChain({ type: 'receive', amount: proposal.amount, from: proposal.senderAddress, to: state.userStore.address, status: 'completed', linkedProposal: proposal });
-                
-                const receipt = {
-                    type: 'AURA_RECEIPT',
-                    receiverAddress: state.userStore.address,
-                    receiverPublicKey: state.wallet.publicKey,
-                    receiverPrevHash: receiverLastTx.hash,
-                    finalTxHash: receiptTx.hash,
-                    linkedProposal: proposal
-                };
-                 receipt.signature = await CryptoWorker.call('sign', {
-                    privateKey: state.wallet.privateKey,
-                    message: JSON.stringify(receipt)
-                });
+            createReceipt: async (proposal, statusCallback) => {
+                const receiptTx = await WalletLogic.addToChain({ type: 'receive', amount: proposal.amount, from: proposal.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: proposal.txHash }, statusCallback);
+                const receipt = { type: 'AURA_RECEIPT', receiverAddress: state.wallet.address, txHash: receiptTx.hash, linkedTxHash: proposal.txHash };
+                receipt.signature = await state.wallet.signMessage(JSON.stringify(receipt));
                 return receipt;
             },
-
-            async verifyAndFinalize(receipt) {
-                // Verify receipt signature
-                const receiptSignerValid = await CryptoWorker.call('verify', {
-                    publicKey: receipt.receiverPublicKey,
-                    signature: receipt.signature,
-                    message: JSON.stringify({...receipt, signature: undefined})
-                });
-                if (!receiptSignerValid) throw new Error("Receiver's signature is invalid.");
-
-                // Verify proposal signature within receipt
-                const proposal = receipt.linkedProposal;
-                const proposalSignerValid = await CryptoWorker.call('verify', {
-                    publicKey: proposal.senderPublicKey,
-                    signature: proposal.signature,
-                    message: JSON.stringify({...proposal, signature: undefined})
-                });
-                if (!proposalSignerValid) throw new Error("Sender's signature inside receipt is invalid.");
-
-                // Add to own chain
-                this.addToChain({ type: 'send', amount: proposal.amount, from: state.userStore.address, to: receipt.receiverAddress, status: 'completed', linkedReceipt: receipt });
+            verifyAndFinalize: async (receipt) => {
+                const senderTxIndex = state.userStore.chain.findIndex(tx => tx.hash === receipt.linkedTxHash);
+                if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') {
+                    throw new Error("Associated send transaction not found or already completed.");
+                }
+                const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
+                state.userStore.chain[senderTxIndex].status = 'completed';
+                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                 return true;
             }
         };
-        
-        // --- UI & Event Listeners ---
-        
+
         function showView(id) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active');
         }
-
         function updateBalanceDisplay() {
             const balance = WalletLogic.calculateBalance();
             document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`;
-            updateHistoryView();
         }
-
-        function updateHistoryView() {
-            const listEl = document.getElementById('history-list');
-            listEl.innerHTML = '';
-            if (!state.userStore || state.userStore.chain.length <= 1) {
-                listEl.innerHTML = '<p>تاریخچه‌ای وجود ندارد.</p>';
-                return;
-            }
-            [...state.userStore.chain].reverse().forEach(tx => {
-                if(tx.type === 'creation') return;
-                const item = document.createElement('div');
-                item.className = 'tx-history-item';
-                const date = new Date(tx.timestamp).toLocaleString('fa-IR');
-                let html = `<div>${date}</div>`;
-                if(tx.type === 'send'){
-                    html += `<div><span class="tx-amount sent">- ${tx.amount.toFixed(2)} $</span> به <small>${tx.to}</small></div>`;
-                } else if(tx.type === 'receive'){
-                    html += `<div><span class="tx-amount received">+ ${tx.amount.toFixed(2)} $</span> از <small>${tx.from}</small></div>`;
-                }
-                item.innerHTML = html;
-                listEl.appendChild(item);
-            });
-        }
-
         function generateQrCode(data, containerId) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
-            const qr = qrcode(0, 'M');
+            const qr = qrcode(0, 'L');
             qr.addData(JSON.stringify(data));
             qr.make();
-            container.innerHTML = qr.createImgTag(5, 10);
+            container.innerHTML = qr.createImgTag(6, 10);
         }
-        
         async function decodeQrFromFile(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -355,274 +293,205 @@
                 reader.readAsDataURL(file);
             });
         }
-        
         async function initializeApp() {
-            if (localStorage.getItem('aura_user_store')) {
-                showView('login-view');
-            } else {
-                showView('onboarding-view');
+            try {
+                state.falconApi = await pqcSignFalcon1024();
+                console.log("Falcon API Initialized.");
+            } catch (e) {
+                alert(`Critical error initializing Falcon: ${e.message}`);
+                return;
             }
+            if (localStorage.getItem('aura_user_store')) { showView('login-view'); } 
+            else { showView('onboarding-view'); }
             setupEventListeners();
-            document.getElementById('create-wallet-button').disabled = false;
-        }
-
-        // --- WebRTC Logic ---
-        function setupPeerConnection(isInitiator) {
-            peerConnection = new RTCPeerConnection({ 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] });
-            
-            peerConnection.onicecandidate = event => {
-                if (event.candidate) {
-                    // This will generate multiple candidates, we just need to show the final result
-                    setTimeout(() => {
-                         if(isInitiator) document.getElementById('webrtc-offer-display').value = JSON.stringify(peerConnection.localDescription);
-                    }, 1000);
-                }
-            };
-
-            if (isInitiator) {
-                dataChannel = peerConnection.createDataChannel("txChannel");
-                setupDataChannelEvents();
-                peerConnection.createOffer()
-                    .then(offer => peerConnection.setLocalDescription(offer))
-                    .catch(e => console.error("Offer creation failed", e));
-            } else {
-                peerConnection.ondatachannel = event => {
-                    dataChannel = event.channel;
-                    setupDataChannelEvents();
-                };
-            }
-        }
-
-        function setupDataChannelEvents() {
-            dataChannel.onopen = () => {
-                alert("اتصال آنلاین برقرار شد!");
-                showView('wallet-view');
-            };
-            dataChannel.onmessage = async event => {
-                const message = JSON.parse(event.data);
-                if (message.type === 'AURA_PROPOSAL') {
-                    const statusEl = document.getElementById('receive-status');
-                    try {
-                        statusEl.textContent = 'پیشنهاد دریافت شد، در حال ساخت رسید...';
-                        // Add verification logic here if needed
-                        const receipt = await WalletLogic.createReceipt(message);
-                        dataChannel.send(JSON.stringify(receipt));
-                        updateBalanceDisplay();
-                         statusEl.textContent = 'رسید ارسال شد. تراکنش تکمیل شد.';
-                    } catch(e) {
-                         statusEl.textContent = `Error: ${e.message}`;
-                    }
-                } else if (message.type === 'AURA_RECEIPT') {
-                     const statusEl = document.getElementById('send-status');
-                     try {
-                        statusEl.textContent = 'رسید دریافت شد، در حال نهایی‌سازی...';
-                        await WalletLogic.verifyAndFinalize(message);
-                        updateBalanceDisplay();
-                        statusEl.textContent = 'تراکنش با موفقیت تکمیل شد.';
-                        setTimeout(() => showView('wallet-view'), 2000);
-                     } catch(e) {
-                         statusEl.textContent = `Error: ${e.message}`;
-                     }
-                }
-            };
         }
 
         function setupEventListeners() {
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
             
-            document.getElementById('create-wallet-button').addEventListener('click', async () => {
+            document.getElementById('create-wallet-button').addEventListener('click', () => {
                 const pass = document.getElementById('create-password-input').value;
                 const confirmPass = document.getElementById('confirm-password-input').value;
-                const statusEl = document.getElementById('create-status');
-                if (pass.length < 8) { statusEl.textContent = 'رمز عبور باید حداقل ۸ کاراکتر باشد.'; return; }
-                if (pass !== confirmPass) { statusEl.textContent = 'رمزهای عبور مطابقت ندارند.'; return; }
-                
-                statusEl.textContent = 'در حال ساخت کلیدهای کوانتومی... این ممکن است چند ثانیه طول بکشد.';
-                const { mnemonic } = await WalletLogic.createWallet(pass);
+                if (pass.length < 8) { document.getElementById('create-status').textContent = 'Password must be at least 8 characters.'; return; }
+                if (pass !== confirmPass) { document.getElementById('create-status').textContent = 'Passwords do not match.'; return; }
+                const { mnemonic } = WalletLogic.createWallet(pass);
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
             
-            document.getElementById('seed-phrase-confirm-button').addEventListener('click', () => {
+            document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
                 const pass = document.getElementById('create-password-input').value;
-                if (WalletLogic.login(pass)) {
-                    updateBalanceDisplay();
-                    showView('wallet-view');
-                } else {
-                    alert('ورود خودکار ناموفق بود. لطفاً دستی وارد شوید.');
-                    showView('login-view');
-                }
+                if (await WalletLogic.login(pass)) { updateBalanceDisplay(); showView('wallet-view'); } 
+                else { alert('Auto-login failed. Please log in manually.'); showView('login-view'); }
             });
 
-            document.getElementById('restore-wallet-button').addEventListener('click', async () => {
+            document.getElementById('restore-wallet-button').addEventListener('click', () => {
                 const mnemonic = document.getElementById('restore-seed-input').value.trim();
                 const pass = document.getElementById('restore-password-input').value;
-                const statusEl = document.getElementById('restore-status');
-                if (mnemonic.split(' ').length !== 12) { statusEl.textContent = 'عبارت بازیابی باید ۱۲ کلمه باشد.'; return; }
-                if (pass.length < 8) { statusEl.textContent = 'رمز عبور باید حداقل ۸ کاراکتر باشد.'; return; }
-                statusEl.textContent = 'در حال بازیابی...';
-                const success = await WalletLogic.restoreWallet(mnemonic, pass);
-                if (success) {
-                    statusEl.textContent = 'کیف پول با موفقیت بازیابی شد! لطفاً وارد شوید.';
+                if (mnemonic.split(' ').length !== 12) { document.getElementById('restore-status').textContent = 'Recovery phrase must be 12 words.'; return; }
+                if (pass.length < 8) { document.getElementById('restore-status').textContent = 'Password must be at least 8 characters.'; return; }
+                if (WalletLogic.restoreWallet(mnemonic, pass)) {
+                    document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.';
                     setTimeout(() => showView('login-view'), 2000);
-                } else {
-                     statusEl.textContent = 'بازیابی ناموفق بود. عبارت یا رمز اشتباه است.';
-                }
+                } else { document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.'; }
             });
-            
-            document.getElementById('login-button').addEventListener('click', () => {
+
+            document.getElementById('login-button').addEventListener('click', async () => {
                 const pass = document.getElementById('login-password-input').value;
                 const statusEl = document.getElementById('login-status');
-                statusEl.textContent = 'در حال رمزگشایی...';
-                if (WalletLogic.login(pass)) {
+                statusEl.textContent = 'Decrypting & Verifying...';
+                if (await WalletLogic.login(pass)) {
                     updateBalanceDisplay();
                     showView('wallet-view');
                     document.getElementById('login-password-input').value = '';
                     statusEl.textContent = '';
-                } else {
-                    statusEl.textContent = 'رمز عبور نامعتبر است.';
-                }
+                } else { statusEl.textContent = 'Invalid password.'; }
             });
             
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
             
             document.getElementById('reset-app-button').addEventListener('click', () => {
-                if (confirm('آیا مطمئنید؟ تمام اطلاعات کیف پول از این مرورگر پاک خواهد شد.')) {
+                if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
+                    localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
                     location.reload();
                 }
             });
 
+            document.getElementById('show-charge-view-button').addEventListener('click', () => showView('charge-view'));
             document.getElementById('show-send-view-button').addEventListener('click', () => showView('send-view'));
-            document.getElementById('show-receive-view-button').addEventListener('click', () => showView('receive-view'));
+            document.getElementById('show-receive-view-button').addEventListener('click', () => showView('scan-proposal-view'));
 
-            document.getElementById('create-proposal-qr-button').addEventListener('click', async () => {
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
+                const amount = parseFloat(event.target.dataset.amount);
+                const serial = event.target.dataset.serial;
+                const confirmBtn = event.target;
+                const statusEl = document.getElementById('mining-status-charge');
+                confirmBtn.disabled = true;
+                await WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
+                WitnessNetwork.markAsSpent(serial, 'banknote');
+                updateBalanceDisplay();
+                setTimeout(() => {
+                    alert(`$${amount.toFixed(2)} added successfully.`);
+                    showView('wallet-view');
+                    confirmBtn.disabled = false;
+                    statusEl.textContent = '';
+                }, 1500);
+            });
+
+            document.getElementById('create-proposal-button').addEventListener('click', async (event) => {
                 const amount = parseFloat(document.getElementById('send-amount-input').value);
                 const statusEl = document.getElementById('send-status');
+                const miningStatusEl = document.getElementById('mining-status-send');
+                const proposalBtn = event.target;
                 if (isNaN(amount) || amount <= 0 || amount > WalletLogic.calculateBalance()) {
-                    statusEl.textContent = 'مبلغ نامعتبر یا موجودی ناکافی است.'; return;
+                    statusEl.textContent = 'Invalid amount or insufficient funds.';
+                    return;
                 }
-                statusEl.textContent = 'در حال ساخت پیشنهاد...';
-                const proposal = await WalletLogic.createProposal(amount);
+                proposalBtn.disabled = true;
+                statusEl.textContent = '';
+                const proposal = await WalletLogic.createProposal(amount, (msg) => miningStatusEl.textContent = msg);
                 generateQrCode(proposal, 'qr-display-box');
-                document.getElementById('qr-display-title').textContent = 'ارسال وجه (مرحله ۱ از ۲)';
-                document.getElementById('qr-display-instruction').textContent = 'این کد را به گیرنده نشان دهید تا اسکن کند.';
+                document.getElementById('qr-display-title').textContent = 'Send Funds (Step 2 of 2)';
+                document.getElementById('qr-display-instruction').textContent = 'Show this code to the recipient to scan.';
                 document.getElementById('scan-receipt-label').style.display = 'block';
                 showView('qr-display-view');
+                proposalBtn.disabled = false;
+                miningStatusEl.textContent = '';
             });
             
             document.getElementById('scan-receipt-input').addEventListener('change', async (event) => {
-                 const file = event.target.files[0];
-                 if (!file) return;
-                 const statusEl = document.getElementById('qr-status');
-                 try {
-                    statusEl.textContent = 'در حال پردازش رسید...';
+                const file = event.target.files[0];
+                if (!file) return;
+                const statusEl = document.getElementById('qr-status');
+                try {
+                    statusEl.textContent = 'Processing receipt...';
                     const receipt = await decodeQrFromFile(file);
-                    if (receipt.type !== 'AURA_RECEIPT') throw new Error('این یک QR کد رسید معتبر نیست.');
-
+                    if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
                     await WalletLogic.verifyAndFinalize(receipt);
-                    statusEl.innerHTML = '<span class="success">تراکنش با موفقیت نهایی شد!</span>';
+                    WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
+                    statusEl.textContent = 'Transaction finalized successfully!';
                     updateBalanceDisplay();
                     setTimeout(() => showView('wallet-view'), 2000);
-                 } catch (err) { statusEl.textContent = `خطا: ${err.message}`; } 
-                 finally { event.target.value = ''; }
+                } catch (err) { statusEl.textContent = `Error: ${err.message}`; } 
+                finally { event.target.value = ''; }
             });
 
             document.getElementById('scan-proposal-input').addEventListener('change', async (event) => {
-                 const file = event.target.files[0];
-                 if (!file) return;
-                 const statusEl = document.getElementById('receive-status');
-                 try {
-                    statusEl.textContent = 'در حال پردازش پیشنهاد...';
+                const file = event.target.files[0];
+                if (!file) return;
+                const statusEl = document.getElementById('proposal-status');
+                const miningStatusEl = document.getElementById('mining-status-proposal');
+                try {
+                    statusEl.textContent = 'Processing proposal...';
                     const proposal = await decodeQrFromFile(file);
-                    if (proposal.type !== 'AURA_PROPOSAL') throw new Error('این یک QR کد پیشنهاد معتبر نیست.');
-                    
-                    const isValid = await CryptoWorker.call('verify', {
-                        publicKey: proposal.senderPublicKey,
-                        signature: proposal.signature,
-                        message: JSON.stringify({...proposal, signature: undefined})
-                    });
-                    if (!isValid) throw new Error("امضای فرستنده نامعتبر است.");
-
-                    statusEl.textContent = 'پیشنهاد معتبر است. در حال ساخت QR کد رسید...';
-                    const receipt = await WalletLogic.createReceipt(proposal);
-                    
+                    if (proposal.type !== 'AURA_PROPOSAL') throw new Error('Not a valid proposal QR code.');
+                    const message = JSON.stringify({ ...proposal, signature: undefined });
+                    const signerAddress = ethers.verifyMessage(message, proposal.signature);
+                    if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
+                    if (WitnessNetwork.hasBeenSpent(proposal.txHash)) throw new Error('This transaction has already been processed.');
+                    statusEl.textContent = 'Proposal valid. Creating and mining receipt block...';
+                    const receipt = await WalletLogic.createReceipt(proposal, (msg) => miningStatusEl.textContent = msg);
                     generateQrCode(receipt, 'qr-display-box');
-                    document.getElementById('qr-display-title').textContent = 'ارائه رسید به فرستنده (مرحله ۲ از ۲)';
-                    document.getElementById('qr-display-instruction').textContent = 'این کد را به فرستنده نشان دهید تا برای نهایی‌سازی اسکن کند.';
+                    document.getElementById('qr-display-title').textContent = 'Present Receipt to Sender';
+                    document.getElementById('qr-display-instruction').textContent = 'Show this code to the sender to scan and finalize.';
                     document.getElementById('scan-receipt-label').style.display = 'none';
                     showView('qr-display-view');
                     updateBalanceDisplay();
-
-                 } catch (err) { statusEl.textContent = `خطا: ${err.message}`; } 
-                 finally { event.target.value = ''; }
-            });
-
-            // WebRTC Event Listeners
-            document.getElementById('create-webrtc-offer-button').addEventListener('click', () => {
-                setupPeerConnection(true);
-                document.getElementById('send-status').textContent = 'کد اتصال ساخته شد. آن را برای گیرنده کپی و ارسال کنید.';
-            });
-
-            document.getElementById('connect-webrtc-button').addEventListener('click', async () => {
-                const offer = JSON.parse(document.getElementById('webrtc-answer-input').value);
-                setupPeerConnection(false);
-                await peerConnection.setRemoteDescription(offer);
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                alert("کد پاسخ ساخته شد! آن را برای فرستنده ارسال کنید تا اتصال برقرار شود.");
-                // In a real app, this answer would be sent back via a signaling server or copy/paste
-                // For this simplified example, we assume this is handled manually.
-                // The connection will establish once the initiator receives and sets this answer.
-                 document.getElementById('receive-status').textContent = 'کد پاسخ شما (برای فرستنده): ' + JSON.stringify(answer);
-            });
-            
-            // Backup/Restore
-            document.getElementById('export-backup-button').addEventListener('click', () => {
-                if(!state.userStore) { alert("ابتدا وارد شوید."); return; }
-                const dataStr = "data:text/json;charset=utf-t," + encodeURIComponent(JSON.stringify(state.userStore));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", "aura_genius_backup.json");
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
-            });
-            
-            document.getElementById('import-backup-input').addEventListener('change', (event) => {
-                if(event.target.files.length > 0) {
-                    document.getElementById('import-backup-password').style.display = 'block';
-                    document.getElementById('import-backup-button').style.display = 'block';
+                } catch (err) { statusEl.textContent = `Error: ${err.message}`; } 
+                finally {
+                    event.target.value = '';
+                    miningStatusEl.textContent = '';
                 }
             });
+            
+            document.getElementById('public-key-input').addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const keyStatus = document.getElementById('key-status');
+                keyStatus.textContent = 'Processing key...';
+                document.getElementById('banknote-image-input').disabled = true;
+                state.masterPublicKey = null;
+                try {
+                    const keyData = JSON.parse(await file.text());
+                    if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'.");
+                    state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey);
+                    keyStatus.innerHTML = '<span class="success">Public key loaded successfully.</span>';
+                    document.getElementById('banknote-image-input').disabled = false;
+                } catch (err) { keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`; }
+            });
 
-             document.getElementById('import-backup-button').addEventListener('click', () => {
-                const file = document.getElementById('import-backup-input').files[0];
-                const password = document.getElementById('import-backup-password').value;
-                const statusEl = document.getElementById('restore-status');
-                if (!file || !password) { statusEl.textContent = 'فایل و رمز عبور الزامی است.'; return; }
-                
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const importedStore = JSON.parse(e.target.result);
-                        // Quick validation by trying to decrypt with the provided password
-                        const privateKeyBytes = CryptoJS.AES.decrypt(importedStore.encryptedPrivateKey, password);
-                        if (!privateKeyBytes.toString(CryptoJS.enc.Utf8)) {
-                            throw new Error("رمز عبور اشتباه است یا فایل پشتیبان خراب است.");
-                        }
-                        localStorage.setItem('aura_user_store', JSON.stringify(importedStore));
-                        statusEl.innerHTML = '<span class="success">پشتیبان با موفقیت وارد شد! اکنون وارد شوید.</span>';
-                         setTimeout(() => location.reload(), 2000);
-                    } catch (err) {
-                        statusEl.textContent = `خطا: ${err.message}`;
-                    }
-                };
-                reader.readAsText(file);
-             });
+            document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const statusEl = document.getElementById('validation-status');
+                const confirmSection = document.getElementById('charge-confirmation');
+                confirmSection.style.display = 'none';
+                if (!state.masterPublicKey) { statusEl.textContent = 'Error: Please load the bank\'s public key first.'; return; }
+                statusEl.textContent = 'Preparing image...';
+                try {
+                    const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
+                    const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
+                    const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
+                    const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
+                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
+                    const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                    if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) throw new Error("This banknote has already been spent.");
+                    const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
+                    if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
+                    const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
+                    if (!isSigTwoValid) throw new Error("Signature 2 is invalid (does not match public key).");
+                    statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
+                    document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
+                    const confirmBtn = document.getElementById('confirm-charge-button');
+                    confirmBtn.dataset.amount = banknoteData.amount;
+                    confirmBtn.dataset.serial = banknoteData.serial;
+                    confirmSection.style.display = 'block';
+                } catch (err) { statusEl.textContent = `Error: ${err.message}`; } 
+                finally { event.target.value = ''; }
+            });
         }
-
         document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
