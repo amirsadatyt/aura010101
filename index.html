@@ -51,6 +51,9 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
@@ -95,7 +98,7 @@
         // PROOF OF WORK & BLOCKCHAIN CORE LOGIC
         // ===================================================================================
         const PoW = {
-            DIFFICULTY: 3, // Set a global difficulty. Increase for more work.
+            DIFFICULTY: 3, 
             async createSHA256Hash(string) {
                 const textAsBuffer = new TextEncoder().encode(string);
                 const hashBuffer = await crypto.subtle.digest('SHA-256', textAsBuffer);
@@ -137,7 +140,7 @@
                 return true;
             }
         };
-
+        
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
         // ===================================================================================
@@ -149,16 +152,121 @@
             falconApi: null, 
         };
 
+        // ===================================================================================
+        // P2P WITNESS NETWORK LOGIC (UPDATED)
+        // ===================================================================================
+        const P2P_Network = {
+            peers: {},
+            socket: null,
+            SIGNALING_SERVER: 'https://aura-p2p-signal.glitch.me/', // A simple, free signaling server
+            
+            initialize: () => {
+                console.log("Initializing P2P Witness Network...");
+                P2P_Network.socket = io(P2P_Network.SIGNALING_SERVER);
+
+                P2P_Network.socket.on('connect', () => {
+                    console.log("Connected to Signaling Server with ID:", P2P_Network.socket.id);
+                });
+
+                P2P_Network.socket.on('signal', (data) => {
+                    if (P2P_Network.peers[data.from]) {
+                        P2P_Network.peers[data.from].signal(data.signal);
+                    } else {
+                        // If a signal arrives from an unknown peer, create one
+                        P2P_Network.createPeer(data.from, false);
+                        // Queue the signal to be processed once the peer is ready
+                        setTimeout(() => {
+                           if(P2P_Network.peers[data.from]) {
+                                P2P_Network.peers[data.from].signal(data.signal);
+                           }
+                        }, 500);
+                    }
+                });
+
+                P2P_Network.socket.on('user-joined', (userId) => {
+                    if (userId === P2P_Network.socket.id) return;
+                    console.log("A new user joined:", userId, "Creating peer connection.");
+                    P2P_Network.createPeer(userId, true);
+                });
+                
+                P2P_Network.socket.on('user-left', (userId) => {
+                    if (P2P_Network.peers[userId]) {
+                        console.log("User left:", userId);
+                        P2P_Network.peers[userId].destroy();
+                        delete P2P_Network.peers[userId];
+                    }
+                });
+            },
+
+            createPeer: (userId, initiator = false) => {
+                if(P2P_Network.peers[userId]) {
+                    console.log("Peer already exists for:", userId);
+                    return;
+                }
+                const peer = new SimplePeer({ initiator: initiator, trickle: false });
+                P2P_Network.peers[userId] = peer; // Add peer to list immediately
+
+                peer.on('signal', (signal) => {
+                    P2P_Network.socket.emit('signal', { to: userId, from: P2P_Network.socket.id, signal });
+                });
+
+                peer.on('connect', () => {
+                    console.log('Connected to peer:', userId);
+                });
+
+                peer.on('data', (data) => {
+                    try {
+                        const message = JSON.parse(data.toString());
+                        console.log("Received data from peer:", message);
+                        if (message.type === 'SPEND_EVENT') {
+                            WitnessNetwork.markAsSpentLocally(message.id, message.spendType);
+                            console.log(`Witness event from peer: Marked ${message.id} as spent.`);
+                        }
+                    } catch(e) { console.error("Error processing peer data", e); }
+                });
+                
+                peer.on('close', () => {
+                    delete P2P_Network.peers[userId];
+                    console.log("Connection closed with peer:", userId);
+                });
+                
+                peer.on('error', (err) => {
+                    console.error('Peer error for ' + userId + ':', err);
+                    if (P2P_Network.peers[userId]) {
+                        P2P_Network.peers[userId].destroy();
+                        delete P2P_Network.peers[userId];
+                    }
+                });
+            },
+
+            broadcastSpendEvent: (id, type) => {
+                const message = JSON.stringify({ type: 'SPEND_EVENT', id: id, spendType: type });
+                console.log("Broadcasting spend event:", message);
+                for (const peerId in P2P_Network.peers) {
+                    if (P2P_Network.peers[peerId].connected) {
+                       P2P_Network.peers[peerId].send(message);
+                    }
+                }
+            }
+        };
+
         const WitnessNetwork = {
             LEDGER_KEY: 'aura_witness_ledger',
             getLedger: () => JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {},
             saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
             hasBeenSpent: (id) => !!WitnessNetwork.getLedger()[id],
-            markAsSpent: (id, type) => {
+            
+            markAsSpentLocally: (id, type) => {
                 const ledger = WitnessNetwork.getLedger();
+                if (ledger[id]) return; // Don't mark it again if it already exists
                 ledger[id] = { type: type, timestamp: Date.now() };
                 WitnessNetwork.saveLedger(ledger);
-                console.log(`Witness Network: Marked ${id} as spent.`);
+            },
+
+            markAsSpent: (id, type) => {
+                WitnessNetwork.markAsSpentLocally(id, type);
+                P2P_Network.broadcastSpendEvent(id, type);
+                console.log(`Witness Network: Marked ${id} as spent and broadcasted to peers.`);
             }
         };
 
@@ -285,7 +393,13 @@
                         ctx.drawImage(image, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const code = jsQR(imageData.data, imageData.width, imageData.height);
-                        if (code) { resolve(JSON.parse(code.data)); } 
+                        if (code) { 
+                            try {
+                                resolve(JSON.parse(code.data)); 
+                            } catch(e) {
+                                reject(new Error("QR Code data is not valid JSON."));
+                            }
+                        } 
                         else { reject(new Error("QR Code not found or invalid.")); }
                     };
                     image.src = e.target.result;
@@ -297,8 +411,9 @@
             try {
                 state.falconApi = await pqcSignFalcon1024();
                 console.log("Falcon API Initialized.");
+                P2P_Network.initialize(); // <-- INITIALIZE P2P NETWORK
             } catch (e) {
-                alert(`Critical error initializing Falcon: ${e.message}`);
+                alert(`Critical error initializing dependencies: ${e.message}`);
                 return;
             }
             if (localStorage.getItem('aura_user_store')) { showView('login-view'); } 
@@ -409,6 +524,7 @@
                     statusEl.textContent = 'Processing receipt...';
                     const receipt = await decodeQrFromFile(file);
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
+                    if (WitnessNetwork.hasBeenSpent(receipt.linkedTxHash)) throw new Error('This transaction has already been finalized.');
                     await WalletLogic.verifyAndFinalize(receipt);
                     WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
                     statusEl.textContent = 'Transaction finalized successfully!';
@@ -427,8 +543,9 @@
                     statusEl.textContent = 'Processing proposal...';
                     const proposal = await decodeQrFromFile(file);
                     if (proposal.type !== 'AURA_PROPOSAL') throw new Error('Not a valid proposal QR code.');
-                    const message = JSON.stringify({ ...proposal, signature: undefined });
-                    const signerAddress = ethers.verifyMessage(message, proposal.signature);
+                    const message = { ...proposal };
+                    delete message.signature;
+                    const signerAddress = ethers.verifyMessage(JSON.stringify(message), proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
                     if (WitnessNetwork.hasBeenSpent(proposal.txHash)) throw new Error('This transaction has already been processed.');
                     statusEl.textContent = 'Proposal valid. Creating and mining receipt block...';
