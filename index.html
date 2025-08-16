@@ -41,7 +41,9 @@
     
     <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
-    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button><div id="mining-status-charge" class="status-box info" style="margin-top: 10px;"></div></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button><div id="mining-status-charge" class="status-box info" style="margin-top: 10px;"></div></div>
+    <button id="charge-view-back-button" class="back-button">Back</button>
+    </div></div>
     <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal QR Code</button><div id="send-status" class="status-box"></div><div id="mining-status-send" class="status-box info" style="margin-top: 10px;"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
     <div id="receive-view" class="view"><div class="card"><h2>Receive Funds (Step 1 of 2)</h2><p>Show this QR code to the sender for them to scan.</p><div id="my-qr-code"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back to Wallet</button></div></div>
@@ -186,7 +188,6 @@
                             case 'SYNC_LEDGER':
                                 WitnessNetwork.syncLedger(message.ledger);
                                 break;
-                            // FIX: Handle lock messages
                             case 'REQUEST_LOCK':
                                 WitnessNetwork.handleLockRequest(message.id);
                                 break;
@@ -213,11 +214,10 @@
 
         const WitnessNetwork = {
             LEDGER_KEY: 'aura_witness_ledger',
-            locks: new Set(), // FIX: In-memory set to hold temporary locks
+            locks: new Set(),
             getLedger: () => JSON.parse(localStorage.getItem(WitnessNetwork.LEDGER_KEY)) || {},
             saveLedger: (ledger) => localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(ledger)),
             
-            // FIX: Check both permanent ledger and temporary locks
             isUnavailable: (id) => WitnessNetwork.getLedger()[id] || WitnessNetwork.locks.has(id),
             
             syncLedger: (remoteLedger) => {
@@ -236,10 +236,9 @@
             markAsSpent: (id, type) => {
                 WitnessNetwork.markAsSpentLocally(id, type);
                 P2P_Network.broadcast({ type: 'SPEND_EVENT', id, spendType: type });
-                WitnessNetwork.releaseLock(id); // Release lock once spent
+                WitnessNetwork.releaseLock(id);
             },
 
-            // FIX: New functions for handling locks
             requestLock: (id) => {
                 if (WitnessNetwork.isUnavailable(id)) return false;
                 WitnessNetwork.locks.add(id);
@@ -452,6 +451,20 @@
             document.getElementById('show-charge-view-button').addEventListener('click', () => showView('charge-view'));
             document.getElementById('show-send-view-button').addEventListener('click', () => showView('send-view'));
             document.getElementById('show-receive-view-button').addEventListener('click', () => showView('scan-proposal-view'));
+            
+            // FIX: Dedicated listener for the back button on the charge view to release locks.
+            document.getElementById('charge-view-back-button').addEventListener('click', () => {
+                const confirmBtn = document.getElementById('confirm-charge-button');
+                const serial = confirmBtn.dataset.serial;
+                // If a serial is set, it means a lock is active that needs to be released.
+                if (serial) {
+                    WitnessNetwork.releaseLock(serial);
+                    // Clean up state
+                    delete confirmBtn.dataset.serial;
+                    delete confirmBtn.dataset.amount;
+                }
+                showView('wallet-view');
+            });
 
             document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
                 const amount = parseFloat(event.target.dataset.amount);
@@ -459,16 +472,9 @@
                 const confirmBtn = event.target;
                 const statusEl = document.getElementById('mining-status-charge');
                 confirmBtn.disabled = true;
-                
-                // FIX: Re-check availability right before mining
-                if (WitnessNetwork.isUnavailable(serial)) {
-                    alert("Error: This banknote was spent by another user while you were confirming.");
-                    showView('wallet-view');
-                    return;
-                }
 
                 await WalletLogic.addToChain({ type: 'charge', amount, status: 'completed' }, (msg) => statusEl.textContent = msg);
-                WitnessNetwork.markAsSpent(serial, 'banknote'); // This now also releases the lock
+                WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 setTimeout(() => {
                     alert(`$${amount.toFixed(2)} added successfully.`);
@@ -567,6 +573,8 @@
                 if (!file) return;
                 const statusEl = document.getElementById('validation-status');
                 const confirmSection = document.getElementById('charge-confirmation');
+                const confirmBtn = document.getElementById('confirm-charge-button');
+                let lockedSerial = null;
                 confirmSection.style.display = 'none';
                 if (!state.masterPublicKey) { statusEl.textContent = 'Error: Please load the bank\'s public key first.'; return; }
                 statusEl.textContent = 'Preparing image...';
@@ -577,12 +585,12 @@
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
                     statusEl.innerHTML = '<span class="success">Scan complete. Verifying...</span>';
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                    lockedSerial = banknoteData.serial;
                     
-                    // FIX: GENIUS FIX - Check for lock first, then request lock
-                    if (WitnessNetwork.isUnavailable(banknoteData.serial)) {
+                    if (WitnessNetwork.isUnavailable(lockedSerial)) {
                         throw new Error("Banknote is already spent or is being processed by another user.");
                     }
-                    if (!WitnessNetwork.requestLock(banknoteData.serial)) {
+                    if (!WitnessNetwork.requestLock(lockedSerial)) {
                         throw new Error("Failed to acquire network lock for this banknote.");
                     }
                     
@@ -595,16 +603,13 @@
                     
                     statusEl.innerHTML = '<span class="success">Banknote is valid! Ready to charge.</span>';
                     document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
-                    const confirmBtn = document.getElementById('confirm-charge-button');
                     confirmBtn.dataset.amount = banknoteData.amount;
-                    confirmBtn.dataset.serial = banknoteData.serial;
+                    confirmBtn.dataset.serial = lockedSerial;
                     confirmSection.style.display = 'block';
 
                 } catch (err) {
                     statusEl.textContent = `Error: ${err.message}`;
-                    // If something fails, release the lock so others can try.
-                    const serial = document.getElementById('confirm-charge-button').dataset.serial;
-                    if(serial) WitnessNetwork.releaseLock(serial);
+                    if(lockedSerial) WitnessNetwork.releaseLock(lockedSerial);
                 } 
                 finally { event.target.value = ''; }
             });
