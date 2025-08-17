@@ -146,7 +146,9 @@
             };
 
             const initNetwork = () => {
-                if (client) client.destroy();
+                if (client) {
+                    client.destroy();
+                }
                 client = new WebTorrent();
                 client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
 
@@ -169,13 +171,23 @@
                     saveFilter();
                 }
                 
-                swarm = client.join(SWARM_ID);
+                // FIX: Use client.seed() with a common identifier to create/join the P2P network.
+                // This creates a "torrent" that other peers can find.
+                const swarmIdentifier = SWARM_ID;
+                swarm = client.seed(new TextEncoder().encode(swarmIdentifier), { name: SWARM_ID });
+
+                // Update UI immediately and whenever peers connect/disconnect.
                 updateNetworkStatusUI();
                 
                 swarm.on('wire', (wire) => {
                     console.log('New peer connected:', wire.peerId);
                     updateNetworkStatusUI();
-                    wire.on('close', updateNetworkStatusUI);
+                    
+                    wire.on('close', () => {
+                        console.log('Peer disconnected:', wire.peerId);
+                        updateNetworkStatusUI();
+                    });
+
                     wire.on('data', (data) => {
                         try {
                             const message = JSON.parse(data.toString());
@@ -185,6 +197,9 @@
                         } catch (e) { console.error('Error processing network message:', e); }
                     });
                 });
+
+                // Also update the UI when the torrent is fully ready.
+                swarm.on('ready', updateNetworkStatusUI);
             };
 
             const hasBeenSpent = (id) => {
