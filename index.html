@@ -52,8 +52,16 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     
-    <script src="bloomfilter.min.js"></script>
-    
+    <script>
+        /**
+         * Minified by jsDelivr using Terser v5.39.0.
+         * Original file: /npm/bloomfilter@0.0.21/bloomfilter.js
+         *
+         * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+         */
+        !function(t){t.BloomFilter=n;const e="undefined"!=typeof ArrayBuffer;function n(t,n){let o;"number"!=typeof t&&(o=t,t=32*o.length);const r=Math.ceil(t/32);if(t=32*r,this.m=t,this.k=n,e){const e=1<<Math.ceil(Math.log2(Math.ceil(Math.log2(t)/8))),i=1===e?Uint8Array:2===e?Uint16Array:Uint32Array,s=new ArrayBuffer(e*n),c=new Int32Array(r);if(o)for(let t=0;t<r;++t)c[t]=o[t];this.buckets=c,this._locations=new i(s)}else{const t=[];if(o)for(let e=0;e<r;++e)t[e]=o[e];else for(let e=0;e<r;++e)t[e]=0;this.buckets=t,this._locations=[]}}function o(t){return 16843009*((t=(858993459&(t-=t>>1&1431655765))+(t>>2&858993459))+(t>>4)&252645135)>>24}n.prototype.locations=function(t){const e=this.k,n=this.m,o=this._locations;let r,i;{const e=435,n=t.length;let o=0,s=0,c=0,h=0,l=8997,u=33826,f=40164,a=52210;for(let r=0;r<n;++r)l^=t.charCodeAt(r),o=l*e,s=u*e,c=f*e,h=a*e,c+=l<<8,h+=u<<8,s+=o>>>16,l=65535&o,c+=s>>>16,u=65535&s,a=h+(c>>>16)&65535,f=65535&c;r=a<<16|f,i=u<<16|l}r%=n,r<0&&(r+=n),i%=n,i<0&&(i+=n),o[0]=r;for(let t=1;t<e;++t)r=(r+i)%n,i=(i+t)%n,o[t]=r;return o},n.prototype.add=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t)o[e[t]>>5]|=1<<(31&e[t])},n.prototype.test=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t){const n=e[t];if(!(o[n>>5]&1<<(31&n)))return!1}return!0},n.prototype.size=function(){return-this.m*Math.log(1-this.countBits()/this.m)/this.k},n.prototype.countBits=function(){const t=this.buckets;let e=0;for(let n=0;n<t.length;++n)e+=o(t[n]);return e},n.prototype.error=function(){return Math.pow(this.countBits()/this.m,this.k)},n.union=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]|o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.intersection=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]&o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.withTargetError=function(t,e){const o=Math.ceil(-t*Math.log2(e)/Math.LN2);return new n(o,Math.ceil(Math.LN2*o/t))}}("undefined"!=typeof exports?exports:this);
+    </script>
+
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
@@ -85,7 +93,7 @@
                     const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0);
                     for(let i=0;i<Constants.NUM_QR_CODES;i++){
                         statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5));
-                        const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.spacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height);
+                        const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height);
                         if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}}
                     }
                     if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);}
@@ -164,7 +172,6 @@
             masterPublicKey: null,
             userStore: null,
             falconApi: null, 
-            spentBanknotesFilter: null // State for our Bloom Filter
         };
 
         const WalletLogic = {
@@ -181,6 +188,7 @@
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                 
+                // Update in-memory state immediately after creating
                 state.userStore = userStore;
                 state.wallet = wallet;
 
@@ -199,6 +207,7 @@
                     };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
 
+                    // Update in-memory state immediately after restoring
                     state.userStore = userStore;
                     state.wallet = wallet;
 
@@ -213,12 +222,15 @@
                 if (!userStoreJson) return null;
                 
                 try {
+                    // Always reload userStore from localStorage to ensure it's the latest version
                     const reloadedUserStore = JSON.parse(userStoreJson);
                     const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password);
                     
+                    // Update the global state with the validated data
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
                     
+                    // Initialize Witness Network on login
                     WitnessNetwork.init();
                     
                     return true;
@@ -338,23 +350,6 @@
                 return;
             }
 
-            // --- Bloom Filter Initialization ---
-            const savedFilterJSON = localStorage.getItem('spent_banknotes_filter');
-            if (savedFilterJSON) {
-                const savedFilter = JSON.parse(savedFilterJSON);
-                // The library's constructor can accept a typed array of buckets to restore state
-                state.spentBanknotesFilter = new BloomFilter(new Int32Array(savedFilter.buckets), savedFilter.k);
-                console.log("Bloom filter loaded from storage.");
-            } else {
-                // For ~1000 items with a 0.1% false positive rate, we need ~14400 bits and 10 hash functions.
-                // We use bits (m) and hash functions (k). m should be a multiple of 32.
-                const m = 32 * 450; // 14400 bits
-                const k = 10;
-                state.spentBanknotesFilter = new BloomFilter(m, k);
-                console.log("New Bloom filter created.");
-            }
-            // --- End of Bloom Filter Initialization ---
-
             const userStore = localStorage.getItem('aura_user_store');
             if (userStore) {
                 showView('login-view');
@@ -383,6 +378,7 @@
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
+                // Since the state is already updated in WalletLogic.createWallet, we just need to navigate
                 updateBalanceDisplay();
                 showView('wallet-view');
                 document.getElementById('create-password-input').value = '';
@@ -401,6 +397,7 @@
                 const success = await WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
                     document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.';
+                    // This is also a login, so update state and navigate
                     updateBalanceDisplay();
                     showView('wallet-view');
                 } else {
@@ -431,7 +428,6 @@
              document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
-                    localStorage.removeItem('spent_banknotes_filter'); // Also clear the bloom filter
                     localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
                     location.reload();
                 }
@@ -445,22 +441,8 @@
                 const amount = parseFloat(event.target.dataset.amount);
                 const serial = event.target.dataset.serial;
                 WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' });
-                
-                // Mark as spent in the authoritative source
+                // Mark the banknote as spent and flood the network with invalidation message
                 WitnessNetwork.markAsSpent(serial, 'banknote');
-                
-                // --- Add to Bloom Filter and Save ---
-                state.spentBanknotesFilter.add(serial);
-                const filterToSave = {
-                    // Convert typed array to a regular array for reliable JSON serialization
-                    buckets: Array.from(state.spentBanknotesFilter.buckets),
-                    k: state.spentBanknotesFilter.k,
-                    m: state.spentBanknotesFilter.m
-                };
-                localStorage.setItem('spent_banknotes_filter', JSON.stringify(filterToSave));
-                console.log(`Serial ${serial} added to Bloom filter.`);
-                // --- End of Bloom Filter Logic ---
-
                 updateBalanceDisplay();
                 alert(`$${amount.toFixed(2)} added successfully.`);
                 showView('wallet-view');
@@ -577,22 +559,14 @@
                     const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
 
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying banknote...</span>';
+                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
 
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
 
-                    // --- Bloom Filter Check ---
-                    // Fast, preliminary check. If it *might* be spent, proceed with the authoritative check.
-                    if (state.spentBanknotesFilter.test(banknoteData.serial)) {
-                        console.log("Bloom filter returned a potential match. Verifying with Witness Network...");
-                        if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) {
-                            throw new Error("This banknote has already been spent (verified by network).");
-                        }
-                        console.log("False positive from Bloom filter. Banknote is valid.");
+                    if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) {
+                        throw new Error("This banknote has already been spent.");
                     }
-                    // --- End of Bloom Filter Check ---
 
-                    statusEl.innerHTML = '<span class="success">Verifying signatures...</span>';
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
 
@@ -607,7 +581,7 @@
                     confirmSection.style.display = 'block';
 
                 } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+                    statusEl.textContent = `Error: ${err.message}`;
                 } finally {
                     event.target.value = '';
                 }
