@@ -52,7 +52,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     
-    <script src="bloomfilter.min.js"></script>
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
@@ -98,29 +97,16 @@
         // AURA PROTOCOL - WITNESS NETWORK (P2P)
         // ===================================================================================
         const WitnessNetwork = (() => {
-            let client, swarm, bf;
-            const LEDGER_KEY = 'aura_witness_ledger_bloom';
-            const BLOOM_FILTER_SIZE = 10000; // m
-            const HASH_FUNCTIONS_COUNT = 4; // k
+            let client, swarm;
+            const LEDGER_KEY = 'aura_witness_ledger';
             const SWARM_ID = 'WitnessNetwork-Aura'; // A fixed ID for the swarm
 
-            // Bloom Filter Operations
-            const getBloomFilter = () => {
-                const stored = localStorage.getItem(LEDGER_KEY);
-                if (stored) {
-                    const arr = JSON.parse(stored);
-                    return new BloomFilter(arr, HASH_FUNCTIONS_COUNT);
-                }
-                const bucketsArray = new Uint32Array(Math.ceil(BLOOM_FILTER_SIZE / 32));
-                return new BloomFilter(bucketsArray, HASH_FUNCTIONS_COUNT);
-            };
-
-            const saveBloomFilter = (filter) => {
-                localStorage.setItem(LEDGER_KEY, JSON.stringify(Array.from(filter.buckets)));
-            };
+            // Witness Network Operations
+            const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
+            const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
 
             // WebTorrent Network Logic
-            const initNetwork = (walletAddress) => {
+            const initNetwork = () => {
                 if (client) {
                     client.destroy();
                 }
@@ -131,81 +117,44 @@
 
                 swarm.on('wire', (wire) => {
                     console.log('New peer connected:', wire.peerId);
-                    // On new connection, request the latest bloom filter
-                    wire.send(JSON.stringify({ type: 'getBloomFilter' }));
-                    // Listen for incoming bloom filters from other peers
                     wire.on('data', (data) => {
                         try {
                             const message = JSON.parse(data.toString());
-                            if (message.type === 'bloomFilterUpdate' && message.buckets) {
-                                // Union the received filter with our own
-                                const receivedFilter = new BloomFilter(message.buckets, HASH_FUNCTIONS_COUNT);
-                                bf = BloomFilter.union(bf, receivedFilter);
-                                saveBloomFilter(bf);
-                                console.log('Received and merged bloom filter from a peer.');
-                            } else if (message.type === 'invalidation' && message.serial) {
+                            if (message.type === 'invalidation' && message.serial) {
                                 // Mark the received serial as spent
-                                bf.add(message.serial);
-                                saveBloomFilter(bf);
+                                markAsSpent(message.serial, 'network');
                                 console.log(`Witness Network: Invalidation message received for ${message.serial}`);
-                            } else if (message.type === 'getBloomFilter') {
-                                // A peer requested our filter, send it back
-                                wire.send(JSON.stringify({
-                                    type: 'bloomFilterUpdate',
-                                    buckets: Array.from(bf.buckets)
-                                }));
                             }
                         } catch (e) {
                             console.error('Error processing network message:', e);
                         }
                     });
                 });
-
-                // Periodically announce our own bloom filter
-                setInterval(() => {
-                    if (swarm && bf) {
-                        const message = JSON.stringify({
-                            type: 'bloomFilterUpdate',
-                            buckets: Array.from(bf.buckets),
-                        });
-                        for (const wire of swarm.wires) {
-                            wire.send(message);
-                        }
-                    }
-                }, 30000); // Send update every 30 seconds
             };
 
-            bf = getBloomFilter(); // Initialize the Bloom Filter on app start
-
-            return {
-                init: initNetwork,
-                hasBeenSpent: (id) => bf.test(id),
-                markAsSpent: (id) => {
-                    bf.add(id);
-                    saveBloomFilter(bf);
-                    console.log(`Witness Network: Marked ${id} as spent.`);
-                    if (swarm) {
-                        const invalidationMessage = JSON.stringify({
-                            type: 'invalidation',
-                            serial: id,
-                            timestamp: Date.now()
-                        });
-                        // Flood the message to all connected peers
-                        for (const wire of swarm.wires) {
-                            wire.send(invalidationMessage);
-                        }
-                    }
-                },
-                // For offline users, sync the entire filter on reconnect
-                syncOnReconnect: () => {
-                    if (client && swarm) {
-                        // Request full filter from peers
-                        for (const wire of swarm.wires) {
-                            wire.send(JSON.stringify({ type: 'getBloomFilter' }));
-                        }
-                    }
-                },
+            const hasBeenSpent = (id) => {
+                const ledger = getLedger();
+                return !!ledger[id];
             };
+
+            const markAsSpent = (id, type) => {
+                const ledger = getLedger();
+                ledger[id] = { type: type, timestamp: Date.now() };
+                saveLedger(ledger);
+                console.log(`Witness Network: Marked ${id} as spent.`);
+                if (swarm) {
+                    const invalidationMessage = JSON.stringify({
+                        type: 'invalidation',
+                        serial: id,
+                        timestamp: Date.now()
+                    });
+                    // Flood the message to all connected peers
+                    for (const wire of swarm.wires) {
+                        wire.send(invalidationMessage);
+                    }
+                }
+            };
+            return { init: initNetwork, hasBeenSpent, markAsSpent };
         })();
 
         // ===================================================================================
@@ -260,7 +209,7 @@
                     state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
                     
                     // Initialize Witness Network on login
-                    WitnessNetwork.init(state.wallet.address);
+                    WitnessNetwork.init();
                     
                     return true;
                 } catch (e) {
@@ -320,8 +269,7 @@
                 state.userStore.chain[senderTxIndex].status = 'completed';
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                 
-                // Mark the received serial as spent
-                WitnessNetwork.markAsSpent(receipt.linkedTxHash);
+                WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
                 
                 return true;
             }
@@ -474,7 +422,7 @@
                 const serial = event.target.dataset.serial;
                 WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' });
                 // Mark the banknote as spent and flood the network with invalidation message
-                WitnessNetwork.markAsSpent(serial);
+                WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 alert(`$${amount.toFixed(2)} added successfully.`);
                 showView('wallet-view');
