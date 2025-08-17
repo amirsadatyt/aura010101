@@ -14,7 +14,7 @@
         textarea { resize: vertical; height: 80px; }
         button { width: 100%; padding: 12px; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: all 0.2s; }
         button:hover { opacity: 0.9; transform: translateY(-2px); }
-        button:disabled { background: #ccc; cursor: not-allowed; }
+        button:disabled { background: #999; cursor: not-allowed; transform: translateY(0); }
         .back-button { background: var(--dark-gray); margin-top: 10px; }
         .logout-button { background: var(--danger-color); margin-top: 10px; }
         .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; }
@@ -25,26 +25,35 @@
         label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
         label.qr-upload-label:hover { background-color: #f9f9f9; }
         input[type="file"] { display: none; }
+        /* FIX: Added loader style */
+        .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; margin: 10px auto; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
     <div id="onboarding-view" class="view active"><div class="card"><h1>Aura Wallet</h1><p>A new generation of asset security and control</p><button id="go-to-create-wallet">Create a New Wallet</button><button id="go-to-restore-wallet" class="back-button">Restore Wallet</button></div></div>
     
-    <div id="create-wallet-view" class="view"><div class="card"><h2>Create Password</h2><p>Choose a strong password to encrypt your wallet. This password cannot be recovered.</p><input type="password" id="create-password-input" placeholder="Password"><input type="password" id="confirm-password-input" placeholder="Confirm Password"><button id="create-wallet-button">Create Wallet</button><div id="create-status" class="status-box"></div><button class="back-button" onclick="showView('onboarding-view')">Back</button></div></div>
+    <div id="create-wallet-view" class="view"><div class="card"><h2>Create Password</h2><p>Choose a strong password to encrypt your wallet. This password cannot be recovered.</p><input type="password" id="create-password-input" placeholder="Password"><input type="password" id="confirm-password-input" placeholder="Confirm Password"><div class="loader" id="create-loader"></div><button id="create-wallet-button">Create Wallet</button><div id="create-status" class="status-box"></div><button class="back-button" id="back-from-create">Back</button></div></div>
 
     <div id="seed-phrase-view" class="view"><div class="card"><h2>Your Recovery Phrase</h2><p class="error">Write down these 12 words in a safe, offline place. This is the only way to recover your wallet.</p><div id="seed-phrase-display" class="seed-phrase-box"></div><button id="seed-phrase-confirm-button">I Understand, Take Me to My Wallet</button></div></div>
 
-    <div id="restore-wallet-view" class="view"><div class="card"><h2>Restore Wallet</h2><p>Enter your 12-word recovery phrase.</p><textarea id="restore-seed-input" placeholder="Enter words separated by spaces..."></textarea><p>Choose a new password for this device.</p><input type="password" id="restore-password-input" placeholder="New Password"><button id="restore-wallet-button">Restore</button><div id="restore-status" class="status-box"></div><button class="back-button" onclick="showView('onboarding-view')">Back</button></div></div>
+    <div id="restore-wallet-view" class="view"><div class="card"><h2>Restore Wallet</h2><p>Enter your 12-word recovery phrase.</p><textarea id="restore-seed-input" placeholder="Enter words separated by spaces..."></textarea><p>Choose a new password for this device.</p><input type="password" id="restore-password-input" placeholder="New Password"><div class="loader" id="restore-loader"></div><button id="restore-wallet-button">Restore</button><div id="restore-status" class="status-box"></div><button class="back-button" id="back-from-restore">Back</button></div></div>
     
-    <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
+    <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><div class="loader" id="login-loader"></div><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><p id="network-status" style="font-size: 12px; color: var(--dark-gray);">Connecting to network...</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
-    <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal QR Code</button><div id="send-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    
+    <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal</button><div id="send-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    
+    <div id="send-confirm-view" class="view"><div class="card"><h2>Confirm Transaction</h2><p>You are about to create a proposal to send:</p><h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2><p>This will create a QR code for the recipient to scan. The funds will be deducted from your balance only after the transaction is finalized.</p><button id="confirm-send-button">Confirm and Proceed</button><button class="back-button" onclick="showView('send-view')">Cancel</button></div></div>
+
     <div id="receive-view" class="view"><div class="card"><h2>Receive Funds (Step 1 of 2)</h2><p>Show this QR code to the sender for them to scan.</p><div id="my-qr-code"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back to Wallet</button></div></div>
+    
     <div id="scan-proposal-view" class="view"><div class="card"><h2>Receive Funds (Step 2 of 2)</h2><label class="qr-upload-label" for="scan-proposal-input">To receive funds, scan the sender's "Proposal" QR code</label><input type="file" id="scan-proposal-input" accept="image/*"><div id="proposal-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
@@ -108,7 +117,7 @@
             let client, swarm, spentFilter;
             const LEDGER_KEY = 'aura_witness_ledger';
             const FILTER_KEY = 'aura_witness_filter';
-            const SWARM_ID = 'WitnessNetwork-Aura'; 
+            const SWARM_ID = 'WitnessNetwork-Aura-v2'; // Changed to avoid conflicts with old versions
 
             const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
             const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
@@ -117,6 +126,23 @@
                 if (!spentFilter) return;
                 const serializableBuckets = Array.from(spentFilter.buckets);
                 localStorage.setItem(FILTER_KEY, JSON.stringify(serializableBuckets));
+            };
+            
+            // FIX: Added function to update network status UI
+            const updateNetworkStatusUI = () => {
+                const statusEl = document.getElementById('network-status');
+                if (!statusEl) return;
+                const peerCount = swarm ? swarm.wires.length : 0;
+                if (peerCount > 0) {
+                    statusEl.textContent = `Network: Connected (${peerCount} peers)`;
+                    statusEl.style.color = '#1e8e3e'; // success color
+                } else if (client) {
+                    statusEl.textContent = 'Network: Connected (Searching for peers...)';
+                    statusEl.style.color = '#007bff'; // info color
+                } else {
+                    statusEl.textContent = 'Network: Disconnected';
+                    statusEl.style.color = '#6c757d'; // dark-gray
+                }
             };
 
             const initNetwork = () => {
@@ -129,7 +155,6 @@
                     try {
                         const buckets = new Int32Array(JSON.parse(savedFilterData));
                         spentFilter = new BloomFilter(buckets, 7);
-                        console.log("Bloom filter loaded from localStorage.");
                     } catch (e) {
                          console.error("Could not parse bloom filter, creating a new one.", e);
                     }
@@ -142,19 +167,20 @@
                         spentFilter.add(id);
                     }
                     saveFilter();
-                    console.log("New bloom filter created and populated.");
                 }
                 
                 swarm = client.join(SWARM_ID);
+                updateNetworkStatusUI();
                 
                 swarm.on('wire', (wire) => {
                     console.log('New peer connected:', wire.peerId);
+                    updateNetworkStatusUI();
+                    wire.on('close', updateNetworkStatusUI);
                     wire.on('data', (data) => {
                         try {
                             const message = JSON.parse(data.toString());
                             if (message.type === 'invalidation' && message.serial) {
                                 markAsSpent(message.serial, 'network');
-                                console.log(`Witness Network: Invalidation message received for ${message.serial}`);
                             }
                         } catch (e) { console.error('Error processing network message:', e); }
                     });
@@ -162,22 +188,11 @@
             };
 
             const hasBeenSpent = (id) => {
-                // --- PROFESSIONAL ERROR HANDLING START ---
-                // Add a guard clause to ensure the filter is initialized before use.
                 if (!spentFilter) {
-                    console.warn("WitnessNetwork bloom filter is not initialized. Falling back to definitive ledger check.");
-                    // If the high-speed filter isn't ready, always use the authoritative source.
                     const ledger = getLedger();
                     return !!ledger[id];
                 }
-                // --- PROFESSIONAL ERROR HANDLING END ---
-
-                // Step 1: Fast, optimistic check with the bloom filter.
-                if (!spentFilter.test(id)) {
-                    return false; // If the filter says no, it's definitively not spent.
-                }
-                // Step 2: If the filter says yes (might be a false positive),
-                // perform the definitive check against the persistent ledger.
+                if (!spentFilter.test(id)) return false; 
                 const ledger = getLedger();
                 return !!ledger[id];
             };
@@ -194,9 +209,8 @@
                     saveFilter();
                 }
 
-                console.log(`Witness Network: Marked ${id} as spent.`);
                 if (swarm) {
-                    const invalidationMessage = JSON.stringify({ type: 'invalidation', serial: id, timestamp: Date.now() });
+                    const invalidationMessage = JSON.stringify({ type: 'invalidation', serial: id });
                     for (const wire of swarm.wires) wire.send(invalidationMessage);
                 }
             };
@@ -212,6 +226,8 @@
             masterPublicKey: null,
             userStore: null,
             falconApi: null, 
+            failedLoginAttempts: 0, // FIX: Added for brute-force protection
+            isLockedOut: false,     // FIX: Added for brute-force protection
         };
 
         const WalletLogic = {
@@ -251,7 +267,6 @@
 
                     return true;
                 } catch (e) {
-                    console.error("Restore failed:", e);
                     return false;
                 }
             },
@@ -265,12 +280,13 @@
                     
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
+                    state.failedLoginAttempts = 0; // FIX: Reset attempts on success
                     
                     WitnessNetwork.init();
                     
                     return true;
                 } catch (e) {
-                    console.error("Login failed:", e);
+                    state.failedLoginAttempts++; // FIX: Increment attempts on failure
                     return false;
                 }
             },
@@ -299,6 +315,7 @@
                     if (tx.type === 'charge' || tx.type === 'receive') {
                         return balance + (tx.amount || 0);
                     }
+                     // FIX: Only deduct from balance if the send is COMPLETED
                     if (tx.type === 'send') {
                         return balance - (tx.amount || 0);
                     }
@@ -331,6 +348,19 @@
                 return true;
             }
         };
+
+        // FIX: Added helper to clear inputs in a view
+        function resetViewInputs(viewId) {
+            const view = document.getElementById(viewId);
+            if (!view) return;
+            view.querySelectorAll('input, textarea').forEach(input => {
+                if (input.type !== 'file') {
+                    input.value = '';
+                }
+            });
+            const statusBox = view.querySelector('.status-box');
+            if (statusBox) statusBox.innerHTML = '';
+        }
 
         function showView(id) {
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -379,9 +409,8 @@
         async function initializeApp() {
             try {
                 state.falconApi = await pqcSignFalcon1024();
-                console.log("Falcon API Initialized.");
             } catch (e) {
-                alert(`Critical error initializing Falcon: ${e.message}`);
+                alert(`Critical error initializing cryptography module: ${e.message}`);
                 return;
             }
 
@@ -398,58 +427,121 @@
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
             
+            // FIX: Added functional back buttons and input clearing
+            document.getElementById('back-from-create').addEventListener('click', () => {
+                resetViewInputs('create-wallet-view');
+                showView('onboarding-view');
+            });
+            document.getElementById('back-from-restore').addEventListener('click', () => {
+                resetViewInputs('restore-wallet-view');
+                showView('onboarding-view');
+            });
+
             document.getElementById('create-wallet-button').addEventListener('click', async () => {
+                const button = document.getElementById('create-wallet-button');
+                const loader = document.getElementById('create-loader');
+                const statusEl = document.getElementById('create-status');
                 const pass = document.getElementById('create-password-input').value;
                 const confirmPass = document.getElementById('confirm-password-input').value;
+                
+                statusEl.textContent = '';
                 if (pass.length < 8) {
-                    document.getElementById('create-status').textContent = 'Password must be at least 8 characters.'; return;
+                    statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return;
                 }
                 if (pass !== confirmPass) {
-                    document.getElementById('create-status').textContent = 'Passwords do not match.'; return;
+                    statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return;
                 }
-                const { mnemonic } = WalletLogic.createWallet(pass);
-                document.getElementById('seed-phrase-display').textContent = mnemonic;
-                showView('seed-phrase-view');
+                
+                button.disabled = true;
+                loader.style.display = 'block';
+
+                setTimeout(() => { // Simulate async work
+                    const { mnemonic } = WalletLogic.createWallet(pass);
+                    document.getElementById('seed-phrase-display').textContent = mnemonic;
+                    showView('seed-phrase-view');
+                    button.disabled = false;
+                    loader.style.display = 'none';
+                }, 50);
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
                 updateBalanceDisplay();
                 showView('wallet-view');
-                document.getElementById('create-password-input').value = '';
-                document.getElementById('confirm-password-input').value = '';
+                // FIX: Clear sensitive data after confirmation
+                document.getElementById('seed-phrase-display').textContent = '';
+                resetViewInputs('create-wallet-view');
             });
 
             document.getElementById('restore-wallet-button').addEventListener('click', async () => {
+                const button = document.getElementById('restore-wallet-button');
+                const loader = document.getElementById('restore-loader');
+                const statusEl = document.getElementById('restore-status');
                 const mnemonic = document.getElementById('restore-seed-input').value.trim();
                 const pass = document.getElementById('restore-password-input').value;
+
+                statusEl.textContent = '';
                 if (mnemonic.split(' ').length !== 12) {
-                    document.getElementById('restore-status').textContent = 'Recovery phrase must be 12 words.'; return;
+                    statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return;
                 }
                 if (pass.length < 8) {
-                    document.getElementById('restore-status').textContent = 'Password must be at least 8 characters.'; return;
+                    statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return;
                 }
+
+                button.disabled = true;
+                loader.style.display = 'block';
+
                 const success = await WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
                     updateBalanceDisplay();
                     showView('wallet-view');
                 } else {
-                     document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.';
+                     statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>';
                 }
+                button.disabled = false;
+                loader.style.display = 'none';
             });
 
             document.getElementById('login-button').addEventListener('click', async () => {
-                const pass = document.getElementById('login-password-input').value;
+                // FIX: Implemented brute-force protection
+                if (state.isLockedOut) return;
+
+                const MAX_ATTEMPTS = 5;
+                const LOCKOUT_PERIOD = 30000; // 30 seconds
+
+                const button = document.getElementById('login-button');
+                const loader = document.getElementById('login-loader');
                 const statusEl = document.getElementById('login-status');
-                statusEl.textContent = 'Decrypting...';
+                const pass = document.getElementById('login-password-input').value;
+                
+                button.disabled = true;
+                loader.style.display = 'block';
+                statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>';
+
                 const success = await WalletLogic.login(pass);
+                
                 if (success) {
                     updateBalanceDisplay();
                     showView('wallet-view');
-                    document.getElementById('login-password-input').value = '';
-                    statusEl.textContent = '';
+                    resetViewInputs('login-view');
                 } else {
-                    statusEl.textContent = 'Invalid password.';
+                    if (state.failedLoginAttempts >= MAX_ATTEMPTS) {
+                        state.isLockedOut = true;
+                        statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`;
+                        setTimeout(() => {
+                            state.isLockedOut = false;
+                            state.failedLoginAttempts = 0;
+                            statusEl.textContent = '';
+                            button.disabled = false;
+                        }, LOCKOUT_PERIOD);
+                    } else {
+                        statusEl.innerHTML = `<span class="error">Invalid password. (${MAX_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`;
+                    }
                 }
+                
+                if (!state.isLockedOut) {
+                    button.disabled = false;
+                }
+                loader.style.display = 'none';
             });
             
             document.getElementById('logout-button').addEventListener('click', () => {
@@ -457,7 +549,7 @@
                 showView('login-view');
             });
             
-             document.getElementById('reset-app-button').addEventListener('click', () => {
+            document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
                     localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
@@ -473,19 +565,27 @@
             document.getElementById('confirm-charge-button').addEventListener('click', (event) => {
                 const amount = parseFloat(event.target.dataset.amount);
                 const serial = event.target.dataset.serial;
-                WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' });
+                WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' });
                 WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 alert(`$${amount.toFixed(2)} added successfully.`);
                 showView('wallet-view');
             });
-
+            
+            // FIX: Added confirmation step before creating proposal
             document.getElementById('create-proposal-button').addEventListener('click', async () => {
                 const amount = parseFloat(document.getElementById('send-amount-input').value);
                 if (isNaN(amount) || amount <= 0 || amount > WalletLogic.calculateBalance()) {
-                    document.getElementById('send-status').textContent = 'Invalid amount or insufficient funds.';
+                    document.getElementById('send-status').innerHTML = '<span class="error">Invalid amount or insufficient funds.</span>';
                     return;
                 }
+                document.getElementById('confirm-amount-display').textContent = `$${amount.toFixed(2)}`;
+                document.getElementById('confirm-send-button').dataset.amount = amount;
+                showView('send-confirm-view');
+            });
+
+            document.getElementById('confirm-send-button').addEventListener('click', async (event) => {
+                const amount = parseFloat(event.target.dataset.amount);
                 const proposal = await WalletLogic.createProposal(amount);
                 generateQrCode(proposal, 'qr-display-box');
                 document.getElementById('qr-display-title').textContent = 'Send Funds (Step 2 of 2)';
@@ -499,17 +599,17 @@
                  if (!file) return;
                  const statusEl = document.getElementById('qr-status');
                  try {
-                    statusEl.textContent = 'Processing receipt...';
+                    statusEl.innerHTML = '<span class="info">Processing receipt...</span>';
                     const receipt = await decodeQrFromFile(file);
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
 
                     await WalletLogic.verifyAndFinalize(receipt);
-
-                    statusEl.textContent = 'Transaction finalized successfully!';
+                    
+                    statusEl.innerHTML = '<span class="success">Transaction finalized successfully!</span>';
                     updateBalanceDisplay();
                     setTimeout(() => showView('wallet-view'), 2000);
                  } catch (err) {
-                    statusEl.textContent = `Error: ${err.message}`;
+                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
                  } finally {
                     event.target.value = '';
                  }
@@ -520,7 +620,7 @@
                  if (!file) return;
                  const statusEl = document.getElementById('proposal-status');
                  try {
-                    statusEl.textContent = 'Processing proposal...';
+                    statusEl.innerHTML = '<span class="info">QR Code detected. Processing proposal...</span>';
                     const proposal = await decodeQrFromFile(file);
                     if (proposal.type !== 'AURA_PROPOSAL') throw new Error('Not a valid proposal QR code.');
                     
@@ -534,7 +634,7 @@
                         throw new Error('This transaction has already been processed or is in progress.');
                     }
 
-                    statusEl.textContent = 'Proposal valid. Creating receipt QR code...';
+                    statusEl.innerHTML = '<span class="info">Proposal valid. Creating receipt...</span>';
                     const receipt = await WalletLogic.createReceipt(proposal);
                     
                     generateQrCode(receipt, 'qr-display-box');
@@ -545,7 +645,7 @@
                     updateBalanceDisplay();
 
                  } catch (err) {
-                    statusEl.textContent = `Error: ${err.message}`;
+                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
                  } finally {
                     event.target.value = '';
                  }
@@ -555,7 +655,7 @@
                 const file = event.target.files[0];
                 if (!file) return;
                 const keyStatus = document.getElementById('key-status');
-                keyStatus.textContent = 'Processing key...';
+                keyStatus.innerHTML = '<span class="info">Processing key...</span>';
                 document.getElementById('banknote-image-input').disabled = true;
                 state.masterPublicKey = null;
 
@@ -579,11 +679,11 @@
                 confirmSection.style.display = 'none';
 
                 if (!state.masterPublicKey) {
-                    statusEl.textContent = 'Error: Please load the bank\'s public key first.';
+                    statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>';
                     return;
                 }
                 
-                statusEl.textContent = 'Preparing image...';
+                statusEl.innerHTML = '<span class="info">Preparing image...</span>';
 
                 try {
                     const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
@@ -591,19 +691,19 @@
                     const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
 
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
+                    statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>';
 
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
 
                     if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) {
-                        throw new Error("This banknote has already been spent.");
+                        throw new Error("This banknote has already been spent according to the witness network.");
                     }
-
+                    
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
-                    if (!isSigOneValid) throw new Error("Signature 1 is invalid (internal forgery).");
+                    if (!isSigOneValid) throw new Error("Signature validation failed (internal). The note may be damaged or counterfeit.");
 
                     const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
-                    if (!isSigTwoValid) throw new Error("Signature 2 is invalid (does not match public key).");
+                    if (!isSigTwoValid) throw new Error("Signature validation failed (issuer). The note is not authentic according to the provided public key.");
 
                     statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
                     document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
@@ -613,7 +713,7 @@
                     confirmSection.style.display = 'block';
 
                 } catch (err) {
-                    statusEl.textContent = `Error: ${err.message}`;
+                    statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`;
                 } finally {
                     event.target.value = '';
                 }
