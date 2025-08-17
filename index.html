@@ -25,8 +25,6 @@
         label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
         label.qr-upload-label:hover { background-color: #f9f9f9; }
         input[type="file"] { display: none; }
-        .network-status { font-size: 12px; color: var(--dark-gray); margin-bottom: 15px; }
-        .network-status.connected { color: #1e8e3e; }
     </style>
 </head>
 <body>
@@ -41,7 +39,7 @@
     
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><div id="network-status" class="network-status">Network: Disconnected</div><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
     <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal QR Code</button><div id="send-status" class="status-box"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
@@ -53,12 +51,13 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-    <script src="./webtorrent.min.js"></script>
-    <script src="./bloomfilter.min.js"></script>
+    
+    <script src="bloomfilter.min.js"></script>
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+        import WebTorrent from './webtorrent.min.js';
 
         // ===================================================================================
         // CORE BANKNOTE VALIDATION LOGIC
@@ -96,6 +95,120 @@
         })();
 
         // ===================================================================================
+        // AURA PROTOCOL - WITNESS NETWORK (P2P)
+        // ===================================================================================
+        const WitnessNetwork = (() => {
+            let client, swarm, bf;
+            const LEDGER_KEY = 'aura_witness_ledger_bloom';
+            const BLOOM_FILTER_SIZE = 10000; // m
+            const HASH_FUNCTIONS_COUNT = 4; // k
+            const SWARM_ID = 'WitnessNetwork-Aura'; // A fixed ID for the swarm
+
+            // Bloom Filter Operations
+            const getBloomFilter = () => {
+                const stored = localStorage.getItem(LEDGER_KEY);
+                if (stored) {
+                    const arr = JSON.parse(stored);
+                    return new BloomFilter(arr, HASH_FUNCTIONS_COUNT);
+                }
+                const bucketsArray = new Uint32Array(Math.ceil(BLOOM_FILTER_SIZE / 32));
+                return new BloomFilter(bucketsArray, HASH_FUNCTIONS_COUNT);
+            };
+
+            const saveBloomFilter = (filter) => {
+                localStorage.setItem(LEDGER_KEY, JSON.stringify(Array.from(filter.buckets)));
+            };
+
+            // WebTorrent Network Logic
+            const initNetwork = (walletAddress) => {
+                if (client) {
+                    client.destroy();
+                }
+                client = new WebTorrent();
+                client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
+
+                swarm = client.join(SWARM_ID);
+
+                swarm.on('wire', (wire) => {
+                    console.log('New peer connected:', wire.peerId);
+                    // On new connection, request the latest bloom filter
+                    wire.send(JSON.stringify({ type: 'getBloomFilter' }));
+                    // Listen for incoming bloom filters from other peers
+                    wire.on('data', (data) => {
+                        try {
+                            const message = JSON.parse(data.toString());
+                            if (message.type === 'bloomFilterUpdate' && message.buckets) {
+                                // Union the received filter with our own
+                                const receivedFilter = new BloomFilter(message.buckets, HASH_FUNCTIONS_COUNT);
+                                bf = BloomFilter.union(bf, receivedFilter);
+                                saveBloomFilter(bf);
+                                console.log('Received and merged bloom filter from a peer.');
+                            } else if (message.type === 'invalidation' && message.serial) {
+                                // Mark the received serial as spent
+                                bf.add(message.serial);
+                                saveBloomFilter(bf);
+                                console.log(`Witness Network: Invalidation message received for ${message.serial}`);
+                            } else if (message.type === 'getBloomFilter') {
+                                // A peer requested our filter, send it back
+                                wire.send(JSON.stringify({
+                                    type: 'bloomFilterUpdate',
+                                    buckets: Array.from(bf.buckets)
+                                }));
+                            }
+                        } catch (e) {
+                            console.error('Error processing network message:', e);
+                        }
+                    });
+                });
+
+                // Periodically announce our own bloom filter
+                setInterval(() => {
+                    if (swarm && bf) {
+                        const message = JSON.stringify({
+                            type: 'bloomFilterUpdate',
+                            buckets: Array.from(bf.buckets),
+                        });
+                        for (const wire of swarm.wires) {
+                            wire.send(message);
+                        }
+                    }
+                }, 30000); // Send update every 30 seconds
+            };
+
+            bf = getBloomFilter(); // Initialize the Bloom Filter on app start
+
+            return {
+                init: initNetwork,
+                hasBeenSpent: (id) => bf.test(id),
+                markAsSpent: (id) => {
+                    bf.add(id);
+                    saveBloomFilter(bf);
+                    console.log(`Witness Network: Marked ${id} as spent.`);
+                    if (swarm) {
+                        const invalidationMessage = JSON.stringify({
+                            type: 'invalidation',
+                            serial: id,
+                            timestamp: Date.now()
+                        });
+                        // Flood the message to all connected peers
+                        for (const wire of swarm.wires) {
+                            wire.send(invalidationMessage);
+                        }
+                    }
+                },
+                // For offline users, sync the entire filter on reconnect
+                syncOnReconnect: () => {
+                    if (client && swarm) {
+                        // Request full filter from peers
+                        for (const wire of swarm.wires) {
+                            wire.send(JSON.stringify({ type: 'getBloomFilter' }));
+                        }
+                    }
+                },
+            };
+        })();
+
+        // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
         // ===================================================================================
         
@@ -103,88 +216,7 @@
             wallet: null,
             masterPublicKey: null,
             userStore: null,
-            falconApi: null,
-            wtClient: null,
-        };
-
-        const WitnessNetwork = {
-            LEDGER_KEY: 'aura_witness_ledger',
-            BLOOM_FILTER_SIZE: 1000000,
-            BLOOM_FILTER_HASHES: 10,
-            ledger: null,
-            isOnline: false,
-
-            initialize: (userAddress) => {
-                let savedBloomFilter = localStorage.getItem(WitnessNetwork.LEDGER_KEY);
-                if (savedBloomFilter) {
-                    WitnessNetwork.ledger = new BloomFilter(JSON.parse(savedBloomFilter), WitnessNetwork.BLOOM_FILTER_HASHES);
-                } else {
-                    WitnessNetwork.ledger = new BloomFilter(WitnessNetwork.BLOOM_FILTER_SIZE, WitnessNetwork.BLOOM_FILTER_HASHES);
-                }
-
-                state.wtClient = new WebTorrent();
-                const torrentId = `aura-witness-network-${userAddress}`;
-                state.wtClient.add(torrentId, (torrent) => {
-                    WitnessNetwork.isOnline = true;
-                    console.log('Witness Network connected to swarm:', torrent.infoHash);
-                    document.getElementById('network-status').textContent = `Network: Connected to ${torrent.numPeers} peers`;
-                    document.getElementById('network-status').classList.add('connected');
-                    
-                    torrent.on('wire', (wire) => {
-                        wire.on('data', (data) => {
-                            try {
-                                const message = JSON.parse(data.toString());
-                                if (message.type === 'invalid_message' && message.id) {
-                                    WitnessNetwork.markAsSpent(message.id, 'network');
-                                }
-                            } catch (e) {
-                                console.error('Failed to parse incoming message:', e);
-                            }
-                        });
-                    });
-
-                    torrent.on('peer', () => {
-                        document.getElementById('network-status').textContent = `Network: Connected to ${torrent.numPeers} peers`;
-                    });
-
-                    torrent.on('noPeers', () => {
-                        document.getElementById('network-status').textContent = `Network: No peers found. Trying again...`;
-                        document.getElementById('network-status').classList.remove('connected');
-                    });
-                });
-            },
-            
-            destroy: () => {
-                if (state.wtClient) {
-                    state.wtClient.destroy(() => {
-                        console.log('WebTorrent client destroyed.');
-                    });
-                }
-                WitnessNetwork.isOnline = false;
-                document.getElementById('network-status').textContent = 'Network: Disconnected';
-                document.getElementById('network-status').classList.remove('connected');
-                
-            },
-            
-            hasBeenSpent: (id) => {
-                return WitnessNetwork.ledger.test(id);
-            },
-            
-            markAsSpent: (id, type) => {
-                WitnessNetwork.ledger.add(id);
-                localStorage.setItem(WitnessNetwork.LEDGER_KEY, JSON.stringify(WitnessNetwork.ledger.buckets));
-                console.log(`Witness Network: Marked ${id} as spent. Local ledger updated.`);
-
-                if (WitnessNetwork.isOnline) {
-                    const message = JSON.stringify({ type: 'invalid_message', id: id });
-                    state.wtClient.torrents.forEach(torrent => {
-                        torrent.wires.forEach(wire => {
-                            wire.send(message);
-                        });
-                    });
-                    console.log('Witness Network: Broadcasted invalidation message.');
-                }
-            }
+            falconApi: null, 
         };
 
         const WalletLogic = {
@@ -226,7 +258,10 @@
                 try {
                     state.userStore = JSON.parse(userStoreJson);
                     state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
-                    WitnessNetwork.initialize(state.wallet.address);
+                    
+                    // Initialize Witness Network on login
+                    WitnessNetwork.init(state.wallet.address);
+                    
                     return true;
                 } catch (e) {
                     console.error("Login failed:", e);
@@ -236,7 +271,6 @@
             logout: () => {
                 state.wallet = null;
                 state.userStore = null;
-                WitnessNetwork.destroy();
             },
             getLastTransaction: () => {
                 return state.userStore.chain[state.userStore.chain.length - 1];
@@ -285,6 +319,10 @@
                 const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
                 state.userStore.chain[senderTxIndex].status = 'completed';
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
+                
+                // Mark the received serial as spent
+                WitnessNetwork.markAsSpent(receipt.linkedTxHash);
+                
                 return true;
             }
         };
@@ -435,7 +473,8 @@
                 const amount = parseFloat(event.target.dataset.amount);
                 const serial = event.target.dataset.serial;
                 WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' });
-                WitnessNetwork.markAsSpent(serial, 'banknote');
+                // Mark the banknote as spent and flood the network with invalidation message
+                WitnessNetwork.markAsSpent(serial);
                 updateBalanceDisplay();
                 alert(`$${amount.toFixed(2)} added successfully.`);
                 showView('wallet-view');
@@ -465,7 +504,6 @@
                     if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
 
                     await WalletLogic.verifyAndFinalize(receipt);
-                    WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
 
                     statusEl.textContent = 'Transaction finalized successfully!';
                     updateBalanceDisplay();
