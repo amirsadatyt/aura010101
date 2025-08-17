@@ -107,33 +107,27 @@
         const WitnessNetwork = (() => {
             let client, swarm, spentFilter;
             const LEDGER_KEY = 'aura_witness_ledger';
-            const FILTER_KEY = 'aura_witness_filter'; // Key for storing the bloom filter
+            const FILTER_KEY = 'aura_witness_filter';
             const SWARM_ID = 'WitnessNetwork-Aura'; 
 
             const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
             const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
 
-            // BLOOM FILTER IMPLEMENTATION START
             const saveFilter = () => {
                 if (!spentFilter) return;
-                // Convert TypedArray to a regular array for JSON serialization
                 const serializableBuckets = Array.from(spentFilter.buckets);
                 localStorage.setItem(FILTER_KEY, JSON.stringify(serializableBuckets));
             };
-            // BLOOM FILTER IMPLEMENTATION END
 
             const initNetwork = () => {
                 if (client) client.destroy();
                 client = new WebTorrent();
                 client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
 
-                // BLOOM FILTER IMPLEMENTATION START
                 const savedFilterData = localStorage.getItem(FILTER_KEY);
                 if (savedFilterData) {
                     try {
                         const buckets = new Int32Array(JSON.parse(savedFilterData));
-                        // Recreate the filter. The 'k' value must be the same as when created.
-                        // We will use a fixed k=7, which is a good balance for the target error rate.
                         spentFilter = new BloomFilter(buckets, 7);
                         console.log("Bloom filter loaded from localStorage.");
                     } catch (e) {
@@ -142,10 +136,7 @@
                 }
                 
                 if (!spentFilter) {
-                    // Create a new filter if one doesn't exist.
-                    // Tuned for ~1000 items with a <1% false positive rate.
                     spentFilter = BloomFilter.withTargetError(1000, 0.01);
-                    // Populate it with any existing ledger data to ensure consistency.
                     const ledger = getLedger();
                     for (const id in ledger) {
                         spentFilter.add(id);
@@ -153,7 +144,6 @@
                     saveFilter();
                     console.log("New bloom filter created and populated.");
                 }
-                // BLOOM FILTER IMPLEMENTATION END
                 
                 swarm = client.join(SWARM_ID);
                 
@@ -172,7 +162,16 @@
             };
 
             const hasBeenSpent = (id) => {
-                // BLOOM FILTER IMPLEMENTATION START
+                // --- PROFESSIONAL ERROR HANDLING START ---
+                // Add a guard clause to ensure the filter is initialized before use.
+                if (!spentFilter) {
+                    console.warn("WitnessNetwork bloom filter is not initialized. Falling back to definitive ledger check.");
+                    // If the high-speed filter isn't ready, always use the authoritative source.
+                    const ledger = getLedger();
+                    return !!ledger[id];
+                }
+                // --- PROFESSIONAL ERROR HANDLING END ---
+
                 // Step 1: Fast, optimistic check with the bloom filter.
                 if (!spentFilter.test(id)) {
                     return false; // If the filter says no, it's definitively not spent.
@@ -181,20 +180,19 @@
                 // perform the definitive check against the persistent ledger.
                 const ledger = getLedger();
                 return !!ledger[id];
-                // BLOOM FILTER IMPLEMENTATION END
             };
 
             const markAsSpent = (id, type) => {
                 const ledger = getLedger();
-                if (ledger[id]) return; // Avoid re-processing if already in the definitive ledger
+                if (ledger[id]) return;
 
                 ledger[id] = { type: type, timestamp: Date.now() };
                 saveLedger(ledger);
 
-                // BLOOM FILTER IMPLEMENTATION START
-                spentFilter.add(id);
-                saveFilter(); // Persist the updated filter state
-                // BLOOM FILTER IMPLEMENTATION END
+                if (spentFilter) {
+                    spentFilter.add(id);
+                    saveFilter();
+                }
 
                 console.log(`Witness Network: Marked ${id} as spent.`);
                 if (swarm) {
@@ -463,7 +461,7 @@
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
                     localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
-                    localStorage.removeItem(WitnessNetwork.FILTER_KEY); // Also remove the bloom filter
+                    localStorage.removeItem(WitnessNetwork.FILTER_KEY);
                     location.reload();
                 }
             });
