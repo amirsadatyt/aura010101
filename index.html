@@ -25,7 +25,6 @@
         label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
         label.qr-upload-label:hover { background-color: #f9f9f9; }
         input[type="file"] { display: none; }
-        /* FIX: Added loader style */
         .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; margin: 10px auto; display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
@@ -117,7 +116,28 @@
             let client, swarm, spentFilter;
             const LEDGER_KEY = 'aura_witness_ledger';
             const FILTER_KEY = 'aura_witness_filter';
-            const SWARM_ID = 'WitnessNetwork-Aura-v2'; // Changed to avoid conflicts with old versions
+            const SWARM_ID = 'WitnessNetwork-Aura-v2';
+
+            // GENIUS FIX: Define a robust tracker configuration for WebTorrent.
+            // These public trackers help peers find each other much more reliably.
+            const torrentConfig = {
+                tracker: {
+                    announce: [
+                        'wss://tracker.webtorrent.dev',
+                        'wss://tracker.openwebtorrent.com',
+                        'wss://tracker.files.fm:7073/announce',
+                        'wss://tracker.btorrent.xyz'
+                    ],
+                    // The rtcConfig helps with NAT traversal, improving peer-to-peer connections
+                    // for users behind firewalls.
+                    rtcConfig: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:global.stun.twilio.com:3478' }
+                        ]
+                    }
+                }
+            };
 
             const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
             const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
@@ -128,15 +148,15 @@
                 localStorage.setItem(FILTER_KEY, JSON.stringify(serializableBuckets));
             };
             
-            // FIX: Added function to update network status UI
             const updateNetworkStatusUI = () => {
                 const statusEl = document.getElementById('network-status');
                 if (!statusEl) return;
-                const peerCount = swarm ? swarm.wires.length : 0;
+                // A wire is a connection to a peer.
+                const peerCount = swarm ? swarm.wires.filter(wire => !wire.destroyed).length : 0;
                 if (peerCount > 0) {
                     statusEl.textContent = `Network: Connected (${peerCount} peers)`;
                     statusEl.style.color = '#1e8e3e'; // success color
-                } else if (client) {
+                } else if (client && swarm) {
                     statusEl.textContent = 'Network: Connected (Searching for peers...)';
                     statusEl.style.color = '#007bff'; // info color
                 } else {
@@ -147,10 +167,21 @@
 
             const initNetwork = () => {
                 if (client) {
-                    client.destroy();
+                    // Destroy any existing client to ensure a clean start.
+                    client.destroy(() => { console.log('Previous WebTorrent client destroyed.'); });
                 }
-                client = new WebTorrent();
-                client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
+                
+                // GENIUS FIX: Initialize the client with our robust tracker configuration.
+                client = new WebTorrent(torrentConfig);
+                client.on('error', (e) => {
+                    console.error('WebTorrent Client Error:', e.message);
+                    // Update UI to show there's a connection issue.
+                    const statusEl = document.getElementById('network-status');
+                    if(statusEl) {
+                        statusEl.textContent = 'Network: Connection Error';
+                        statusEl.style.color = '#d9534f'; // danger color
+                    }
+                });
 
                 const savedFilterData = localStorage.getItem(FILTER_KEY);
                 if (savedFilterData) {
@@ -171,10 +202,13 @@
                     saveFilter();
                 }
                 
-                // FIX: Use client.seed() with a common identifier to create/join the P2P network.
-                // This creates a "torrent" that other peers can find.
-                const swarmIdentifier = SWARM_ID;
-                swarm = client.seed(new TextEncoder().encode(swarmIdentifier), { name: SWARM_ID });
+                // Use a common identifier (our SWARM_ID) to create or join the P2P network.
+                // The content seeded is trivial; its hash is what identifies the swarm.
+                const swarmIdentifier = new TextEncoder().encode(SWARM_ID);
+                const torrentOptions = { name: SWARM_ID };
+                swarm = client.seed(swarmIdentifier, torrentOptions, (torrent) => {
+                    console.log('Successfully joined the witness network swarm. Info hash:', torrent.infoHash);
+                });
 
                 // Update UI immediately and whenever peers connect/disconnect.
                 updateNetworkStatusUI();
@@ -188,6 +222,7 @@
                         updateNetworkStatusUI();
                     });
 
+                    // Listen for invalidation messages from other peers.
                     wire.on('data', (data) => {
                         try {
                             const message = JSON.parse(data.toString());
@@ -200,6 +235,8 @@
 
                 // Also update the UI when the torrent is fully ready.
                 swarm.on('ready', updateNetworkStatusUI);
+                swarm.on('warning', (err) => { console.warn('WebTorrent Swarm Warning:', err); updateNetworkStatusUI(); });
+                swarm.on('error', (err) => { console.error('WebTorrent Swarm Error:', err); updateNetworkStatusUI(); });
             };
 
             const hasBeenSpent = (id) => {
@@ -207,14 +244,16 @@
                     const ledger = getLedger();
                     return !!ledger[id];
                 }
+                // Check the fast bloom filter first.
                 if (!spentFilter.test(id)) return false; 
+                // If the filter has a potential match, double-check with the definitive ledger.
                 const ledger = getLedger();
                 return !!ledger[id];
             };
 
             const markAsSpent = (id, type) => {
                 const ledger = getLedger();
-                if (ledger[id]) return;
+                if (ledger[id]) return; // Already marked.
 
                 ledger[id] = { type: type, timestamp: Date.now() };
                 saveLedger(ledger);
@@ -224,9 +263,12 @@
                     saveFilter();
                 }
 
-                if (swarm) {
+                // Broadcast the invalidation to all connected peers.
+                if (swarm && swarm.wires.length > 0) {
                     const invalidationMessage = JSON.stringify({ type: 'invalidation', serial: id });
-                    for (const wire of swarm.wires) wire.send(invalidationMessage);
+                    for (const wire of swarm.wires) {
+                        if (!wire.destroyed) wire.send(invalidationMessage);
+                    }
                 }
             };
             return { init: initNetwork, hasBeenSpent, markAsSpent, LEDGER_KEY, FILTER_KEY };
@@ -241,8 +283,8 @@
             masterPublicKey: null,
             userStore: null,
             falconApi: null, 
-            failedLoginAttempts: 0, // FIX: Added for brute-force protection
-            isLockedOut: false,     // FIX: Added for brute-force protection
+            failedLoginAttempts: 0,
+            isLockedOut: false,     
         };
 
         const WalletLogic = {
@@ -295,13 +337,13 @@
                     
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
-                    state.failedLoginAttempts = 0; // FIX: Reset attempts on success
+                    state.failedLoginAttempts = 0;
                     
                     WitnessNetwork.init();
                     
                     return true;
                 } catch (e) {
-                    state.failedLoginAttempts++; // FIX: Increment attempts on failure
+                    state.failedLoginAttempts++;
                     return false;
                 }
             },
@@ -330,7 +372,6 @@
                     if (tx.type === 'charge' || tx.type === 'receive') {
                         return balance + (tx.amount || 0);
                     }
-                     // FIX: Only deduct from balance if the send is COMPLETED
                     if (tx.type === 'send') {
                         return balance - (tx.amount || 0);
                     }
@@ -364,7 +405,6 @@
             }
         };
 
-        // FIX: Added helper to clear inputs in a view
         function resetViewInputs(viewId) {
             const view = document.getElementById(viewId);
             if (!view) return;
@@ -442,7 +482,6 @@
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
             
-            // FIX: Added functional back buttons and input clearing
             document.getElementById('back-from-create').addEventListener('click', () => {
                 resetViewInputs('create-wallet-view');
                 showView('onboarding-view');
@@ -482,7 +521,6 @@
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
                 updateBalanceDisplay();
                 showView('wallet-view');
-                // FIX: Clear sensitive data after confirmation
                 document.getElementById('seed-phrase-display').textContent = '';
                 resetViewInputs('create-wallet-view');
             });
@@ -517,7 +555,6 @@
             });
 
             document.getElementById('login-button').addEventListener('click', async () => {
-                // FIX: Implemented brute-force protection
                 if (state.isLockedOut) return;
 
                 const MAX_ATTEMPTS = 5;
@@ -587,7 +624,6 @@
                 showView('wallet-view');
             });
             
-            // FIX: Added confirmation step before creating proposal
             document.getElementById('create-proposal-button').addEventListener('click', async () => {
                 const amount = parseFloat(document.getElementById('send-amount-input').value);
                 if (isNaN(amount) || amount <= 0 || amount > WalletLogic.calculateBalance()) {
@@ -645,97 +681,4 @@
                         throw new Error("Sender's signature is invalid.");
                     }
                     
-                    if (WitnessNetwork.hasBeenSpent(proposal.txHash)) {
-                        throw new Error('This transaction has already been processed or is in progress.');
-                    }
-
-                    statusEl.innerHTML = '<span class="info">Proposal valid. Creating receipt...</span>';
-                    const receipt = await WalletLogic.createReceipt(proposal);
-                    
-                    generateQrCode(receipt, 'qr-display-box');
-                    document.getElementById('qr-display-title').textContent = 'Present Receipt to Sender';
-                    document.getElementById('qr-display-instruction').textContent = 'Show this code to the sender to scan and finalize the transaction.';
-                    document.getElementById('scan-receipt-label').style.display = 'none';
-                    showView('qr-display-view');
-                    updateBalanceDisplay();
-
-                 } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-                 } finally {
-                    event.target.value = '';
-                 }
-            });
-            
-            document.getElementById('public-key-input').addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                const keyStatus = document.getElementById('key-status');
-                keyStatus.innerHTML = '<span class="info">Processing key...</span>';
-                document.getElementById('banknote-image-input').disabled = true;
-                state.masterPublicKey = null;
-
-                try {
-                    const keyData = JSON.parse(await file.text());
-                    if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'.");
-                    state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey);
-                    keyStatus.innerHTML = '<span class="success">Public key loaded successfully.</span>';
-                    document.getElementById('banknote-image-input').disabled = false;
-                } catch (err) {
-                    keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-                }
-            });
-
-            document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                const statusEl = document.getElementById('validation-status');
-                const confirmSection = document.getElementById('charge-confirmation');
-                confirmSection.style.display = 'none';
-
-                if (!state.masterPublicKey) {
-                    statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>';
-                    return;
-                }
-                
-                statusEl.innerHTML = '<span class="info">Preparing image...</span>';
-
-                try {
-                    const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
-                    const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
-                    const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
-
-                    const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>';
-
-                    const banknoteData = CoreLogic.Banknote.parsePayload(payload);
-
-                    if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) {
-                        throw new Error("This banknote has already been spent according to the witness network.");
-                    }
-                    
-                    const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
-                    if (!isSigOneValid) throw new Error("Signature validation failed (internal). The note may be damaged or counterfeit.");
-
-                    const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
-                    if (!isSigTwoValid) throw new Error("Signature validation failed (issuer). The note is not authentic according to the provided public key.");
-
-                    statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
-                    document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
-                    const confirmBtn = document.getElementById('confirm-charge-button');
-                    confirmBtn.dataset.amount = banknoteData.amount;
-                    confirmBtn.dataset.serial = banknoteData.serial;
-                    confirmSection.style.display = 'block';
-
-                } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`;
-                } finally {
-                    event.target.value = '';
-                }
-            });
-        }
-
-        document.addEventListener('DOMContentLoaded', initializeApp);
-    </script>
-</body>
-</html>
+                    if (WitnessNetwork.hasBeenSpent(proposal.txH
