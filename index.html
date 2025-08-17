@@ -61,10 +61,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     
     <script>
-        /**
-         * Minified by jsDelivr using Terser v5.39.0.
-         * Original file: /npm/bloomfilter@0.0.21/bloomfilter.js
-         */
+        // BloomFilter library (unchanged)
         !function(t){t.BloomFilter=n;const e="undefined"!=typeof ArrayBuffer;function n(t,n){let o;"number"!=typeof t&&(o=t,t=32*o.length);const r=Math.ceil(t/32);if(t=32*r,this.m=t,this.k=n,e){const e=1<<Math.ceil(Math.log2(Math.ceil(Math.log2(t)/8))),i=1===e?Uint8Array:2===e?Uint16Array:Uint32Array,s=new ArrayBuffer(e*n),c=new Int32Array(r);if(o)for(let t=0;t<r;++t)c[t]=o[t];this.buckets=c,this._locations=new i(s)}else{const t=[];if(o)for(let e=0;e<r;++e)t[e]=o[e];else for(let e=0;e<r;++e)t[e]=0;this.buckets=t,this._locations=[]}}function o(t){return 16843009*((t=(858993459&(t-=t>>1&1431655765))+(t>>2&858993459))+(t>>4)&252645135)>>24}n.prototype.locations=function(t){const e=this.k,n=this.m,o=this._locations;let r,i;{const e=435,n=t.length;let o=0,s=0,c=0,h=0,l=8997,u=33826,f=40164,a=52210;for(let r=0;r<n;++r)l^=t.charCodeAt(r),o=l*e,s=u*e,c=f*e,h=a*e,c+=l<<8,h+=u<<8,s+=o>>>16,l=65535&o,c+=s>>>16,u=65535&s,a=h+(c>>>16)&65535,f=65535&c;r=a<<16|f,i=u<<16|l}r%=n,r<0&&(r+=n),i%=n,i<0&&(i+=n),o[0]=r;for(let t=1;t<e;++t)r=(r+i)%n,i=(i+t)%n,o[t]=r;return o},n.prototype.add=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t)o[e[t]>>5]|=1<<(31&e[t])},n.prototype.test=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t){const n=e[t];if(!(o[n>>5]&1<<(31&n)))return!1}return!0},n.prototype.size=function(){return-this.m*Math.log(1-this.countBits()/this.m)/this.k},n.prototype.countBits=function(){const t=this.buckets;let e=0;for(let n=0;n<t.length;++n)e+=o(t[n]);return e},n.prototype.error=function(){return Math.pow(this.countBits()/this.m,this.k)},n.union=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]|o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.intersection=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]&o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.withTargetError=function(t,e){const o=Math.ceil(-t*Math.log2(e)/Math.LN2);return new n(o,Math.ceil(Math.LN2*o/t))}}("undefined"!=typeof exports?exports:this);
     </script>
 
@@ -75,7 +72,7 @@
         import WebTorrent from './webtorrent.min.js';
 
         // ===================================================================================
-        // CORE BANKNOTE VALIDATION LOGIC
+        // CORE BANKNOTE VALIDATION LOGIC (Unchanged)
         // ===================================================================================
         const CoreLogic = (() => {
             const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
@@ -110,21 +107,28 @@
         })();
 
         // ===================================================================================
-        // AURA PROTOCOL - WITNESS NETWORK (P2P)
+        // AURA PROTOCOL - WITNESS NETWORK (P2P) - INNOVATIVE "PROOF-OF-GOSSIP" IMPLEMENTATION
         // ===================================================================================
         const WitnessNetwork = (() => {
-            let client, swarm, spentFilter;
+            let client, swarm;
+            let ledger = {}; // Use an in-memory object for the ledger
             const LEDGER_KEY = 'aura_witness_ledger';
-            const FILTER_KEY = 'aura_witness_filter';
             const SWARM_ID = 'WitnessNetwork-Aura-v2';
 
-            const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
-            const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
+            // Load ledger from localStorage on startup
+            const loadLedger = () => {
+                ledger = JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
+            };
+            const saveLedger = () => {
+                localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
+            };
 
-            const saveFilter = () => {
-                if (!spentFilter) return;
-                const serializableBuckets = Array.from(spentFilter.buckets);
-                localStorage.setItem(FILTER_KEY, JSON.stringify(serializableBuckets));
+            // Create a SHA-256 fingerprint of the current ledger state
+            const getLedgerHash = async () => {
+                const ledgerString = JSON.stringify(ledger, Object.keys(ledger).sort());
+                const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ledgerString));
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             };
             
             const updateNetworkStatusUI = () => {
@@ -144,33 +148,13 @@
             };
 
             const initNetwork = () => {
-                if (client) {
-                    client.destroy(() => { client = null; });
-                }
+                if (client) return; // Already initialized
+
+                loadLedger(); // Load our existing knowledge from past sessions
+
                 client = new WebTorrent();
                 client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
 
-                const savedFilterData = localStorage.getItem(FILTER_KEY);
-                if (savedFilterData) {
-                    try {
-                        const buckets = new Int32Array(JSON.parse(savedFilterData));
-                        spentFilter = new BloomFilter(buckets, 7);
-                    } catch (e) {
-                         console.error("Could not parse bloom filter, creating a new one.", e);
-                    }
-                }
-                
-                if (!spentFilter) {
-                    spentFilter = BloomFilter.withTargetError(1000, 0.01);
-                    const ledger = getLedger();
-                    for (const id in ledger) {
-                        spentFilter.add(id);
-                    }
-                    saveFilter();
-                }
-                
-                // **UPDATED CODE BLOCK STARTS HERE**
-                // This updated and expanded list of trackers will significantly improve the reliability of peer discovery.
                 const torrentOpts = {
                     name: SWARM_ID,
                     announce: [
@@ -185,65 +169,96 @@
                         'wss://ws-tracker.webtorrent.io'
                     ]
                 };
-                // **UPDATED CODE BLOCK ENDS HERE**
-                
                 swarm = client.seed(new TextEncoder().encode(SWARM_ID), torrentOpts);
 
-                updateNetworkStatusUI();
-                
                 swarm.on('wire', (wire) => {
-                    console.log('New peer connected:', wire.peerId);
                     updateNetworkStatusUI();
                     
-                    wire.on('close', () => {
-                        console.log('Peer disconnected:', wire.peerId);
-                        updateNetworkStatusUI();
+                    // --- NETWORK ENTRY PROTOCOL: Announce ourselves and our knowledge state ---
+                    getLedgerHash().then(hash => {
+                        wire.send(JSON.stringify({ type: 'hello', ledgerHash: hash }));
                     });
 
-                    wire.on('data', (data) => {
+                    wire.on('data', async (data) => {
                         try {
                             const message = JSON.parse(data.toString());
-                            if (message.type === 'invalidation' && message.serial) {
-                                markAsSpent(message.serial, 'network');
+                            switch (message.type) {
+                                // A peer announced itself. Let's compare ledgers.
+                                case 'hello':
+                                    const myHash = await getLedgerHash();
+                                    // If they have a different ledger, they might be new or we might be.
+                                    // Let's send them our ledger to be safe. They can merge it.
+                                    if (message.ledgerHash !== myHash) {
+                                        wire.send(JSON.stringify({ type: 'full_ledger', payload: ledger }));
+                                    }
+                                    break;
+
+                                // We received a full ledger from a peer. Let's merge it.
+                                case 'full_ledger':
+                                    const newEntries = Object.keys(message.payload).length > Object.keys(ledger).length;
+                                    if (newEntries) {
+                                        console.log("Received a more current ledger from a peer. Merging.");
+                                        ledger = { ...ledger, ...message.payload };
+                                        saveLedger();
+                                    }
+                                    break;
+
+                                // Received gossip about a single spent note.
+                                case 'invalidation':
+                                    if (!ledger[message.serial]) {
+                                        console.log(`Learned about spent note ${message.serial} via gossip.`);
+                                        markAsSpent(message.serial, 'network_gossip');
+                                    }
+                                    break;
                             }
                         } catch (e) { console.error('Error processing network message:', e); }
                     });
-                });
-                swarm.on('ready', updateNetworkStatusUI);
-            };
 
-            const hasBeenSpent = (id) => {
-                if (!spentFilter) {
-                    const ledger = getLedger();
-                    return !!ledger[id];
-                }
-                if (!spentFilter.test(id)) return false; 
-                const ledger = getLedger();
-                return !!ledger[id];
+                    wire.on('close', updateNetworkStatusUI);
+                });
+                
+                // --- PROOF-OF-GOSSIP PROTOCOL: Periodically gossip about what we know ---
+                setInterval(() => {
+                    if (!swarm || swarm.wires.length === 0) return;
+
+                    const allSerials = Object.keys(ledger);
+                    if (allSerials.length === 0) return;
+                    
+                    // Pick a random spent note from our ledger to gossip about
+                    const randomSerial = allSerials[Math.floor(Math.random() * allSerials.length)];
+                    const gossipMessage = JSON.stringify({ type: 'invalidation', serial: randomSerial });
+
+                    // Send the gossip to all connected peers
+                    for (const wire of swarm.wires) {
+                        wire.send(gossipMessage);
+                    }
+                }, 15000); // Gossip every 15 seconds
             };
 
             const markAsSpent = (id, type) => {
-                const ledger = getLedger();
-                if (ledger[id]) return;
+                if (ledger[id]) return; // We already know this is spent
 
                 ledger[id] = { type: type, timestamp: Date.now() };
-                saveLedger(ledger);
+                saveLedger();
 
-                if (spentFilter) {
-                    spentFilter.add(id);
-                    saveFilter();
-                }
-
+                // Immediately broadcast the fresh news to our direct peers
                 if (swarm) {
                     const invalidationMessage = JSON.stringify({ type: 'invalidation', serial: id });
                     for (const wire of swarm.wires) wire.send(invalidationMessage);
                 }
             };
-            return { init: initNetwork, hasBeenSpent, markAsSpent, LEDGER_KEY, FILTER_KEY };
+
+            const hasBeenSpent = (id) => {
+                // Check our local, gossiped ledger
+                return !!ledger[id];
+            };
+
+            return { init: initNetwork, hasBeenSpent, markAsSpent };
         })();
 
+
         // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
+        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (Unchanged)
         // ===================================================================================
         
         let state = {
@@ -453,8 +468,6 @@
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
             
-            // **FIX #2: Centralized all back button event listeners for reliability.**
-            // This removes the old `onclick` attributes from the HTML.
             document.getElementById('back-from-create').addEventListener('click', () => { resetViewInputs('create-wallet-view'); showView('onboarding-view'); });
             document.getElementById('back-from-restore').addEventListener('click', () => { resetViewInputs('restore-wallet-view'); showView('onboarding-view'); });
             document.getElementById('back-from-charge').addEventListener('click', () => showView('wallet-view'));
@@ -580,7 +593,6 @@
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
                     localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
-                    localStorage.removeItem(WitnessNetwork.FILTER_KEY);
                     location.reload();
                 }
             });
