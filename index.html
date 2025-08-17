@@ -1,579 +1,254 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sadat Digital Banknote - Validator</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    
-    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <title>Sadat Digital Wallet (Final Version)</title>
 
     <style>
-        :root {
-            --primary-font: 'Poppins', 'Segoe UI', sans-serif;
-            --mono-font: 'Roboto Mono', monospace;
-            --dark-bg: #10101a;
-            --medium-bg: #1a1a2e;
-            --light-bg: #2a2a3e;
-            --accent-color-1: #e040fb;
-            --accent-color-2: #7c4dff;
-            --text-color: #e0e0e0;
-            --text-muted: #a0a0c0;
-            --success-color: #00e676;
-            --error-color: #ff5252;
-            --info-color: #40c4ff;
-            --warning-color: #ffab40;
-            --border-color: rgba(124, 77, 255, 0.2);
-        }
-        body { 
-            margin: 0;
-            font-family: var(--primary-font); 
-            background-color: var(--dark-bg); 
-            background-image: radial-gradient(at 0% 0%, hsla(253, 100%, 15%, 0.3) 0px, transparent 50%), radial-gradient(at 100% 100%, hsla(263, 100%, 20%, 0.3) 0px, transparent 50%);
-            color: var(--text-color); 
-            text-align: center; 
-            padding: 24px; 
-        }
-        .container { 
-            max-width: 1200px;
-            margin: 0 auto; 
-            background: rgba(26, 26, 46, 0.7); 
-            backdrop-filter: blur(12px); 
-            padding: 24px; 
-            border-radius: 24px; 
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); 
-        }
-        .header { 
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 16px; 
-            margin-bottom: 24px; 
-        }
-        h1 { 
-            font-size: 2.5rem; 
-            font-weight: 600; 
-            color: #fff;
-            margin: 0 0 8px 0; 
-            letter-spacing: 1px; 
-            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); 
-            -webkit-background-clip: text; 
-            -webkit-text-fill-color: transparent;
-        }
-        .header p { 
-            font-size: 1rem; 
-            color: var(--text-muted); 
-            margin: 0;
-        }
-        canvas#noteCanvas { 
-            border-radius: 16px; 
-            margin-top: 24px; 
-            background: #050508; 
-            cursor: default;
-            box-shadow: 0 0 50px rgba(124, 77, 255, 0.15); 
-            width: 100%; 
-            max-width: 790px; 
-            height: auto; 
-            border: 1px solid var(--border-color);
-        }
-        input, button, label { 
-            padding: 14px 22px; 
-            font-size: 16px; 
-            font-family: var(--primary-font);
-            border-radius: 12px; 
-            margin: 8px 5px; 
-            border: 1px solid var(--border-color); 
-            background: var(--medium-bg); 
-            color: #fff; 
-            transition: all 0.3s ease; 
-            cursor: pointer;
-            outline: none; 
-            display: inline-flex; 
-            align-items: center; 
-            justify-content: center; 
-            gap: 8px;
-        }
-        button:not([disabled]), label.button:not([disabled]) { 
-            font-weight: 600; 
-            background: linear-gradient(90deg, var(--accent-color-1), var(--accent-color-2)); 
-            border: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
-        }
-        button.sub-button, label.button.sub-button { 
-            background: var(--light-bg);
-            border: 1px solid var(--border-color); 
-        }
-        button:hover:not([disabled]), label.button:hover:not([disabled]) { 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(124, 77, 255, 0.4); 
-        }
-        .section { 
-            background: rgba(16, 16, 26, 0.5);
-            padding: 20px; 
-            margin-top: 30px; 
-            border-radius: 16px; 
-            border: 1px solid var(--border-color);
-        }
-        h2 { 
-            font-size: 1.5rem; 
-            color: var(--text-color); 
-            margin-top: 0; 
-            margin-bottom: 20px; 
-            font-weight: 600;
-            border-bottom: 1px solid var(--border-color); 
-            padding-bottom: 10px; 
-        }
-        .controls-grid { 
-            display: flex; 
-            justify-content: center;
-            align-items: center; 
-            flex-wrap: wrap; 
-            gap: 16px; 
-        }
-        .status-box { 
-            margin-top: 20px; 
-            font-size: 13px;
-            font-weight: normal; 
-            min-height: 50px; 
-            line-height: 1.6; 
-            text-align: left; 
-            background: var(--dark-bg); 
-            padding: 15px 20px; 
-            border-radius: 12px; 
-            white-space: pre-wrap; 
-            font-family: var(--mono-font);
-            border: 1px solid var(--border-color); 
-            transition: all 0.3s ease; 
-        }
-        .valid { color: var(--success-color); } 
-        .invalid { color: var(--error-color); } 
-        .info { color: var(--info-color); } 
-        .warning { color: var(--warning-color); }
-        .pill { 
-            background-color: var(--border-color); 
-            color: var(--accent-color-1); 
-            padding: 5px 15px;
-            border-radius: 20px; 
-            font-size: 14px; 
-            font-weight: 600; 
-            margin: 5px; 
-            display: inline-block;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .view { display: none; }
+        .view.active { display: block; }
+        .card { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); width: 380px; text-align: center; }
+        input[type="text"], input[type="password"], input[type="file"], input[type="number"] { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; text-align: center; }
+        button { width: 100%; padding: 12px; background: linear-gradient(90deg, #4b6cb7, #182848); color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: transform 0.2s; }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .back-button { background: #6c757d; margin-top: 20px; }
+        .status-box { font-weight: bold; min-height: 20px; margin-top: 10px; }
+        .status-box .error { color: #d93025; }
+        .status-box .success { color: #1e8e3e; }
+        .status-box .info { color: #007bff; }
+        .upload-step { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
+        .upload-step h3 { margin-top: 0; color: #333; }
+        #my-qr-code img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
 <body>
-<div class="container">
-    <div class="header"><h1>Sadat Banknote Validator</h1><p>An offline tool to verify the authenticity of Sadat Digital Banknotes.</p></div>
-    
-    <div class="section">
-        <h2><span class="pill">Step 1</span> Load the Guardian's Public Key</h2>
-        <div class="controls-grid">
-            <label for="import-public-key" class="button sub-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Load Public Key File
-            </label>
-            <input type="file" id="import-public-key" accept=".json" style="display: none;">
-        </div>
-        <div id="key-gen-status" class="status-box">
-            <span class="info">ℹ️ Welcome. Please load the Master Public Key file (`.json`) to begin validation.</span>
-        </div>
-    </div>
-    
-    <div class="section" id="validator-section">
-        <h2><span class="pill">Step 2</span> Verify Banknote Authenticity</h2>
-        <p style="color: var(--text-muted); font-size: 0.9em; max-width: 700px; margin: -10px auto 20px auto;">
-            To verify a banknote, upload a clear picture of the <strong>entire banknote</strong>.
-            The system will find and validate all QR Codes.
-        </p>
-        <label for="validator-input" class="button">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 15 17 10"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            Select Banknote Image for Validation
-        </label>
-        <input type="file" id="validator-input" accept="image/png, image/jpeg" style="display: none;">
-        <div id="validation-result" class="status-box">Awaiting banknote for validation...</div>
-        <canvas id="noteCanvas" width="790" height="790"></canvas>
-    </div>
-</div>
 
-<script type="module">
-// --- DEPENDENCIES ---
-import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
-import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+    <div id="login-view" class="view active"><div class="card"><h1>Digital Wallet</h1><p>Please log in to continue.</p><input type="text" id="uid-input" value="ABCDEFGHIJ" placeholder="User ID"><input type="password" id="password-input" value="12345" placeholder="Password"><button id="login-button">Login</button><div id="login-status" class="status-box"></div></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>My Wallet</h2><p>Current Balance:</p><h1 id="balance-display">$0.00</h1><div class="button-group" style="margin-top:20px;"><button id="show-charge-view-button">Charge Wallet</button><button id="show-send-view-button" style="margin-top:10px;">Send Funds</button><button id="show-receive-view-button" style="margin-top:10px;">Receive Funds</button></div></div></div>
+    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div class="upload-step"><h3>Step 1: Upload Public Key</h3><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div class="upload-step"><h3>Step 2: Validate Banknote</h3><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful. Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button">Back to Wallet</button></div></div>
+    <div id="send-view" class="view"><div class="card"><h2>Send Funds</h2><input type="number" id="send-amount-input" placeholder="Amount to Send"><label for="recipient-qr-input" style="cursor: pointer; display: block; margin-bottom: 15px; text-decoration: underline; color: #007bff;">Upload Recipient QR Code</label><input type="file" id="recipient-qr-input" accept=".png, .jpg, .jpeg" style="display: none;"><div id="recipient-info" style="min-height: 20px; margin-bottom: 15px;"></div><button id="send-funds-button">Send</button><div id="send-status" class="status-box"></div><button class="back-button">Back to Wallet</button></div></div>
+    <div id="receive-view" class="view"><div class="card"><h2>Receive Funds</h2><p>Share this QR Code with the sender.</p><div id="my-qr-code"></div><a id="download-qr-link"><button>Download QR Code (PNG)</button></a><button class="back-button">Back to Wallet</button></div></div>
 
-// --- Global State ---
-const state = {
-    falconApi: null,
-    masterPublicKey: null,
-};
+    <script type="module">
+        import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
+        import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-// --- CONSTANTS ---
-const Constants = {
-    EPOCH: new Date('2024-01-01T00:00:00Z').getTime(),
-    VALIDATION_PREFIX: "SADAT_V2_PART",
-    NUM_QR_CODES: 9, 
-    MAX_IMAGE_DIMENSION: 2000
-};
-
-// --- DOM Elements ---
-const DOMElements = {
-    importPublicKey: document.getElementById('import-public-key'),
-    keyGenStatus: document.getElementById('key-gen-status'),
-    noteCanvas: document.getElementById('noteCanvas'),
-    validatorInput: document.getElementById('validator-input'),
-    validationResult: document.getElementById('validation-result'),
-};
-
-// --- Utility Functions ---
-const Utils = {
-    base64ToUint8Array: (base64) => {
-        const binaryString = atob(base64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-        return bytes;
-    },
-    hexToUint8Array: (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
-    updateStatus: (element, message, type = 'info') => {
-        element.innerHTML = `<span class="${type}">${message}</span>`;
-    },
-    log: (message, type = 'info') => {
-        const icon = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' }[type];
-        console.log(`[Sadat System] ${icon} ${message}`);
-    },
-    async preprocessImage(dataUrl) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                ctx.filter = 'grayscale(1) contrast(2.5) brightness(1.1)';
-                ctx.drawImage(img, 0, 0);
-                resolve(canvas.toDataURL('image/jpeg'));
+        // ===================================================================================
+        // CORE LOGIC (Professionally ported from index(14).html - DO NOT MODIFY)
+        // ===================================================================================
+        const CoreLogic = (() => {
+            const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
+            const Utils = {
+                arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
+                base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; },
+                hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
+                preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }),
+                resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}),
+                decodeQrFromImage: (f) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);const d=x.getImageData(0,0,c.width,c.height);const code=jsQR(d.data,d.width,d.height);if(code){res(code.data);}else{rej(new Error("No QR code found."));}};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);})
             };
-            img.onerror = reject;
-            img.src = dataUrl;
-        });
-    },
-    async resizeImage(file, maxSize) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let { width, height } = img;
-                    if (width > height) {
-                        if (width > maxSize) {
-                            height *= maxSize / width;
-                            width = maxSize;
-                        }
-                    } else {
-                        if (height > maxSize) {
-                            width *= maxSize / height;
-                            height = maxSize;
-                        }
+            const Crypto = {
+                hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)),
+                async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); }
+            };
+            const Banknote = {
+                getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']),
+                getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); },
+                parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; },
+                getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; },
+                decodeQrGrid: async (imgData, statusEl) => {
+                    const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0);
+                    for(let i=0;i<Constants.NUM_QR_CODES;i++){
+                        statusEl.innerHTML=`<span class="info">Scanning Region ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5));
+                        const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height);
+                        if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}}
                     }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg'));
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    },
-    async decodeQrCodeFromImage(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                if (code) {
-                    resolve(code.data);
-                } else {
-                    reject(new Error("QR Code not found."));
+                    if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} parts.`);}
+                    let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload;
                 }
             };
-            img.src = event.target.result;
+            return { Constants, Utils, Crypto, Banknote };
+        })();
+
+        // ===================================================================================
+        // WALLET APPLICATION LOGIC
+        // ===================================================================================
+        const state = { falconApi: null, masterPublicKey: null, currentUser: null, balance: 0 };
+        const DOMElements = {
+            views: document.querySelectorAll('.view'),
+            loginButton: document.getElementById('login-button'), loginStatus: document.getElementById('login-status'),
+            balanceDisplay: document.getElementById('balance-display'),
+            showChargeViewButton: document.getElementById('show-charge-view-button'), showSendViewButton: document.getElementById('show-send-view-button'), showReceiveViewButton: document.getElementById('show-receive-view-button'),
+            publicKeyInput: document.getElementById('public-key-input'), keyStatus: document.getElementById('key-status'),
+            banknoteImageInput: document.getElementById('banknote-image-input'), validationStatus: document.getElementById('validation-status'),
+            chargeConfirmation: document.getElementById('charge-confirmation'), validatedAmount: document.getElementById('validated-amount'), confirmChargeButton: document.getElementById('confirm-charge-button'),
+            sendAmountInput: document.getElementById('send-amount-input'), recipientQrInput: document.getElementById('recipient-qr-input'),
+            recipientInfo: document.getElementById('recipient-info'), sendFundsButton: document.getElementById('send-funds-button'), sendStatus: document.getElementById('send-status'),
+            myQrCodeContainer: document.getElementById('my-qr-code'), downloadQrLink: document.getElementById('download-qr-link'),
+            backButtons: document.querySelectorAll('.back-button'),
         };
-        reader.onerror = () => reject(new Error("FileReader failed."));
-        reader.readAsDataURL(file);
-      });
-    }
-};
 
-// --- CORE CRYPTO ENGINE ---
-const BankCrypto = (() => {
-    function hashMessageForSigning(message) { return Utils.hexToUint8Array(shake256(message, 1536)); }
-    return {
-        async verifySignature(signature, data, publicKey) {
-            if (!publicKey || !state.falconApi) throw new Error("Verification prerequisites not met.");
-            const dataHash = hashMessageForSigning(data);
-            return state.falconApi.verify(signature, dataHash, publicKey);
-        }
-    };
-})();
-
-// --- UI EVENT HANDLERS ---
-const UIHandlers = (() => {
-    return {
-        handleImportPublicKey: async (event) => { 
-            const file = event.target.files[0];
-            if (!file) return; 
-            try { 
-                const data = JSON.parse(await file.text()); 
-                if (!data.masterPublicKey) throw new Error("Invalid public key file format.");
-                state.masterPublicKey = Utils.base64ToUint8Array(data.masterPublicKey); 
-                Utils.updateStatus(DOMElements.keyGenStatus, '✅ Public key imported. Ready to validate banknotes.', 'success'); 
-            } catch (error) { 
-                Utils.updateStatus(DOMElements.keyGenStatus, `❌ Error importing public key: ${error.message}`, 'error'); 
-            } 
-            event.target.value = '';
-        }
-    };
-})();
-
-// --- BANKNOTE LOGIC ---
-const BanknoteLogic = (() => {
-    const getStandardizedDataForSigning = (noteData) => JSON.stringify({ timestamp: noteData.timestamp, serial: noteData.serial, }, ['timestamp', 'serial']);
-    
-    const getStandardizedDataForMasterSig = (noteData) => {
-        const tempNoteData = { 
-            ephemeralPublicKey: btoa(String.fromCharCode(...noteData.ephemeralPublicKey)), 
-            signatureOne: btoa(String.fromCharCode(...noteData.signatureOne)) 
-        };
-        return JSON.stringify(tempNoteData, Object.keys(tempNoteData).sort());
-    };
-    
-    const parseUnifiedVerificationPayload = (base64CompressedString) => {
-        const compressedData = Utils.base64ToUint8Array(base64CompressedString);
-        const jsonString = pako.inflate(compressedData, { to: 'string' });
-        const p = JSON.parse(jsonString);
-        return { 
-            amount: p.a, 
-            serial: p.s, 
-            timestamp: p.t, 
-            ephemeralPublicKey: Utils.base64ToUint8Array(p.epk), 
-            signatureOne: Utils.base64ToUint8Array(p.s1), 
-            signatureTwo: Utils.base64ToUint8Array(p.s2) 
-        };
-    };
-
-    async function decodeAllQrCodesFromImage(processedDataUrl, banknoteImage) {
-        const mainCanvas = document.createElement('canvas');
-        mainCanvas.width = banknoteImage.width;
-        mainCanvas.height = banknoteImage.height;
-        const mainCtx = mainCanvas.getContext('2d');
-        mainCtx.drawImage(banknoteImage, 0, 0);
-
-        const layout = BanknoteDrawer.getLayout(mainCanvas.width, mainCanvas.height);
-        const scanResults = [];
-        for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
-            Utils.updateStatus(DOMElements.validationResult, `⏳ Scanning Exact Location ${i + 1} of ${Constants.NUM_QR_CODES}...`, 'info');
-            const row = Math.floor(i / 3);
-            const col = i % 3;
-            const regionX = col * (layout.qrSize + layout.xSpacing);
-            const regionY = row * (layout.qrSize + layout.ySpacing);
-            const regionSize = layout.qrSize;
-            
-            const imageData = mainCtx.getImageData(regionX, regionY, regionSize, regionSize);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            
-            const result = { x: regionX, y: regionY, size: regionSize, data: null, success: false };
-            if (code && code.data) {
-                result.data = code.data;
-                result.success = true;
-            } else {
-                 console.warn(`Could not decode QR in zone ${i + 1}.`);
-            }
-            scanResults.push(result);
+        async function initializeApp() {
+            try { state.falconApi = await pqcSignFalcon1024(); console.log("System Initialized."); setupEventListeners(); } 
+            catch (e) { alert(`Critical startup error: ${e.message}`); }
         }
         
-        if (scanResults.every(r => !r.success)) {
-             throw new Error("Validation Failed. No QR codes found at exact locations. Tip: Use a flat, well-lit photo.");
+        function setupEventListeners() {
+            DOMElements.loginButton.addEventListener('click', handleLogin);
+            DOMElements.showChargeViewButton.addEventListener('click', () => showView('charge-view'));
+            DOMElements.showSendViewButton.addEventListener('click', () => showView('send-view'));
+            DOMElements.showReceiveViewButton.addEventListener('click', () => { generateReceiveQrCode(); showView('receive-view'); });
+            DOMElements.publicKeyInput.addEventListener('change', handlePublicKeyUpload);
+            DOMElements.banknoteImageInput.addEventListener('change', handleBanknoteValidation);
+            DOMElements.recipientQrInput.addEventListener('change', handleRecipientQrUpload);
+            DOMElements.sendFundsButton.addEventListener('click', handleSendFunds);
+            DOMElements.confirmChargeButton.addEventListener('click', confirmCharge);
+            DOMElements.backButtons.forEach(b => { b.addEventListener('click', () => { resetViews(); showView('wallet-view'); }); });
         }
-        return scanResults;
-    }
+        
+        function showView(id) { DOMElements.views.forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+        function updateBalanceDisplay() { DOMElements.balanceDisplay.textContent = `$${state.balance.toFixed(2)}`; }
+        function resetViews() {
+            DOMElements.keyStatus.innerHTML = ''; DOMElements.validationStatus.innerHTML = '';
+            DOMElements.publicKeyInput.value = ''; DOMElements.banknoteImageInput.value = '';
+            DOMElements.banknoteImageInput.disabled = true; DOMElements.chargeConfirmation.style.display = 'none';
+            state.masterPublicKey = null;
+            DOMElements.sendStatus.innerHTML = ''; DOMElements.recipientInfo.innerHTML = '';
+            DOMElements.recipientQrInput.value = ''; DOMElements.sendAmountInput.value = '';
+        }
 
-    return {
-        handleFileSelectForValidation: async (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-            if (!state.masterPublicKey) { 
-                Utils.updateStatus(DOMElements.validationResult, '❌ Load a Master Public Key in Step 1 before validating.', 'error'); 
-                return;
-            }
-            
-            const resultDiv = DOMElements.validationResult;
-            const noteCanvas = DOMElements.noteCanvas;
-            const noteCtx = noteCanvas.getContext('2d');
-            Utils.updateStatus(resultDiv, '⏳ Preparing image for validation...', 'info');
-            
+        function handleLogin() {
+            const uid = document.getElementById('uid-input').value; const password = document.getElementById('password-input').value;
+            if (uid === 'ABCDEFGHIJ' && password === '12345') { state.currentUser = { uid: uid }; updateBalanceDisplay(); showView('wallet-view'); } 
+            else { DOMElements.loginStatus.innerHTML = `<span class="error">Invalid User ID or Password.</span>`; }
+        }
+
+        async function handlePublicKeyUpload(event) {
+            const file = event.target.files[0]; if (!file) return;
+            DOMElements.keyStatus.textContent = 'Processing key...'; DOMElements.banknoteImageInput.disabled = true; state.masterPublicKey = null;
             try {
-                const resizedDataUrl = await Utils.resizeImage(file, Constants.MAX_IMAGE_DIMENSION);
-                const processedDataUrl = await Utils.preprocessImage(resizedDataUrl);
-                
-                const banknoteImage = await new Promise((resolve, reject) => {
-                    const img = new Image();
-                    img.onload = () => resolve(img);
-                    img.onerror = () => reject('Could not load banknote image');
-                    img.src = processedDataUrl;
-                });
-                
-                noteCanvas.width = banknoteImage.width;
-                noteCanvas.height = banknoteImage.height;
-                noteCtx.drawImage(banknoteImage, 0, 0);
+                const keyData = JSON.parse(await file.text());
+                if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'.");
+                state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey);
+                DOMElements.keyStatus.innerHTML = '<span class="success">Public Key loaded.</span>';
+                DOMElements.banknoteImageInput.disabled = false;
+            } catch (err) { DOMElements.keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`; }
+        }
 
-                const scanResults = await decodeAllQrCodesFromImage(processedDataUrl, banknoteImage);
-                scanResults.forEach(result => {
-                    if (result.success) {
-                        noteCtx.font = `bold ${result.size * 0.8}px sans-serif`;
-                        noteCtx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-                        noteCtx.textAlign = 'center';
-                        noteCtx.textBaseline = 'middle';
-                        noteCtx.fillText('✔', result.x + result.size / 2, result.y + result.size / 2);
-                    } else {
-                        noteCtx.font = `bold ${result.size * 0.8}px sans-serif`;
-                        noteCtx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-                        noteCtx.textAlign = 'center';
-                        noteCtx.textBaseline = 'middle';
-                        noteCtx.fillText('✖', result.x + result.size / 2, result.y + result.size / 2);
-                    }
-                });
-                
-                const decodedCodes = scanResults.filter(r => r.success);
-                let resultHTML = `<span class="info">Found ${decodedCodes.length}/${Constants.NUM_QR_CODES} QR code(s). Assembling payload...</span>\n`;
-                resultDiv.innerHTML = resultHTML;
-                
-                let expectedTotalParts = Constants.NUM_QR_CODES;
-                const receivedParts = {};
-                let uniqueCodes = 0;
-                for (const code of decodedCodes) {
-                    if (code.data.startsWith(Constants.VALIDATION_PREFIX)) {
-                        const payload = code.data.substring(Constants.VALIDATION_PREFIX.length);
-                        const match = payload.match(/^(\d+)\/(\d+):(.*)$/s);
-                        if (match) {
-                            const partNum = parseInt(match[1], 10);
-                            if (!receivedParts[partNum]) {
-                                receivedParts[partNum] = match[3];
-                                uniqueCodes++;
-                            }
-                        }
-                    }
-                }
-                
-                if (uniqueCodes < expectedTotalParts) {
-                    Utils.updateStatus(resultDiv, `❌ Incomplete banknote data. Found ${uniqueCodes}/${expectedTotalParts} required QR codes. The banknote may be damaged or fake.`, 'error');
-                    return;
-                }
+        async function handleBanknoteValidation(event) {
+            const file = event.target.files[0]; if (!file) return;
+            if (!state.masterPublicKey) { DOMElements.validationStatus.innerHTML = '<span class="error">Please upload a Public Key first.</span>'; return; }
+            DOMElements.validationStatus.innerHTML = '<span class="info">Preparing image...</span>';
+            DOMElements.chargeConfirmation.style.display = 'none';
+            try {
+                const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
+                const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
+                const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
+                const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, DOMElements.validationStatus);
+                DOMElements.validationStatus.innerHTML = '<span class="success">Scan complete. Verifying signatures...</span>';
+                const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
+                if (!isSigOneValid) throw new Error("Signature 1 is invalid (Internal Forgery).");
+                const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
+                if (!isSigTwoValid) throw new Error("Signature 2 is invalid (Does not match Public Key).");
+                DOMElements.validationStatus.innerHTML = '<span class="success">Banknote is authentic!</span>';
+                DOMElements.validatedAmount.textContent = `$${banknoteData.amount.toFixed(2)}`;
+                DOMElements.chargeConfirmation.dataset.amount = banknoteData.amount;
+                DOMElements.chargeConfirmation.style.display = 'block';
+            } catch (err) { DOMElements.validationStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`; } 
+            finally { event.target.value = ''; }
+        }
+        
+        async function handleRecipientQrUpload(event) {
+            const file = event.target.files[0]; if (!file) return;
+            DOMElements.recipientInfo.innerHTML = '<span class="info">Decoding QR Code...</span>';
+            try {
+                const decodedText = await CoreLogic.Utils.decodeQrFromImage(file);
+                const recipientData = JSON.parse(decodedText);
+                if (recipientData.type !== 'SADAT_WALLET_ADDRESS' || !recipientData.uid) { throw new Error("Invalid wallet QR code."); }
+                DOMElements.recipientInfo.innerHTML = `<span class="success">Recipient Found: ${recipientData.uid}</span>`;
+                DOMElements.recipientInfo.dataset.uid = recipientData.uid;
+            } catch (err) { DOMElements.recipientInfo.innerHTML = `<span class="error">${err.message}</span>`; DOMElements.recipientInfo.dataset.uid = ''; }
+        }
 
-                let fullPayloadString = '';
-                for (let i = 1; i <= expectedTotalParts; i++) {
-                    fullPayloadString += receivedParts[i];
-                }
+        function handleSendFunds() {
+            const amount = parseFloat(DOMElements.sendAmountInput.value);
+            const recipientUID = DOMElements.recipientInfo.dataset.uid;
+            if (isNaN(amount) || amount <= 0) { DOMElements.sendStatus.innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; }
+            if (!recipientUID) { DOMElements.sendStatus.innerHTML = '<span class="error">Please upload a recipient QR code.</span>'; return; }
+            if (amount > state.balance) { DOMElements.sendStatus.innerHTML = '<span class="error">Insufficient balance.</span>'; return; }
+            state.balance -= amount;
+            updateBalanceDisplay();
+            DOMElements.sendStatus.innerHTML = `<span class="success">Sent $${amount.toFixed(2)} to ${recipientUID}.</span>`;
+            setTimeout(() => { DOMElements.sendAmountInput.value=''; DOMElements.recipientInfo.innerHTML=''; DOMElements.recipientInfo.dataset.uid=''; DOMElements.recipientQrInput.value=''; }, 2500);
+        }
 
-                resultHTML += `<span class="valid">✅ Found all ${expectedTotalParts} parts. Reconstructing payload...</span>\n`;
-                resultDiv.innerHTML = resultHTML;
-                
-                const parsedData = parseUnifiedVerificationPayload(fullPayloadString);
-                
-                resultHTML += `<span class="info">ℹ️ Verifying Ephemeral Signature (Sig 1)...</span>\n`;
-                resultDiv.innerHTML = resultHTML;
-                const dataForSigOne = getStandardizedDataForSigning(parsedData);
-                const isSigOneValid = await BankCrypto.verifySignature(parsedData.signatureOne, dataForSigOne, parsedData.ephemeralPublicKey);
-                if (!isSigOneValid) { 
-                    resultHTML += '<span class="invalid">❌ Ephemeral Signature (Sig 1) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY</span>'; 
-                    resultDiv.innerHTML = resultHTML; 
-                    return;
-                }
-                
-                resultHTML += '<span class="valid">✅ Ephemeral Signature (Sig 1) OK.</span>\n';
-                resultHTML += `<span class="info">ℹ️ Verifying Master Signature (Sig 2)...</span>\n`;
-                resultDiv.innerHTML = resultHTML;
-                const dataForSigTwo = getStandardizedDataForMasterSig(parsedData);
-                const isSigTwoValid = await BankCrypto.verifySignature(parsedData.signatureTwo, dataForSigTwo, state.masterPublicKey);
-                
-                if (!isSigTwoValid) { 
-                    resultHTML += '<span class="invalid">❌ Master Signature (Sig 2) INVALID.</span>\n<hr><span>❌ VERDICT: FORGERY (Not issued by this Guardian)</span>';
-                    resultDiv.innerHTML = resultHTML; 
-                    return; 
-                }
-                
-                resultHTML += '<span class="valid">✅ Master Signature (Sig 2) OK.</span>\n<hr><span style="font-size:14px;font-weight:600;">✅ VERDICT: BANKNOTE IS AUTHENTIC</span>';
-                resultDiv.innerHTML = resultHTML;
-            } catch (e) {
-                if (e.message.includes("incorrect header check") || e.message.includes("invalid block type")) {
-                     Utils.updateStatus(resultDiv, `❌ Validation Error: Decompression failed. The QR code data is corrupt or invalid.`, 'error');
-                } else {
-                     Utils.updateStatus(resultDiv, `❌ Validation Error: ${e.message}`, 'error');
-                }
-                console.error(e);
-            } finally {
-                event.target.value = '';
+        function confirmCharge() {
+            const amount = parseFloat(DOMElements.chargeConfirmation.dataset.amount);
+            if(amount > 0) {
+                state.balance += amount;
+                updateBalanceDisplay();
+                alert(`$${amount.toFixed(2)} was successfully added to your balance.`);
+                resetViews(); showView('wallet-view');
             }
         }
-    };
-})();
+        
+        // *** تابع اصلاح‌شده با منطق جدید ***
+        function generateReceiveQrCode() {
+            DOMElements.myQrCodeContainer.innerHTML = '';
+            const payload = JSON.stringify({type:"SADAT_WALLET_ADDRESS", uid:state.currentUser.uid});
+            
+            // 1. دیتا را برای QR کد آماده می‌کنیم
+            const qr = qrcode(0,'L');
+            qr.addData(payload);
+            qr.make();
+            
+            // 2. به جای تگ img، مستقیما دیتا URL را می‌گیریم
+            const qrDataURL = qr.createDataURL(6, 10);
 
-// --- BANKNOTE DRAWER ---
-const BanknoteDrawer = (() => {
-    return {
-        getLayout: (width, height) => {
-            const qrSize = 250;
-            const xSpacing = 20;
-            const ySpacing = 20;
-            const totalGridWidth = (qrSize * 3) + (xSpacing * 2);
-            const totalGridHeight = (qrSize * 3) + (ySpacing * 2);
-            return { qrSize, xSpacing, ySpacing, totalGridWidth, totalGridHeight };
+            // 3. یک تصویر جدید در حافظه می‌سازیم تا آن را روی کانواس نقاشی کنیم
+            const img = new Image();
+
+            // 4. تعیین می‌کنیم که بعد از بارگذاری کامل تصویر چه اتفاقی بیفتد
+            img.onload = () => {
+                // نمایش QR کد روی صفحه
+                const displayImg = DOMElements.myQrCodeContainer.querySelector('img');
+                if (displayImg) {
+                    displayImg.src = qrDataURL;
+                } else {
+                    DOMElements.myQrCodeContainer.innerHTML = `<img src="${qrDataURL}" alt="Wallet QR Code">`;
+                }
+
+                // آماده‌سازی کانواس برای دانلود
+                const canvas = document.createElement('canvas');
+                const scale = 3;
+                canvas.width = img.width * scale;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext('2d');
+                
+                // 5. پس‌زمینه را سفید می‌کنیم
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 6. تصویر بارگذاری‌شده را روی پس‌زمینه سفید نقاشی می‌کنیم
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // 7. لینک دانلود را با فایل PNG نهایی آپدیت می‌کنیم
+                DOMElements.downloadQrLink.href = canvas.toDataURL('image/png');
+                DOMElements.downloadQrLink.download = 'My-Wallet-QR.png';
+            };
+
+            // 8. فرآیند بارگذاری تصویر را با دادن آدرس دیتا URL آغاز می‌کنیم
+            img.src = qrDataURL;
         }
-    };
-})();
 
-// --- APPLICATION INITIALIZATION ---
-async function main() {
-    Utils.updateStatus(DOMElements.keyGenStatus, '⏳ Loading Falcon-1024 Module...', 'info');
-    try {
-        state.falconApi = await pqcSignFalcon1024();
-        Utils.updateStatus(DOMElements.keyGenStatus, '✅ Module loaded. Please import the public key to begin.', 'success');
-        Utils.log("Cryptographic module initialized successfully.", 'success');
-    } catch (e) {
-        Utils.log(`Critical Error: Could not load required modules: ${e.message}`, 'error');
-        Utils.updateStatus(DOMElements.keyGenStatus, `❌ Critical Error: Could not load modules. See console for details.`, 'error');
-        alert("Error: Failed to load a required cryptographic module. The application cannot run.");
-        return;
-    }
-    
-    DOMElements.importPublicKey.addEventListener('change', UIHandlers.handleImportPublicKey);
-    DOMElements.validatorInput.addEventListener('change', BanknoteLogic.handleFileSelectForValidation);
-    
-    const canvas = DOMElements.noteCanvas;
-    const ctx = canvas.getContext('2d');
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    bgGradient.addColorStop(0, `hsl(250, 50%, 6%)`);
-    bgGradient.addColorStop(1, `hsl(260, 40%, 4%)`);
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = `bold 30px 'Poppins'`;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.fillText("Validated banknote image will appear here", canvas.width/2, canvas.height/2);
-}
-
-main();
-</script>
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
 </body>
 </html>
