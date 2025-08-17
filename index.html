@@ -168,9 +168,6 @@
             falconApi: null,
         };
 
-        // Temporary storage for the password during wallet creation flow
-        let tempPassword = null;
-
         const WalletLogic = {
             createWallet: (password) => {
                 const wallet = ethers.Wallet.createRandom();
@@ -208,6 +205,7 @@
                 if (!userStoreJson) return null;
                 
                 try {
+                    // Always reload userStore to ensure it's the latest version
                     state.userStore = JSON.parse(userStoreJson);
                     state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
                     
@@ -354,14 +352,12 @@
                     document.getElementById('create-status').textContent = 'Passwords do not match.'; return;
                 }
                 const { mnemonic } = WalletLogic.createWallet(pass);
-                tempPassword = pass;
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                const pass = tempPassword;
-                tempPassword = null; // Clear password after use for security
+                const pass = document.getElementById('create-password-input').value;
                 const success = await WalletLogic.login(pass);
                 if (success) {
                     updateBalanceDisplay();
@@ -370,9 +366,11 @@
                     alert('Auto-login failed. Please log in manually.');
                     showView('login-view');
                 }
+                document.getElementById('create-password-input').value = '';
+                document.getElementById('confirm-password-input').value = '';
             });
 
-            document.getElementById('restore-wallet-button').addEventListener('click', () => {
+            document.getElementById('restore-wallet-button').addEventListener('click', async () => {
                 const mnemonic = document.getElementById('restore-seed-input').value.trim();
                 const pass = document.getElementById('restore-password-input').value;
                 if (mnemonic.split(' ').length !== 12) {
@@ -384,10 +382,10 @@
                 const success = WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
                     document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.';
-                    setTimeout(() => showView('login-view'), 2000);
                 } else {
                      document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.';
                 }
+                setTimeout(() => showView('login-view'), 2000);
             });
 
             document.getElementById('login-button').addEventListener('click', async () => {
@@ -403,6 +401,7 @@
                 } else {
                     statusEl.textContent = 'Invalid password.';
                 }
+                document.getElementById('login-password-input').value = '';
             });
             
             document.getElementById('logout-button').addEventListener('click', () => {
