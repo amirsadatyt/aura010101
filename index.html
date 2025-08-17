@@ -101,27 +101,24 @@
             const LEDGER_KEY = 'aura_witness_ledger';
             const SWARM_ID = 'WitnessNetwork-Aura'; // A fixed ID for the swarm
 
-            // Witness Network Operations
             const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
             const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
 
-            // WebTorrent Network Logic
             const initNetwork = () => {
                 if (client) {
                     client.destroy();
                 }
                 client = new WebTorrent();
                 client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
-
+                
                 swarm = client.join(SWARM_ID);
-
+                
                 swarm.on('wire', (wire) => {
                     console.log('New peer connected:', wire.peerId);
                     wire.on('data', (data) => {
                         try {
                             const message = JSON.parse(data.toString());
                             if (message.type === 'invalidation' && message.serial) {
-                                // Mark the received serial as spent
                                 markAsSpent(message.serial, 'network');
                                 console.log(`Witness Network: Invalidation message received for ${message.serial}`);
                             }
@@ -148,7 +145,6 @@
                         serial: id,
                         timestamp: Date.now()
                     });
-                    // Flood the message to all connected peers
                     for (const wire of swarm.wires) {
                         wire.send(invalidationMessage);
                     }
@@ -165,7 +161,7 @@
             wallet: null,
             masterPublicKey: null,
             userStore: null,
-            falconApi: null,
+            falconApi: null, 
         };
 
         const WalletLogic = {
@@ -181,19 +177,30 @@
                     chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }]
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
+                
+                // Update in-memory state immediately after creating
+                state.userStore = userStore;
+                state.wallet = wallet;
+
                 return { mnemonic };
             },
-            restoreWallet: (mnemonic, password) => {
+            restoreWallet: async (mnemonic, password) => {
                 try {
                     const wallet = ethers.Wallet.fromPhrase(mnemonic);
                     const encryptedJson = wallet.encryptSync(password);
-                      const userStore = {
+                    
+                    const userStore = {
                         publicKey: wallet.publicKey,
                         address: wallet.address,
                         encryptedJson: encryptedJson,
                         chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }]
                     };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
+
+                    // Update in-memory state immediately after restoring
+                    state.userStore = userStore;
+                    state.wallet = wallet;
+
                     return true;
                 } catch (e) {
                     console.error("Restore failed:", e);
@@ -205,9 +212,13 @@
                 if (!userStoreJson) return null;
                 
                 try {
-                    // Always reload userStore to ensure it's the latest version
-                    state.userStore = JSON.parse(userStoreJson);
-                    state.wallet = await ethers.Wallet.fromEncryptedJson(state.userStore.encryptedJson, password);
+                    // Always reload userStore from localStorage to ensure it's the latest version
+                    const reloadedUserStore = JSON.parse(userStoreJson);
+                    const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password);
+                    
+                    // Update the global state with the validated data
+                    state.userStore = reloadedUserStore;
+                    state.wallet = wallet;
                     
                     // Initialize Witness Network on login
                     WitnessNetwork.init();
@@ -342,7 +353,7 @@
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
             
-            document.getElementById('create-wallet-button').addEventListener('click', () => {
+            document.getElementById('create-wallet-button').addEventListener('click', async () => {
                 const pass = document.getElementById('create-password-input').value;
                 const confirmPass = document.getElementById('confirm-password-input').value;
                 if (pass.length < 8) {
@@ -357,15 +368,9 @@
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                const pass = document.getElementById('create-password-input').value;
-                const success = await WalletLogic.login(pass);
-                if (success) {
-                    updateBalanceDisplay();
-                    showView('wallet-view');
-                } else {
-                    alert('Auto-login failed. Please log in manually.');
-                    showView('login-view');
-                }
+                // Since the state is already updated in WalletLogic.createWallet, we just need to navigate
+                updateBalanceDisplay();
+                showView('wallet-view');
                 document.getElementById('create-password-input').value = '';
                 document.getElementById('confirm-password-input').value = '';
             });
@@ -379,13 +384,15 @@
                 if (pass.length < 8) {
                     document.getElementById('restore-status').textContent = 'Password must be at least 8 characters.'; return;
                 }
-                const success = WalletLogic.restoreWallet(mnemonic, pass);
+                const success = await WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
                     document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.';
+                    // This is also a login, so update state and navigate
+                    updateBalanceDisplay();
+                    showView('wallet-view');
                 } else {
                      document.getElementById('restore-status').textContent = 'Restore failed. Invalid phrase or password.';
                 }
-                setTimeout(() => showView('login-view'), 2000);
             });
 
             document.getElementById('login-button').addEventListener('click', async () => {
@@ -401,7 +408,6 @@
                 } else {
                     statusEl.textContent = 'Invalid password.';
                 }
-                document.getElementById('login-password-input').value = '';
             });
             
             document.getElementById('logout-button').addEventListener('click', () => {
