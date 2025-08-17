@@ -165,8 +165,11 @@
             wallet: null,
             masterPublicKey: null,
             userStore: null,
-            falconApi: null, 
+            falconApi: null,
         };
+
+        // Temporary storage for the password during wallet creation flow
+        let tempPassword = null;
 
         const WalletLogic = {
             createWallet: (password) => {
@@ -351,12 +354,14 @@
                     document.getElementById('create-status').textContent = 'Passwords do not match.'; return;
                 }
                 const { mnemonic } = WalletLogic.createWallet(pass);
+                tempPassword = pass;
                 document.getElementById('seed-phrase-display').textContent = mnemonic;
                 showView('seed-phrase-view');
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                const pass = document.getElementById('create-password-input').value;
+                const pass = tempPassword;
+                tempPassword = null; // Clear password after use for security
                 const success = await WalletLogic.login(pass);
                 if (success) {
                     updateBalanceDisplay();
