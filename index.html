@@ -56,8 +56,6 @@
         /**
          * Minified by jsDelivr using Terser v5.39.0.
          * Original file: /npm/bloomfilter@0.0.21/bloomfilter.js
-         *
-         * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
          */
         !function(t){t.BloomFilter=n;const e="undefined"!=typeof ArrayBuffer;function n(t,n){let o;"number"!=typeof t&&(o=t,t=32*o.length);const r=Math.ceil(t/32);if(t=32*r,this.m=t,this.k=n,e){const e=1<<Math.ceil(Math.log2(Math.ceil(Math.log2(t)/8))),i=1===e?Uint8Array:2===e?Uint16Array:Uint32Array,s=new ArrayBuffer(e*n),c=new Int32Array(r);if(o)for(let t=0;t<r;++t)c[t]=o[t];this.buckets=c,this._locations=new i(s)}else{const t=[];if(o)for(let e=0;e<r;++e)t[e]=o[e];else for(let e=0;e<r;++e)t[e]=0;this.buckets=t,this._locations=[]}}function o(t){return 16843009*((t=(858993459&(t-=t>>1&1431655765))+(t>>2&858993459))+(t>>4)&252645135)>>24}n.prototype.locations=function(t){const e=this.k,n=this.m,o=this._locations;let r,i;{const e=435,n=t.length;let o=0,s=0,c=0,h=0,l=8997,u=33826,f=40164,a=52210;for(let r=0;r<n;++r)l^=t.charCodeAt(r),o=l*e,s=u*e,c=f*e,h=a*e,c+=l<<8,h+=u<<8,s+=o>>>16,l=65535&o,c+=s>>>16,u=65535&s,a=h+(c>>>16)&65535,f=65535&c;r=a<<16|f,i=u<<16|l}r%=n,r<0&&(r+=n),i%=n,i<0&&(i+=n),o[0]=r;for(let t=1;t<e;++t)r=(r+i)%n,i=(i+t)%n,o[t]=r;return o},n.prototype.add=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t)o[e[t]>>5]|=1<<(31&e[t])},n.prototype.test=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t){const n=e[t];if(!(o[n>>5]&1<<(31&n)))return!1}return!0},n.prototype.size=function(){return-this.m*Math.log(1-this.countBits()/this.m)/this.k},n.prototype.countBits=function(){const t=this.buckets;let e=0;for(let n=0;n<t.length;++n)e+=o(t[n]);return e},n.prototype.error=function(){return Math.pow(this.countBits()/this.m,this.k)},n.union=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]|o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.intersection=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]&o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.withTargetError=function(t,e){const o=Math.ceil(-t*Math.log2(e)/Math.LN2);return new n(o,Math.ceil(Math.LN2*o/t))}}("undefined"!=typeof exports?exports:this);
     </script>
@@ -107,19 +105,55 @@
         // AURA PROTOCOL - WITNESS NETWORK (P2P)
         // ===================================================================================
         const WitnessNetwork = (() => {
-            let client, swarm;
+            let client, swarm, spentFilter;
             const LEDGER_KEY = 'aura_witness_ledger';
-            const SWARM_ID = 'WitnessNetwork-Aura'; // A fixed ID for the swarm
+            const FILTER_KEY = 'aura_witness_filter'; // Key for storing the bloom filter
+            const SWARM_ID = 'WitnessNetwork-Aura'; 
 
             const getLedger = () => JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
             const saveLedger = (ledger) => localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
 
+            // BLOOM FILTER IMPLEMENTATION START
+            const saveFilter = () => {
+                if (!spentFilter) return;
+                // Convert TypedArray to a regular array for JSON serialization
+                const serializableBuckets = Array.from(spentFilter.buckets);
+                localStorage.setItem(FILTER_KEY, JSON.stringify(serializableBuckets));
+            };
+            // BLOOM FILTER IMPLEMENTATION END
+
             const initNetwork = () => {
-                if (client) {
-                    client.destroy();
-                }
+                if (client) client.destroy();
                 client = new WebTorrent();
                 client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
+
+                // BLOOM FILTER IMPLEMENTATION START
+                const savedFilterData = localStorage.getItem(FILTER_KEY);
+                if (savedFilterData) {
+                    try {
+                        const buckets = new Int32Array(JSON.parse(savedFilterData));
+                        // Recreate the filter. The 'k' value must be the same as when created.
+                        // We will use a fixed k=7, which is a good balance for the target error rate.
+                        spentFilter = new BloomFilter(buckets, 7);
+                        console.log("Bloom filter loaded from localStorage.");
+                    } catch (e) {
+                         console.error("Could not parse bloom filter, creating a new one.", e);
+                    }
+                }
+                
+                if (!spentFilter) {
+                    // Create a new filter if one doesn't exist.
+                    // Tuned for ~1000 items with a <1% false positive rate.
+                    spentFilter = BloomFilter.withTargetError(1000, 0.01);
+                    // Populate it with any existing ledger data to ensure consistency.
+                    const ledger = getLedger();
+                    for (const id in ledger) {
+                        spentFilter.add(id);
+                    }
+                    saveFilter();
+                    console.log("New bloom filter created and populated.");
+                }
+                // BLOOM FILTER IMPLEMENTATION END
                 
                 swarm = client.join(SWARM_ID);
                 
@@ -132,35 +166,43 @@
                                 markAsSpent(message.serial, 'network');
                                 console.log(`Witness Network: Invalidation message received for ${message.serial}`);
                             }
-                        } catch (e) {
-                            console.error('Error processing network message:', e);
-                        }
+                        } catch (e) { console.error('Error processing network message:', e); }
                     });
                 });
             };
 
             const hasBeenSpent = (id) => {
+                // BLOOM FILTER IMPLEMENTATION START
+                // Step 1: Fast, optimistic check with the bloom filter.
+                if (!spentFilter.test(id)) {
+                    return false; // If the filter says no, it's definitively not spent.
+                }
+                // Step 2: If the filter says yes (might be a false positive),
+                // perform the definitive check against the persistent ledger.
                 const ledger = getLedger();
                 return !!ledger[id];
+                // BLOOM FILTER IMPLEMENTATION END
             };
 
             const markAsSpent = (id, type) => {
                 const ledger = getLedger();
+                if (ledger[id]) return; // Avoid re-processing if already in the definitive ledger
+
                 ledger[id] = { type: type, timestamp: Date.now() };
                 saveLedger(ledger);
+
+                // BLOOM FILTER IMPLEMENTATION START
+                spentFilter.add(id);
+                saveFilter(); // Persist the updated filter state
+                // BLOOM FILTER IMPLEMENTATION END
+
                 console.log(`Witness Network: Marked ${id} as spent.`);
                 if (swarm) {
-                    const invalidationMessage = JSON.stringify({
-                        type: 'invalidation',
-                        serial: id,
-                        timestamp: Date.now()
-                    });
-                    for (const wire of swarm.wires) {
-                        wire.send(invalidationMessage);
-                    }
+                    const invalidationMessage = JSON.stringify({ type: 'invalidation', serial: id, timestamp: Date.now() });
+                    for (const wire of swarm.wires) wire.send(invalidationMessage);
                 }
             };
-            return { init: initNetwork, hasBeenSpent, markAsSpent };
+            return { init: initNetwork, hasBeenSpent, markAsSpent, LEDGER_KEY, FILTER_KEY };
         })();
 
         // ===================================================================================
@@ -188,7 +230,6 @@
                 };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                 
-                // Update in-memory state immediately after creating
                 state.userStore = userStore;
                 state.wallet = wallet;
 
@@ -207,7 +248,6 @@
                     };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
 
-                    // Update in-memory state immediately after restoring
                     state.userStore = userStore;
                     state.wallet = wallet;
 
@@ -222,15 +262,12 @@
                 if (!userStoreJson) return null;
                 
                 try {
-                    // Always reload userStore from localStorage to ensure it's the latest version
                     const reloadedUserStore = JSON.parse(userStoreJson);
                     const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password);
                     
-                    // Update the global state with the validated data
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
                     
-                    // Initialize Witness Network on login
                     WitnessNetwork.init();
                     
                     return true;
@@ -378,7 +415,6 @@
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                // Since the state is already updated in WalletLogic.createWallet, we just need to navigate
                 updateBalanceDisplay();
                 showView('wallet-view');
                 document.getElementById('create-password-input').value = '';
@@ -396,8 +432,6 @@
                 }
                 const success = await WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
-                    document.getElementById('restore-status').textContent = 'Wallet restored successfully! Please log in.';
-                    // This is also a login, so update state and navigate
                     updateBalanceDisplay();
                     showView('wallet-view');
                 } else {
@@ -429,6 +463,7 @@
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
                     localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
+                    localStorage.removeItem(WitnessNetwork.FILTER_KEY); // Also remove the bloom filter
                     location.reload();
                 }
             });
@@ -441,7 +476,6 @@
                 const amount = parseFloat(event.target.dataset.amount);
                 const serial = event.target.dataset.serial;
                 WalletLogic.addToChain({ type: 'charge', amount: amount, status: 'completed' });
-                // Mark the banknote as spent and flood the network with invalidation message
                 WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 alert(`$${amount.toFixed(2)} added successfully.`);
