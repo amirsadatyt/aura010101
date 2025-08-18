@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Aura Wallet (Supabase Ledger)</title>
+    <title>Aura Wallet (Pinata Ledger)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
         :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --light-gray: #f0f2f5; --dark-gray: #6c757d; }
@@ -41,7 +41,7 @@
     
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><div class="loader" id="login-loader"></div><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><p id="network-status" style="font-size: 12px; color: #1e8e3e;">Ledger: Supabase</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><p id="network-status" style="font-size: 12px; color: #1e8e3e;">Ledger: Pinata IPFS</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     
@@ -64,6 +64,7 @@
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+        // WebTorrent and BloomFilter have been removed.
 
         // ===================================================================================
         // CORE BANKNOTE VALIDATION LOGIC (Unchanged)
@@ -102,48 +103,66 @@
         })();
 
         // ===================================================================================
-        // NEW LEDGER LOGIC: CONNECTS TO YOUR SECURE API (SUPABASE BACKEND)
+        // AURA PROTOCOL - PINATA IPFS LEDGER FOR DOUBLE-SPEND PREVENTION
         // ===================================================================================
-        const SupraLedger = (() => {
-            // !!! IMPORTANT: REPLACE THIS WITH YOUR ACTUAL VERCEL DEPLOYMENT URL !!!
-            const API_BASE_URL = 'https://amir14321-9c3de9m4d-amirs-projects-0dfbeb7e.vercel.app';
+        const PinataLedger = (() => {
+            // WARNING: Storing your JWT directly in client-side code is insecure for production applications.
+            // Anyone can view this key and use your Pinata account. For a real product, this key should be
+            // managed by a secure backend or a serverless function that acts as a proxy.
+            const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIwNjZlN2Q0MC1mNGFkLTRkZGMtYWZhZS04NjgzNGZkMmVlNTMiLCJlbWFpbCI6ImExbTNpNXIuYWZAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6IjAxYzk5YTVkZmFiNDE2ODY3Y2YyIiwic2NvcGVkS2V5U2VjcmV0IjoiYWFmZjgwYzMyZmU0MWQ2NThjYjdhYzRkYmExNTE0OWVhZmE2YTg5ZjVmMGQyNWVmMzA1MzQwNjNiODFlZjcyOSIsImV4cCI6MTc4NzA3NDEzNH0.vupuJXNqqckjCa_jKfa7an0Sf-FOU5qnanlx6P1XFSA';
 
             const recordSpentIdentifier = async (identifier, type) => {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/record-spent`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ serial: identifier })
-                    });
-                    if (!response.ok) {
-                         const err = await response.json();
-                         throw new Error(err.error || 'Failed to record identifier on the ledger.');
+                const dataToPin = {
+                    pinataContent: {
+                        identifier: identifier,
+                        type: type, // e.g., 'banknote' or 'transaction'
+                        status: "spent",
+                        timestamp: new Date().toISOString()
+                    },
+                    pinataMetadata: {
+                        name: `${type}-${identifier}.json`,
+                        keyvalues: {
+                            identifier: identifier
+                        }
                     }
+                };
+
+                try {
+                    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${PINATA_JWT}`
+                        },
+                        body: JSON.stringify(dataToPin)
+                    });
+                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
                     const result = await response.json();
-                    return result.success;
+                    console.log('Identifier recorded to IPFS. Hash:', result.IpfsHash);
+                    return true;
                 } catch (error) {
-                    console.error('Failed to record identifier:', error);
-                    alert(`Critical Error: Could not write to the ledger. Reason: ${error.message}`);
+                    console.error('Failed to record identifier to Pinata:', error);
+                    // In a real app, you'd need robust error handling here.
+                    // For now, we'll alert the user as this is a critical failure.
+                    alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`);
                     return false;
                 }
             };
 
             const hasBeenSpent = async (identifier) => {
+                const url = `https://api.pinata.cloud/data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`;
+                
                 try {
-                    const response = await fetch(`${API_BASE_URL}/api/check-spent`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ serial: identifier })
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: { 'Authorization': `Bearer ${PINATA_JWT}` }
                     });
-                     if (!response.ok) {
-                         const err = await response.json();
-                         throw new Error(err.error || 'Failed to check identifier status from the ledger.');
-                    }
+                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
                     const result = await response.json();
-                    return result.hasBeenSpent;
+                    return result.count > 0;
                 } catch (error) {
-                    console.error('Failed to check identifier status:', error);
-                    alert(`Critical Error: Could not read from the ledger. Reason: ${error.message}`);
+                    console.error('Failed to check identifier status on Pinata:', error);
+                    alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`);
                     // Fail-safe: If we can't check the ledger, we must assume it HAS been spent to prevent double-spending.
                     return true;
                 }
@@ -204,6 +223,7 @@
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
                     state.failedLoginAttempts = 0;
+                    // WitnessNetwork.init() has been removed. No P2P initialization needed.
                     return true;
                 } catch (e) {
                     console.error("Login failed (likely incorrect password):", e);
@@ -250,8 +270,8 @@
                 if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') throw new Error("Associated send transaction not found or already completed.");
                 
                 const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
-                // CRITICAL CHANGE: Use the new SupraLedger
-                const success = await SupraLedger.recordSpentIdentifier(receipt.linkedTxHash, 'transaction');
+                // The following line is the critical change from WitnessNetwork to PinataLedger
+                const success = await PinataLedger.recordSpentIdentifier(receipt.linkedTxHash, 'transaction');
                 if(!success) throw new Error("Could not finalize transaction on the public ledger.");
 
                 state.userStore.chain[senderTxIndex].status = 'completed';
@@ -426,6 +446,7 @@
             document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
+                    // No longer need to remove witness ledger keys
                     location.reload();
                 }
             });
@@ -451,8 +472,8 @@
                     return;
                 }
 
-                // CRITICAL CHANGE: Use the new SupraLedger
-                const success = await SupraLedger.recordSpentIdentifier(serial, 'banknote');
+                // The following line is the critical change from WitnessNetwork to PinataLedger
+                const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
                 if (!success) {
                     alert("Failed to record the banknote on the public ledger. The operation was cancelled to prevent an invalid deposit.");
                     showView('wallet-view');
@@ -519,8 +540,8 @@
                     const signerAddress = ethers.verifyMessage(message, proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
                     
-                    // CRITICAL CHANGE: Use the new SupraLedger
-                    if (await SupraLedger.hasBeenSpent(proposal.txHash)) {
+                    // The following line is the critical change from WitnessNetwork to PinataLedger
+                    if (await PinataLedger.hasBeenSpent(proposal.txHash)) {
                         throw new Error('This transaction has already been processed or is in progress.');
                     }
 
@@ -582,8 +603,8 @@
 
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
                     
-                    // CRITICAL CHANGE: Use the new SupraLedger
-                    if (await SupraLedger.hasBeenSpent(banknoteData.serial)) {
+                    // The following line is the critical change from WitnessNetwork to PinataLedger
+                    if (await PinataLedger.hasBeenSpent(banknoteData.serial)) {
                         throw new Error("This banknote has already been spent according to the public ledger.");
                     }
                     
