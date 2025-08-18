@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Aura Decentralized Wallet</title>
+    <title>Aura Wallet (Pinata Ledger)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
         :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --light-gray: #f0f2f5; --dark-gray: #6c757d; }
@@ -41,7 +41,7 @@
     
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><div class="loader" id="login-loader"></div><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><p id="network-status" style="font-size: 12px; color: var(--dark-gray);">Connecting to network...</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><p id="network-status" style="font-size: 12px; color: #1e8e3e;">Ledger: Pinata IPFS</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     
@@ -60,22 +60,14 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     
-    <script>
-        /**
-         * Minified by jsDelivr using Terser v5.39.0.
-         * Original file: /npm/bloomfilter@0.0.21/bloomfilter.js
-         */
-        !function(t){t.BloomFilter=n;const e="undefined"!=typeof ArrayBuffer;function n(t,n){let o;"number"!=typeof t&&(o=t,t=32*o.length);const r=Math.ceil(t/32);if(t=32*r,this.m=t,this.k=n,e){const e=1<<Math.ceil(Math.log2(Math.ceil(Math.log2(t)/8))),i=1===e?Uint8Array:2===e?Uint16Array:Uint32Array,s=new ArrayBuffer(e*n),c=new Int32Array(r);if(o)for(let t=0;t<r;++t)c[t]=o[t];this.buckets=c,this._locations=new i(s)}else{const t=[];if(o)for(let e=0;e<r;++e)t[e]=o[e];else for(let e=0;e<r;++e)t[e]=0;this.buckets=t,this._locations=[]}}function o(t){return 16843009*((t=(858993459&(t-=t>>1&1431655765))+(t>>2&858993459))+(t>>4)&252645135)>>24}n.prototype.locations=function(t){const e=this.k,n=this.m,o=this._locations;let r,i;{const e=435,n=t.length;let o=0,s=0,c=0,h=0,l=8997,u=33826,f=40164,a=52210;for(let r=0;r<n;++r)l^=t.charCodeAt(r),o=l*e,s=u*e,c=f*e,h=a*e,c+=l<<8,h+=u<<8,s+=o>>>16,l=65535&o,c+=s>>>16,u=65535&s,a=h+(c>>>16)&65535,f=65535&c;r=a<<16|f,i=u<<16|l}r%=n,r<0&&(r+=n),i%=n,i<0&&(i+=n),o[0]=r;for(let t=1;t<e;++t)r=(r+i)%n,i=(i+t)%n,o[t]=r;return o},n.prototype.add=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t)o[e[t]>>5]|=1<<(31&e[t])},n.prototype.test=function(t){const e=this.locations(t+""),n=this.k,o=this.buckets;for(let t=0;t<n;++t){const n=e[t];if(!(o[n>>5]&1<<(31&n)))return!1}return!0},n.prototype.size=function(){return-this.m*Math.log(1-this.countBits()/this.m)/this.k},n.prototype.countBits=function(){const t=this.buckets;let e=0;for(let n=0;n<t.length;++n)e+=o(t[n]);return e},n.prototype.error=function(){return Math.pow(this.countBits()/this.m,this.k)},n.union=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]|o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.intersection=function(t,o){if(t.m===o.m&&t.k===o.k){const r=t.m>>5,i=e?new Int32Array(r):new Array(r);for(let e=0;e<r;++e)i[e]=t.buckets[e]&o.buckets[e];return new n(i,t.k)}throw new Error("Bloom filters must have identical {m, k}.")},n.withTargetError=function(t,e){const o=Math.ceil(-t*Math.log2(e)/Math.LN2);return new n(o,Math.ceil(Math.LN2*o/t))}}("undefined"!=typeof exports?exports:this);
-    </script>
-
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-        import WebTorrent from './webtorrent.min.js';
+        // WebTorrent and BloomFilter have been removed.
 
         // ===================================================================================
-        // CORE BANKNOTE VALIDATION LOGIC
+        // CORE BANKNOTE VALIDATION LOGIC (Unchanged)
         // ===================================================================================
         const CoreLogic = (() => {
             const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
@@ -111,147 +103,76 @@
         })();
 
         // ===================================================================================
-        // AURA PROTOCOL - WITNESS NETWORK (P2P) - **OPTIMIZED**
+        // AURA PROTOCOL - PINATA IPFS LEDGER FOR DOUBLE-SPEND PREVENTION
         // ===================================================================================
-        const WitnessNetwork = (() => {
-            let client, swarm, spentFilter;
-            const LEDGER_KEY = 'aura_witness_ledger';
-            const FILTER_KEY = 'aura_witness_filter';
-            const SWARM_ID = 'WitnessNetwork-Aura-v2';
+        const PinataLedger = (() => {
+            // WARNING: Storing your JWT directly in client-side code is insecure for production applications.
+            // Anyone can view this key and use your Pinata account. For a real product, this key should be
+            // managed by a secure backend or a serverless function that acts as a proxy.
+            const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIwNjZlN2Q0MC1mNGFkLTRkZGMtYWZhZS04NjgzNGZkMmVlNTMiLCJlbWFpbCI6ImExbTNpNXIuYWZAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6IjAxYzk5YTVkZmFiNDE2ODY3Y2YyIiwic2NvcGVkS2V5U2VjcmV0IjoiYWFmZjgwYzMyZmU0MWQ2NThjYjdhYzRkYmExNTE0OWVhZmE2YTg5ZjVmMGQyNWVmMzA1MzQwNjNiODFlZjcyOSIsImV4cCI6MTc4NzA3NDEzNH0.vupuJXNqqckjCa_jKfa7an0Sf-FOU5qnanlx6P1XFSA';
 
-            // In-memory cache for the ledger to dramatically speed up hasBeenSpent checks.
-            let ledgerCache = null;
+            const recordSpentIdentifier = async (identifier, type) => {
+                const dataToPin = {
+                    pinataContent: {
+                        identifier: identifier,
+                        type: type, // e.g., 'banknote' or 'transaction'
+                        status: "spent",
+                        timestamp: new Date().toISOString()
+                    },
+                    pinataMetadata: {
+                        name: `${type}-${identifier}.json`,
+                        keyvalues: {
+                            identifier: identifier
+                        }
+                    }
+                };
 
-            const loadLedger = () => {
-                if (ledgerCache === null) { // Load from disk only if cache is not initialized
-                    ledgerCache = JSON.parse(localStorage.getItem(LEDGER_KEY)) || {};
+                try {
+                    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${PINATA_JWT}`
+                        },
+                        body: JSON.stringify(dataToPin)
+                    });
+                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
+                    const result = await response.json();
+                    console.log('Identifier recorded to IPFS. Hash:', result.IpfsHash);
+                    return true;
+                } catch (error) {
+                    console.error('Failed to record identifier to Pinata:', error);
+                    // In a real app, you'd need robust error handling here.
+                    // For now, we'll alert the user as this is a critical failure.
+                    alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`);
+                    return false;
                 }
-                return ledgerCache;
             };
 
-            const saveLedger = (ledger) => {
-                ledgerCache = ledger; // Update the in-memory cache
-                localStorage.setItem(LEDGER_KEY, JSON.stringify(ledger));
-            };
-
-            const saveFilter = () => {
-                if (!spentFilter) return;
-                const serializableBuckets = Array.from(spentFilter.buckets);
-                localStorage.setItem(FILTER_KEY, JSON.stringify(serializableBuckets));
+            const hasBeenSpent = async (identifier) => {
+                const url = `https://api.pinata.cloud/data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`;
+                
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: { 'Authorization': `Bearer ${PINATA_JWT}` }
+                    });
+                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
+                    const result = await response.json();
+                    return result.count > 0;
+                } catch (error) {
+                    console.error('Failed to check identifier status on Pinata:', error);
+                    alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`);
+                    // Fail-safe: If we can't check the ledger, we must assume it HAS been spent to prevent double-spending.
+                    return true;
+                }
             };
             
-            const updateNetworkStatusUI = () => {
-                const statusEl = document.getElementById('network-status');
-                if (!statusEl) return;
-                const peerCount = swarm ? swarm.wires.length : 0;
-                if (peerCount > 0) {
-                    statusEl.textContent = `Network: Connected (${peerCount} peers)`;
-                    statusEl.style.color = '#1e8e3e';
-                } else if (client && swarm) {
-                    statusEl.textContent = 'Network: Connected (Searching for peers...)';
-                    statusEl.style.color = '#007bff';
-                } else {
-                    statusEl.textContent = 'Network: Disconnected';
-                    statusEl.style.color = '#6c757d';
-                }
-            };
-
-            const initNetwork = () => {
-                if (client) {
-                    client.destroy(() => { client = null; });
-                }
-                client = new WebTorrent();
-                client.on('error', (e) => console.error('WebTorrent Client Error:', e.message));
-
-                loadLedger(); // Pre-load the ledger into the cache on initialization.
-
-                const savedFilterData = localStorage.getItem(FILTER_KEY);
-                if (savedFilterData) {
-                    try {
-                        const buckets = new Int32Array(JSON.parse(savedFilterData));
-                        spentFilter = new BloomFilter(buckets, 7);
-                    } catch (e) {
-                         console.error("Could not parse bloom filter, creating a new one.", e);
-                    }
-                }
-                
-                if (!spentFilter) {
-                    // Tuned the bloom filter for higher capacity (10k) and lower error rate (0.1%).
-                    spentFilter = BloomFilter.withTargetError(10000, 0.001);
-                    const ledger = loadLedger();
-                    for (const id in ledger) {
-                        spentFilter.add(id);
-                    }
-                    saveFilter();
-                }
-                
-                const torrentOpts = {
-                    name: SWARM_ID,
-                    announce: [
-                        'wss://tracker.webtorrent.dev',
-                        'wss://tracker.openwebtorrent.com',
-                        'wss://tracker.webtorrent.io',
-                        'wss://tracker.btorrent.xyz',
-                        'wss://tracker.files.fm:7073/announce',
-                        'wss://spacetracker.org:443/announce'
-                    ]
-                };
-                swarm = client.seed(new TextEncoder().encode(SWARM_ID), torrentOpts);
-
-                updateNetworkStatusUI();
-                
-                swarm.on('wire', (wire) => {
-                    console.log('New peer connected:', wire.peerId);
-                    updateNetworkStatusUI();
-                    wire.on('close', () => {
-                        console.log('Peer disconnected:', wire.peerId);
-                        updateNetworkStatusUI();
-                    });
-                    wire.on('data', (data) => {
-                        try {
-                            const message = JSON.parse(data.toString());
-                            if (message.type === 'invalidation' && message.serial) {
-                                markAsSpent(message.serial, 'network');
-                            }
-                        } catch (e) { console.error('Error processing network message:', e); }
-                    });
-                });
-                swarm.on('ready', updateNetworkStatusUI);
-            };
-
-            // Optimized hasBeenSpent function using the in-memory cache.
-            const hasBeenSpent = (id) => {
-                if (!spentFilter) {
-                    const ledger = loadLedger();
-                    return !!ledger[id];
-                }
-                if (!spentFilter.test(id)) return false; // Fast path
-                const ledger = loadLedger(); // Confirms against the fast in-memory cache
-                return !!ledger[id];
-            };
-
-            const markAsSpent = (id, type) => {
-                const ledger = loadLedger();
-                if (ledger[id]) return;
-
-                ledger[id] = { type: type, timestamp: Date.now() };
-                saveLedger(ledger); // This updates both cache and localStorage
-
-                if (spentFilter) {
-                    spentFilter.add(id);
-                    saveFilter();
-                }
-
-                if (swarm) {
-                    const invalidationMessage = JSON.stringify({ type: 'invalidation', serial: id });
-                    for (const wire of swarm.wires) wire.send(invalidationMessage);
-                }
-            };
-            return { init: initNetwork, hasBeenSpent, markAsSpent, LEDGER_KEY, FILTER_KEY };
+            return { recordSpentIdentifier, hasBeenSpent };
         })();
-
+        
         // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
+        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED)
         // ===================================================================================
         
         const AppConstants = {
@@ -302,7 +223,7 @@
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
                     state.failedLoginAttempts = 0;
-                    WitnessNetwork.init();
+                    // WitnessNetwork.init() has been removed. No P2P initialization needed.
                     return true;
                 } catch (e) {
                     console.error("Login failed (likely incorrect password):", e);
@@ -347,10 +268,14 @@
             verifyAndFinalize: async (receipt) => {
                 const senderTxIndex = state.userStore.chain.findIndex(tx => tx.hash === receipt.linkedTxHash);
                 if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') throw new Error("Associated send transaction not found or already completed.");
-                const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature); // Verification implies address match is not needed here
+                
+                const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
+                // The following line is the critical change from WitnessNetwork to PinataLedger
+                const success = await PinataLedger.recordSpentIdentifier(receipt.linkedTxHash, 'transaction');
+                if(!success) throw new Error("Could not finalize transaction on the public ledger.");
+
                 state.userStore.chain[senderTxIndex].status = 'completed';
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                WitnessNetwork.markAsSpent(receipt.linkedTxHash, 'transaction');
                 return true;
             }
         };
@@ -365,7 +290,6 @@
             if (statusBox) statusBox.innerHTML = '';
         }
         
-        // **FIX**: Resets the state of the charge view completely.
         function resetChargeView() {
             resetViewInputs('charge-view');
             document.getElementById('banknote-image-input').disabled = true;
@@ -373,7 +297,7 @@
             const confirmSection = document.getElementById('charge-confirmation');
             confirmSection.style.display = 'none';
             const confirmBtn = document.getElementById('confirm-charge-button');
-            confirmBtn.disabled = false; // Re-enable the button for the next use.
+            confirmBtn.disabled = false;
             confirmBtn.removeAttribute('data-amount');
             confirmBtn.removeAttribute('data-serial');
         }
@@ -468,7 +392,6 @@
             });
             
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
-                WitnessNetwork.init();
                 updateBalanceDisplay();
                 showView('wallet-view');
                 document.getElementById('seed-phrase-display').textContent = '';
@@ -484,7 +407,7 @@
                 button.disabled = true; loader.style.display = 'block';
                 const success = await WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
-                    WitnessNetwork.init(); updateBalanceDisplay(); showView('wallet-view');
+                    updateBalanceDisplay(); showView('wallet-view');
                 } else {
                      statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>';
                 }
@@ -523,23 +446,22 @@
             document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
-                    localStorage.removeItem(WitnessNetwork.LEDGER_KEY);
-                    localStorage.removeItem(WitnessNetwork.FILTER_KEY);
+                    // No longer need to remove witness ledger keys
                     location.reload();
                 }
             });
 
             // Main Wallet Actions
             document.getElementById('show-charge-view-button').addEventListener('click', () => {
-                resetChargeView(); // **FIX**: Reset the view every time it's shown.
+                resetChargeView();
                 showView('charge-view');
             });
             document.getElementById('show-send-view-button').addEventListener('click', () => showView('send-view'));
             document.getElementById('show-receive-view-button').addEventListener('click', () => showView('scan-proposal-view'));
 
-            document.getElementById('confirm-charge-button').addEventListener('click', (event) => {
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
                 const button = event.target;
-                button.disabled = true; // **FIX**: Disable button immediately on first click.
+                button.disabled = true; 
 
                 const amount = parseFloat(button.dataset.amount);
                 const serial = button.dataset.serial;
@@ -550,8 +472,15 @@
                     return;
                 }
 
+                // The following line is the critical change from WitnessNetwork to PinataLedger
+                const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
+                if (!success) {
+                    alert("Failed to record the banknote on the public ledger. The operation was cancelled to prevent an invalid deposit.");
+                    showView('wallet-view');
+                    return;
+                }
+
                 WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' });
-                WitnessNetwork.markAsSpent(serial, 'banknote');
                 updateBalanceDisplay();
                 alert(`$${amount.toFixed(2)} added successfully.`);
                 showView('wallet-view');
@@ -603,14 +532,18 @@
                  if (!file) return;
                  const statusEl = document.getElementById('proposal-status');
                  try {
-                    statusEl.innerHTML = '<span class="info">QR Code detected. Processing proposal...</span>';
+                    statusEl.innerHTML = '<span class="info">QR Code detected. Verifying transaction on public ledger...</span>';
                     const proposal = await decodeQrFromFile(file);
                     if (proposal.type !== 'AURA_PROPOSAL') throw new Error('Not a valid proposal QR code.');
                     
                     const message = JSON.stringify({ ...proposal, signature: undefined });
                     const signerAddress = ethers.verifyMessage(message, proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
-                    if (WitnessNetwork.hasBeenSpent(proposal.txHash)) throw new Error('This transaction has already been processed or is in progress.');
+                    
+                    // The following line is the critical change from WitnessNetwork to PinataLedger
+                    if (await PinataLedger.hasBeenSpent(proposal.txHash)) {
+                        throw new Error('This transaction has already been processed or is in progress.');
+                    }
 
                     statusEl.innerHTML = '<span class="info">Proposal valid. Creating receipt...</span>';
                     const receipt = await WalletLogic.createReceipt(proposal);
@@ -666,10 +599,14 @@
                     const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
 
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>';
+                    statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures and checking public ledger...</span>';
 
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
-                    if (WitnessNetwork.hasBeenSpent(banknoteData.serial)) throw new Error("This banknote has already been spent according to the witness network.");
+                    
+                    // The following line is the critical change from WitnessNetwork to PinataLedger
+                    if (await PinataLedger.hasBeenSpent(banknoteData.serial)) {
+                        throw new Error("This banknote has already been spent according to the public ledger.");
+                    }
                     
                     const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
                     if (!isSigOneValid) throw new Error("Signature validation failed (internal). The note may be damaged or counterfeit.");
