@@ -115,9 +115,55 @@
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; newTx.hash = ethers.solidityPackedKeccak256(['string', 'uint256', 'string', 'string', 'string'], [newTx.type, newTx.amount || 0, newTx.from || '', newTx.to || '', newTx.prevHash]); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); return newTx; },
             calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0); return balance; }, 0); },
+            
+            // Gets a standardized, sorted string from the confirmation data to ensure consistent signing
+            getStandardizedConfirmationMessage: (confirmation) => {
+                const dataToSign = {
+                    type: confirmation.type,
+                    senderAddress: confirmation.senderAddress,
+                    amount: confirmation.amount,
+                    linkedTxHash: confirmation.linkedTxHash
+                };
+                return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
+            },
+
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash }; },
-            processPayment: async (request) => { if (WalletLogic.calculateBalance() < request.amount) throw new Error("Insufficient funds."); if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash }; const messageToSign = JSON.stringify({ ...confirmation, signature: undefined }); confirmation.signature = await state.wallet.signMessage(messageToSign); await PinataLedger.pinConfirmation(confirmation); return true; },
-            finalizePayment: async (confirmation) => { const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); if (receiveTxIndex === -1) return false; const message = JSON.stringify({ ...confirmation, signature: undefined }); const signerAddress = ethers.verifyMessage(message, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Confirmation signature is invalid."); return false; } state.userStore.chain[receiveTxIndex].status = 'completed'; state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); return true; }
+            
+            processPayment: async (request) => { 
+                if (WalletLogic.calculateBalance() < request.amount) throw new Error("Insufficient funds."); 
+                if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); 
+                
+                const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); 
+                const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); 
+                if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); 
+
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash };
+                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                confirmation.signature = await state.wallet.signMessage(messageToSign);
+                
+                await PinataLedger.pinConfirmation(confirmation); 
+                return true; 
+            },
+
+            finalizePayment: async (confirmation) => { 
+                const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); 
+                if (receiveTxIndex === -1) return false; 
+                
+                const message = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                const signerAddress = ethers.verifyMessage(message, confirmation.signature); 
+                
+                if (signerAddress !== confirmation.senderAddress) { 
+                    console.error("Signature verification failed!");
+                    console.error("Expected Signer (from receipt):", confirmation.senderAddress);
+                    console.error("Actual Signer (from signature):", signerAddress);
+                    return false; 
+                } 
+                
+                state.userStore.chain[receiveTxIndex].status = 'completed'; 
+                state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; 
+                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
+                return true; 
+            }
         };
         
         // UI & EVENT LISTENERS
@@ -166,19 +212,26 @@
                 showView('qr-display-view');
                 
                 state.activePollingTimer = setInterval(async () => {
-                    const confirmation = await PinataLedger.findConfirmation(request.linkedTxHash);
-                    if (confirmation) {
+                    try {
+                        const confirmation = await PinataLedger.findConfirmation(request.linkedTxHash);
+                        if (confirmation) {
+                            clearInterval(state.activePollingTimer);
+                            state.activePollingTimer = null;
+                            statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
+                            const success = await WalletLogic.finalizePayment(confirmation);
+                            if (success) {
+                                statusMsg.innerHTML = `<span class="success">Success! $${confirmation.amount.toFixed(2)} received.</span>`;
+                                document.querySelector('#waiting-on-payment .loader').style.display = 'none';
+                                updateBalanceDisplay();
+                            } else {
+                               statusMsg.innerHTML = `<span class="error">Failed to finalize payment. Invalid receipt.</span>`;
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Polling error:", err);
+                        statusMsg.innerHTML = `<span class="error">Network error while checking for payment.</span>`;
                         clearInterval(state.activePollingTimer);
                         state.activePollingTimer = null;
-                        statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
-                        const success = await WalletLogic.finalizePayment(confirmation);
-                        if (success) {
-                            statusMsg.innerHTML = `<span class="success">Success! $${confirmation.amount.toFixed(2)} received.</span>`;
-                            document.querySelector('#waiting-on-payment .loader').style.display = 'none';
-                            updateBalanceDisplay();
-                        } else {
-                           statusMsg.innerHTML = `<span class="error">Failed to finalize payment. Invalid receipt.</span>`;
-                        }
                     }
                 }, AppConstants.POLLING_INTERVAL);
             });
