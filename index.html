@@ -64,6 +64,7 @@
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+        // WebTorrent and BloomFilter have been removed.
 
         // ===================================================================================
         // CORE BANKNOTE VALIDATION LOGIC (Unchanged)
@@ -87,8 +88,7 @@
                 parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; },
                 getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; },
                 decodeQrGrid: async (imgData, statusEl) => {
-                    const l=Banknote.getLayout(imgData.width);
-                    const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0);
+                    const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0);
                     for(let i=0;i<Constants.NUM_QR_CODES;i++){
                         statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`;
                         await new Promise(r=>setTimeout(r,5));
@@ -96,76 +96,90 @@
                         if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}}
                     }
                     if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);}
-                    let payload='';
-                    for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload;
+                    let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload;
                 }
             };
             return { Constants, Utils, Crypto, Banknote };
         })();
 
         // ===================================================================================
-        // AURA PROTOCOL - PINATA IPFS LEDGER (UPDATED AND SECURE)
+        // AURA PROTOCOL - PINATA IPFS LEDGER FOR DOUBLE-SPEND PREVENTION
         // ===================================================================================
         const PinataLedger = (() => {
-            // 🔽🔽🔽 **IMPORTANT** 🔽🔽🔽
-            // REPLACE THIS URL WITH THE URL OF YOUR OWN SUPABASE EDGE FUNCTION
-            const SUPABASE_FUNCTION_URL = 'https://hoppdalxbmktxexylbkl.supabase.co/functions/v1/quick-responder';
+            // WARNING: Storing your JWT directly in client-side code is insecure for production applications.
+            // Anyone can view this key and use your Pinata account. For a real product, this key should be
+            // managed by a secure backend or a serverless function that acts as a proxy.
+            const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIwNjZlN2Q0MC1mNGFkLTRkZGMtYWZhZS04NjgzNGZkMmVlNTMiLCJlbWFpbCI6ImExbTNpNXIuYWZAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6IjAxYzk5YTVkZmFiNDE2ODY3Y2YyIiwic2NvcGVkS2V5U2VjcmV0IjoiYWFmZjgwYzMyZmU0MWQ2NThjYjdhYzRkYmExNTE0OWVhZmE2YTg5ZjVmMGQyNWVmMzA1MzQwNjNiODFlZjcyOSIsImV4cCI6MTc4NzA3NDEzNH0.vupuJXNqqckjCa_jKfa7an0Sf-FOU5qnanlx6P1XFSA';
 
             const recordSpentIdentifier = async (identifier, type) => {
-                try {
-                    const response = await fetch(SUPABASE_FUNCTION_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ identifier, type })
-                    });
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || `Server error: ${response.status}`);
+                const dataToPin = {
+                    pinataContent: {
+                        identifier: identifier,
+                        type: type, // e.g., 'banknote' or 'transaction'
+                        status: "spent",
+                        timestamp: new Date().toISOString()
+                    },
+                    pinataMetadata: {
+                        name: `${type}-${identifier}.json`,
+                        keyvalues: {
+                            identifier: identifier
+                        }
                     }
+                };
+
+                try {
+                    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${PINATA_JWT}`
+                        },
+                        body: JSON.stringify(dataToPin)
+                    });
+                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
                     const result = await response.json();
-                    console.log('Identifier recorded via Supabase. IPFS Hash:', result.ipfsHash);
+                    console.log('Identifier recorded to IPFS. Hash:', result.IpfsHash);
                     return true;
                 } catch (error) {
-                    console.error('Failed to record identifier via Supabase:', error);
-                    alert(`Critical Error: Could not write to the public ledger. Reason: ${error.message}`);
+                    console.error('Failed to record identifier to Pinata:', error);
+                    // In a real app, you'd need robust error handling here.
+                    // For now, we'll alert the user as this is a critical failure.
+                    alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`);
                     return false;
                 }
             };
 
             const hasBeenSpent = async (identifier) => {
+                const url = `https://api.pinata.cloud/data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`;
+                
                 try {
-                    const url = new URL(SUPABASE_FUNCTION_URL);
-                    url.searchParams.append('identifier', identifier);
-
-                    // CORRECTED: The 'headers' property is removed from this GET request
-                    const response = await fetch(url.toString(), {
+                    const response = await fetch(url, {
                         method: 'GET',
+                        headers: { 'Authorization': `Bearer ${PINATA_JWT}` }
                     });
-
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || `Server error: ${response.status}`);
-                    }
+                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
                     const result = await response.json();
-                    return result.spent;
+                    return result.count > 0;
                 } catch (error) {
-                    console.error('Failed to check identifier status via Supabase:', error);
-                    alert(`Critical Error: Could not read from the public ledger. Reason: ${error.message}`);
-                    // Fail-safe:
+                    console.error('Failed to check identifier status on Pinata:', error);
+                    alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`);
+                    // Fail-safe: If we can't check the ledger, we must assume it HAS been spent to prevent double-spending.
                     return true;
                 }
             };
-
+            
             return { recordSpentIdentifier, hasBeenSpent };
         })();
         
         // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
+        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED)
         // ===================================================================================
+        
         const AppConstants = {
             MAX_LOGIN_ATTEMPTS: 5,
             LOGIN_LOCKOUT_PERIOD: 30000 // 30 seconds
         };
+
         let state = {
             wallet: null,
             masterPublicKey: null,
@@ -174,6 +188,7 @@
             failedLoginAttempts: 0,
             isLockedOut: false,     
         };
+
         const WalletLogic = {
             createWallet: (password) => {
                 const wallet = ethers.Wallet.createRandom();
@@ -208,6 +223,7 @@
                     state.userStore = reloadedUserStore;
                     state.wallet = wallet;
                     state.failedLoginAttempts = 0;
+                    // WitnessNetwork.init() has been removed. No P2P initialization needed.
                     return true;
                 } catch (e) {
                     console.error("Login failed (likely incorrect password):", e);
@@ -252,7 +268,9 @@
             verifyAndFinalize: async (receipt) => {
                 const senderTxIndex = state.userStore.chain.findIndex(tx => tx.hash === receipt.linkedTxHash);
                 if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') throw new Error("Associated send transaction not found or already completed.");
+                
                 const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
+                // The following line is the critical change from WitnessNetwork to PinataLedger
                 const success = await PinataLedger.recordSpentIdentifier(receipt.linkedTxHash, 'transaction');
                 if(!success) throw new Error("Could not finalize transaction on the public ledger.");
 
@@ -356,7 +374,7 @@
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
             document.getElementById('back-from-qr-display').addEventListener('click', () => showView('wallet-view'));
             document.getElementById('back-from-scan-proposal').addEventListener('click', () => showView('wallet-view'));
-            
+
             // Wallet Creation / Restoration
             document.getElementById('create-wallet-button').addEventListener('click', async () => {
                 const button = document.getElementById('create-wallet-button'), loader = document.getElementById('create-loader'), statusEl = document.getElementById('create-status');
@@ -372,12 +390,14 @@
                     button.disabled = false; loader.style.display = 'none';
                 }, 50);
             });
+            
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
                 updateBalanceDisplay();
                 showView('wallet-view');
                 document.getElementById('seed-phrase-display').textContent = '';
                 resetViewInputs('create-wallet-view');
             });
+
             document.getElementById('restore-wallet-button').addEventListener('click', async () => {
                 const button = document.getElementById('restore-wallet-button'), loader = document.getElementById('restore-loader'), statusEl = document.getElementById('restore-status');
                 const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim();
@@ -391,8 +411,7 @@
                 } else {
                      statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>';
                 }
-                button.disabled = false;
-                loader.style.display = 'none';
+                button.disabled = false; loader.style.display = 'none';
                 resetViewInputs('restore-wallet-view');
             });
 
@@ -423,13 +442,15 @@
             });
 
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
+            
             document.getElementById('reset-app-button').addEventListener('click', () => {
                 if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
                     localStorage.removeItem('aura_user_store');
+                    // No longer need to remove witness ledger keys
                     location.reload();
                 }
             });
-            
+
             // Main Wallet Actions
             document.getElementById('show-charge-view-button').addEventListener('click', () => {
                 resetChargeView();
@@ -444,13 +465,14 @@
 
                 const amount = parseFloat(button.dataset.amount);
                 const serial = button.dataset.serial;
-            
+                
                 if (isNaN(amount) || !serial) {
                     alert("An error occurred. Please try scanning again.");
                     showView('wallet-view');
                     return;
                 }
 
+                // The following line is the critical change from WitnessNetwork to PinataLedger
                 const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
                 if (!success) {
                     alert("Failed to record the banknote on the public ledger. The operation was cancelled to prevent an invalid deposit.");
@@ -474,6 +496,7 @@
                 document.getElementById('confirm-send-button').dataset.amount = amount;
                 showView('send-confirm-view');
             });
+
             document.getElementById('confirm-send-button').addEventListener('click', async (event) => {
                 const amount = parseFloat(event.target.dataset.amount);
                 const proposal = await WalletLogic.createProposal(amount);
@@ -483,7 +506,7 @@
                 document.getElementById('scan-receipt-label').style.display = 'block';
                 showView('qr-display-view');
             });
-            
+
             // QR Code Handling
             document.getElementById('scan-receipt-input').addEventListener('change', async (event) => {
                  const file = event.target.files[0];
@@ -503,6 +526,7 @@
                     event.target.value = '';
                 }
             });
+
             document.getElementById('scan-proposal-input').addEventListener('change', async (event) => {
                  const file = event.target.files[0];
                  if (!file) return;
@@ -516,6 +540,7 @@
                     const signerAddress = ethers.verifyMessage(message, proposal.signature);
                     if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
                     
+                    // The following line is the critical change from WitnessNetwork to PinataLedger
                     if (await PinataLedger.hasBeenSpent(proposal.txHash)) {
                         throw new Error('This transaction has already been processed or is in progress.');
                     }
@@ -535,7 +560,7 @@
                     event.target.value = '';
                 }
             });
-            
+
             // Banknote Charging
             document.getElementById('public-key-input').addEventListener('change', async (event) => {
                 const file = event.target.files[0];
@@ -547,7 +572,6 @@
                 try {
                     const keyData = JSON.parse(await file.text());
                     if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'.");
- 
                     state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey);
                     keyStatus.innerHTML = '<span class="success">Public key loaded successfully.</span>';
                     document.getElementById('banknote-image-input').disabled = false;
@@ -555,6 +579,7 @@
                     keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
                 }
             });
+
             document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -577,6 +602,8 @@
                     statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures and checking public ledger...</span>';
 
                     const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                    
+                    // The following line is the critical change from WitnessNetwork to PinataLedger
                     if (await PinataLedger.hasBeenSpent(banknoteData.serial)) {
                         throw new Error("This banknote has already been spent according to the public ledger.");
                     }
@@ -585,7 +612,7 @@
                     if (!isSigOneValid) throw new Error("Signature validation failed (internal). The note may be damaged or counterfeit.");
                     const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
                     if (!isSigTwoValid) throw new Error("Signature validation failed (issuer). The note is not authentic according to the provided public key.");
-                    
+
                     statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
                     document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
                     const confirmBtn = document.getElementById('confirm-charge-button');
