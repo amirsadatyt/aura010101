@@ -305,7 +305,7 @@
                 updateTimer();
 
                 state.activePollingTimer = setInterval(async () => {
-                    updateTimer(); // Update timer on each poll interval as well
+                    updateTimer(); 
                     if (timeLeft <= 0) return;
 
                     try {
@@ -320,9 +320,12 @@
                                 statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
                                 document.querySelector('#waiting-on-payment .loader').style.display = 'none';
                                 updateBalanceDisplay(); 
-                            } else {
-                               statusMsg.innerHTML = `<span class="error">Failed to finalize payment. Invalid receipt.</span>`;
-                            }
+                                // Automatically go back to the wallet view after 2 seconds
+                                setTimeout(() => {
+                                    showView('wallet-view');
+                                }, 2000);
+                            } 
+                            // **CHANGE**: No more "else" block here, so no error message is shown for invalid receipt.
                         }
                     } catch (err) {
                         console.error("Polling error:", err);
