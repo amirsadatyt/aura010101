@@ -116,18 +116,9 @@
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; newTx.hash = ethers.solidityPackedKeccak256(['string', 'uint256', 'string', 'string', 'string'], [newTx.type, newTx.amount || 0, newTx.from || '', newTx.to || '', newTx.prevHash]); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); return newTx; },
             calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0); return balance; }, 0); },
             
-            // **FIX**: Creates a highly reliable, standardized string for signing and verification.
             getStandardizedConfirmationMessage: (confirmation) => {
-                // Normalize all data types to strings with a consistent format
-                // to ensure the message is identical for signing and verification.
-                const type = String(confirmation.type);
-                const senderAddress = String(confirmation.senderAddress);
-                // CRITICAL: Ensure amount is a number and format it to a fixed precision string.
-                // This prevents mismatches like 10.5 vs "10.50".
                 const amount = Number(confirmation.amount).toFixed(8);
-                const linkedTxHash = String(confirmation.linkedTxHash);
-
-                return [type, senderAddress, amount, linkedTxHash].join('|');
+                return [confirmation.type, confirmation.senderAddress, amount, confirmation.linkedTxHash].join('|');
             },
 
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash }; },
@@ -141,8 +132,11 @@
                 if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); 
 
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash };
+                
+                // **NEW ARCHITECTURE**: The message that is signed is now also included in the payload.
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signedMessage = messageToSign; // Include the exact signed message
                 
                 await PinataLedger.pinConfirmation(confirmation); 
                 return true; 
@@ -155,8 +149,21 @@
                     return false;
                 }
                 
-                const message = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                const signerAddress = ethers.verifyMessage(message, confirmation.signature); 
+                // **NEW ARCHITECTURE**: Verify using the `signedMessage` provided in the payload.
+                // This eliminates any possibility of mismatch between sender and receiver.
+                if (!confirmation.signedMessage) {
+                    console.error("Finalize Error: Receipt is missing the 'signedMessage' field. Old format?");
+                    return false;
+                }
+
+                // Security Check: Ensure the data in the confirmation matches the signed message.
+                const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                if (locallyRecreatedMessage !== confirmation.signedMessage) {
+                    console.error("Tamper Detection: Confirmation data does not match the signed message!");
+                    return false;
+                }
+                
+                const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); 
                 
                 if (signerAddress !== confirmation.senderAddress) { 
                     console.error("Signature verification failed!");
