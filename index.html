@@ -118,14 +118,16 @@
             
             // **FIX**: Creates a highly reliable, standardized string for signing and verification.
             getStandardizedConfirmationMessage: (confirmation) => {
-                // By joining fields with a separator, we create an unambiguous message
-                // that avoids any issues with JSON key ordering.
-                return [
-                    confirmation.type,
-                    confirmation.senderAddress,
-                    confirmation.amount,
-                    confirmation.linkedTxHash
-                ].join('|');
+                // Normalize all data types to strings with a consistent format
+                // to ensure the message is identical for signing and verification.
+                const type = String(confirmation.type);
+                const senderAddress = String(confirmation.senderAddress);
+                // CRITICAL: Ensure amount is a number and format it to a fixed precision string.
+                // This prevents mismatches like 10.5 vs "10.50".
+                const amount = Number(confirmation.amount).toFixed(8);
+                const linkedTxHash = String(confirmation.linkedTxHash);
+
+                return [type, senderAddress, amount, linkedTxHash].join('|');
             },
 
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash }; },
@@ -134,7 +136,7 @@
                 if (WalletLogic.calculateBalance() < request.amount) throw new Error("Insufficient funds."); 
                 if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); 
                 
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); 
+                WalletLogic.addToChain({ type: 'send', amount: request.amount, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); 
                 const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); 
                 if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); 
 
@@ -224,7 +226,7 @@
                             statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
                             const success = await WalletLogic.finalizePayment(confirmation);
                             if (success) {
-                                statusMsg.innerHTML = `<span class="success">Success! $${confirmation.amount.toFixed(2)} received.</span>`;
+                                statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
                                 document.querySelector('#waiting-on-payment .loader').style.display = 'none';
                                 updateBalanceDisplay();
                             } else {
