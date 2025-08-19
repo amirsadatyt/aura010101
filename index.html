@@ -133,10 +133,9 @@
 
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash };
                 
-                // **NEW ARCHITECTURE**: The message that is signed is now also included in the payload.
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign; // Include the exact signed message
+                confirmation.signedMessage = messageToSign; 
                 
                 await PinataLedger.pinConfirmation(confirmation); 
                 return true; 
@@ -149,14 +148,11 @@
                     return false;
                 }
                 
-                // **NEW ARCHITECTURE**: Verify using the `signedMessage` provided in the payload.
-                // This eliminates any possibility of mismatch between sender and receiver.
                 if (!confirmation.signedMessage) {
                     console.error("Finalize Error: Receipt is missing the 'signedMessage' field.");
                     return false;
                 }
 
-                // Security Check: Ensure the data in the confirmation matches the signed message.
                 const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 if (locallyRecreatedMessage !== confirmation.signedMessage) {
                     console.error("Tamper Detection: Confirmation data does not match the signed message!");
@@ -224,23 +220,15 @@
                 statusMsg.innerHTML = '<span class="info">Waiting for sender to pay...</span>';
                 showView('qr-display-view');
                 
-                // **FIX**: Introduce a flag to prevent the race condition.
-                let isFinalizing = false;
-
                 state.activePollingTimer = setInterval(async () => {
-                    // **FIX**: If finalization has already started, do nothing.
-                    if (isFinalizing) return;
-
                     try {
                         const confirmation = await PinataLedger.findConfirmation(request.linkedTxHash);
                         if (confirmation) {
-                            // **FIX**: Set the flag immediately to prevent other polls from running this logic.
-                            isFinalizing = true; 
-                            
+                            // CAREFUL UPDATE: Stop polling as soon as confirmation is found
                             clearInterval(state.activePollingTimer);
                             state.activePollingTimer = null;
-                            statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
                             
+                            statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
                             const success = await WalletLogic.finalizePayment(confirmation);
                             if (success) {
                                 statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
