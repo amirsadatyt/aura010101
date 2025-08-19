@@ -109,7 +109,7 @@
         const PinataLedger = (() => {
             // 🔽🔽🔽 **IMPORTANT** 🔽🔽🔽
             // REPLACE THIS URL WITH THE URL OF YOUR OWN SUPABASE EDGE FUNCTION
-            const SUPABASE_FUNCTION_URL = 'https://hoppdalxbmktxexylbkl.supabase.co/functions/v1/quick-responder';
+            const SUPABASE_FUNCTION_URL = 'YOUR_SUPABASE_FUNCTION_URL_HERE';
 
             const recordSpentIdentifier = async (identifier, type) => {
                 try {
@@ -134,20 +134,20 @@
 
             const hasBeenSpent = async (identifier) => {
                 try {
-                    // Add the identifier as a query parameter to the URL
                     const url = new URL(SUPABASE_FUNCTION_URL);
                     url.searchParams.append('identifier', identifier);
 
+                    // CORRECTED: The 'headers' property is removed from this GET request
                     const response = await fetch(url.toString(), {
                         method: 'GET',
-                        headers: { 'Content-Type': 'application/json' },
                     });
+
                     if (!response.ok) {
                         const err = await response.json();
                         throw new Error(err.error || `Server error: ${response.status}`);
                     }
                     const result = await response.json();
-                    return result.spent; // The function returns { spent: true/false }
+                    return result.spent;
                 } catch (error) {
                     console.error('Failed to check identifier status via Supabase:', error);
                     alert(`Critical Error: Could not read from the public ledger. Reason: ${error.message}`);
@@ -451,7 +451,6 @@
                     return;
                 }
 
-                // The following line is the critical change from WitnessNetwork to PinataLedger
                 const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
                 if (!success) {
                     alert("Failed to record the banknote on the public ledger. The operation was cancelled to prevent an invalid deposit.");
