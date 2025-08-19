@@ -107,25 +107,21 @@
         // AURA PROTOCOL - PINATA IPFS LEDGER (WITH ADVANCED DEBUGGING)
         // ===================================================================================
         const PinataLedger = (() => {
-            // 🔽🔽🔽 **IMPORTANT** 🔽🔽🔽
-            // MAKE SURE THIS URL IS CORRECT!
             const SUPABASE_FUNCTION_URL = 'https://hoppdalxbmktxexylbkl.supabase.co/functions/v1/quick-responder';
 
-            // This is a new helper function for detailed error logging
             const handleApiError = async (response) => {
-                const rawText = await response.text(); // Get the raw response text
+                const rawText = await response.text();
                 console.error("----------- ERROR RECEIVED FROM SERVER -----------");
                 console.error("STATUS:", response.status, response.statusText);
                 console.error("RAW RESPONSE BODY:", rawText);
                 console.error("HEADERS:", Object.fromEntries(response.headers.entries()));
                 console.error("--------------------------------------------------");
                 
-                // Try to parse it as JSON for a cleaner error message, but fall back to raw text
                 try {
                     const jsonError = JSON.parse(rawText);
                     return jsonError.error || rawText;
                 } catch {
-                    return rawText; // Return the raw text if it's not JSON
+                    return rawText;
                 }
             };
 
@@ -144,7 +140,6 @@
                     console.log('Identifier recorded via Supabase. IPFS Hash:', result.ipfsHash);
                     return true;
                 } catch (error) {
-                    // This alert will now show the more detailed error
                     alert(`Critical Error: Could not write to the public ledger. Reason: ${error.message}`);
                     return false;
                 }
@@ -166,7 +161,6 @@
                     const result = await response.json();
                     return result.spent;
                 } catch (error) {
-                    // This alert will now show the more detailed error
                     alert(`Critical Error: Could not read from the public ledger. Reason: ${error.message}`);
                     return true;
                 }
@@ -180,7 +174,7 @@
         // ===================================================================================
         const AppConstants = {
             MAX_LOGIN_ATTEMPTS: 5,
-            LOGIN_LOCKOUT_PERIOD: 30000 // 30 seconds
+            LOGIN_LOCKOUT_PERIOD: 30000
         };
         let state = {
             wallet: null,
@@ -195,7 +189,7 @@
                 const wallet = ethers.Wallet.createRandom();
                 const mnemonic = wallet.mnemonic.phrase;
                 const encryptedJson = wallet.encryptSync(password);
-                const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
+                const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now(), status: 'completed' }] };
                 localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                 state.userStore = userStore;
                 state.wallet = wallet;
@@ -205,7 +199,8 @@
                 try {
                     const wallet = ethers.Wallet.fromPhrase(mnemonic);
                     const encryptedJson = wallet.encryptSync(password);
-                    const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
+                    // On restore, we start with a clean slate until we fetch a backup.
+                    const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now(), status: 'completed' }] };
                     localStorage.setItem('aura_user_store', JSON.stringify(userStore));
                     state.userStore = userStore;
                     state.wallet = wallet;
@@ -244,6 +239,14 @@
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                 return newTx;
             },
+            updateTransactionStatus: (txHash, newStatus) => {
+                const txIndex = state.userStore.chain.findIndex(tx => tx.hash === txHash);
+                if (txIndex !== -1) {
+                    state.userStore.chain[txIndex].status = newStatus;
+                    localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
+                    console.log(`Updated transaction ${txHash} to status ${newStatus}`);
+                }
+            },
             calculateBalance: () => {
                 if (!state.userStore) return 0.0;
                 return state.userStore.chain.reduce((balance, tx) => {
@@ -255,12 +258,14 @@
             },
             createProposal: async (amount) => {
                 const proposalTx = WalletLogic.addToChain({ type: 'send', amount: amount, from: state.wallet.address, to: '', status: 'pending' });
+                await WalletLogic.backupUserStore();
                 const proposal = { type: 'AURA_PROPOSAL', senderAddress: state.wallet.address, senderPublicKey: state.wallet.publicKey, txHash: proposalTx.hash, amount: amount };
                 proposal.signature = await state.wallet.signMessage(JSON.stringify(proposal));
                 return proposal;
             },
             createReceipt: async (proposal) => {
                 const receiptTx = WalletLogic.addToChain({ type: 'receive', amount: proposal.amount, from: proposal.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: proposal.txHash });
+                await WalletLogic.backupUserStore();
                 const receipt = { type: 'AURA_RECEIPT', receiverAddress: state.wallet.address, txHash: receiptTx.hash, linkedTxHash: proposal.txHash };
                 receipt.signature = await state.wallet.signMessage(JSON.stringify(receipt));
                 return receipt;
@@ -274,7 +279,88 @@
 
                 state.userStore.chain[senderTxIndex].status = 'completed';
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
+                await WalletLogic.backupUserStore();
                 return true;
+            },
+            reconcilePendingCharges: async () => {
+                if (!state.userStore || !state.userStore.chain) return;
+
+                const pendingCharges = state.userStore.chain.filter(tx => tx.type === 'charge' && tx.status === 'pending');
+                if (pendingCharges.length === 0) return;
+
+                console.log(`Found ${pendingCharges.length} pending charge(s) to reconcile...`);
+                alert(`Your wallet is recovering from an incomplete transaction. Please wait.`);
+
+                for (const tx of pendingCharges) {
+                    try {
+                        const isSpent = await PinataLedger.hasBeenSpent(tx.serial);
+                        if (isSpent) {
+                            WalletLogic.updateTransactionStatus(tx.hash, 'completed');
+                        } else {
+                            WalletLogic.updateTransactionStatus(tx.hash, 'failed');
+                        }
+                    } catch (error) {
+                        console.error(`Could not reconcile transaction ${tx.hash}: ${error.message}`);
+                    }
+                }
+                await WalletLogic.backupUserStore();
+                updateBalanceDisplay();
+                alert('Recovery process complete.');
+            },
+            _getBackupEndpoint: () => 'https://hoppdalxbmktxexylbkl.supabase.co/functions/v1/user-store-backup', // Example endpoint
+            _getEncryptionKey: (password) => {
+                return CryptoJS.SHA256(password).toString();
+            },
+            backupUserStore: async () => {
+                if (!state.userStore) return;
+                const password = document.getElementById('login-password-input').value.trim() || document.getElementById('create-password-input').value.trim() || document.getElementById('restore-password-input').value.trim();
+                if (!password) {
+                    console.warn("Cannot backup user store without a password in context.");
+                    return;
+                }
+                const encryptionKey = WalletLogic._getEncryptionKey(password);
+                const encryptedData = CryptoJS.AES.encrypt(JSON.stringify(state.userStore), encryptionKey).toString();
+
+                try {
+                    await fetch(WalletLogic._getBackupEndpoint(), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ address: state.userStore.address, data: encryptedData })
+                    });
+                    console.log("User store backed up successfully.");
+                } catch (error) {
+                    console.error("Failed to back up user store:", error);
+                }
+            },
+            restoreUserStore: async (address, password) => {
+                if (!password) throw new Error("Password is required to restore data.");
+                const encryptionKey = WalletLogic._getEncryptionKey(password);
+                try {
+                    const response = await fetch(`${WalletLogic._getBackupEndpoint()}?address=${address}`);
+                    if (response.status === 404) {
+                         console.log("No remote backup found for this address.");
+                         return false;
+                    }
+                    if (!response.ok) return false;
+
+                    const { data: encryptedData } = await response.json();
+                    if (!encryptedData) return false;
+
+                    const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, encryptionKey);
+                    const decryptedJson = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+                    if (decryptedJson) {
+                        const restoredStore = JSON.parse(decryptedJson);
+                        state.userStore = restoredStore;
+                        localStorage.setItem('aura_user_store', JSON.stringify(restoredStore));
+                        console.log("User store restored successfully from backup.");
+                        return true;
+                    }
+                    return false;
+                } catch (error) {
+                    console.error("Failed to restore user store:", error);
+                    return false;
+                }
             }
         };
 
@@ -403,7 +489,11 @@
                 button.disabled = true; loader.style.display = 'block';
                 const success = await WalletLogic.restoreWallet(mnemonic, pass);
                 if (success) {
-                    updateBalanceDisplay(); showView('wallet-view');
+                    statusEl.innerHTML = '<span class="info">Keys restored. Checking for cloud backup...</span>';
+                    await WalletLogic.restoreUserStore(state.wallet.address, pass);
+                    await WalletLogic.reconcilePendingCharges();
+                    updateBalanceDisplay(); 
+                    showView('wallet-view');
                 } else {
                      statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>';
                 }
@@ -421,7 +511,10 @@
                 statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>';
                 const success = await WalletLogic.login(pass);
                 if (success) {
-                    updateBalanceDisplay(); showView('wallet-view'); resetViewInputs('login-view');
+                    await WalletLogic.reconcilePendingCharges();
+                    updateBalanceDisplay(); 
+                    showView('wallet-view'); 
+                    resetViewInputs('login-view');
                 } else {
                     if (state.failedLoginAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) {
                         state.isLockedOut = true;
@@ -456,8 +549,8 @@
 
             document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
                 const button = event.target;
-                button.disabled = true; 
-
+                button.disabled = true;
+                const statusEl = document.getElementById('validation-status');
                 const amount = parseFloat(button.dataset.amount);
                 const serial = button.dataset.serial;
             
@@ -467,17 +560,29 @@
                     return;
                 }
 
-                const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
-                if (!success) {
-                    // The alert in PinataLedger will show the detailed error
-                    showView('wallet-view');
-                    return;
-                }
+                statusEl.innerHTML = '<span class="info">Step 1/2: Preparing transaction...</span>';
+                const pendingTx = WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'pending' });
+                await WalletLogic.backupUserStore();
 
-                WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' });
-                updateBalanceDisplay();
-                alert(`$${amount.toFixed(2)} added successfully.`);
-                showView('wallet-view');
+                try {
+                    statusEl.innerHTML = '<span class="info">Step 2/2: Finalizing with public ledger...</span>';
+                    const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
+
+                    if (success) {
+                        WalletLogic.updateTransactionStatus(pendingTx.hash, 'completed');
+                        await WalletLogic.backupUserStore();
+                        updateBalanceDisplay();
+                        alert(`$${amount.toFixed(2)} added successfully.`);
+                        showView('wallet-view');
+                    } else {
+                        throw new Error("Ledger failed to record the transaction.");
+                    }
+                } catch (error) {
+                    WalletLogic.updateTransactionStatus(pendingTx.hash, 'failed');
+                    await WalletLogic.backupUserStore();
+                    statusEl.innerHTML = `<span class="error">Charge Failed: ${error.message}. Please try again.</span>`;
+                    button.disabled = false;
+                }
             });
 
             document.getElementById('create-proposal-button').addEventListener('click', async () => {
