@@ -5,7 +5,7 @@
     <title>Aura Wallet (Pinata Ledger)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-        :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --light-gray: #f0f2f5; --dark-gray: #6c757d; }
+        :root { --primary-color: #4b6cb7; --secondary-color: #182848; --danger-color: #d9534f; --light-gray: #f0f2f5; --dark-gray: #6c757d; --success-color: #1e8e3e; }
         body { font-family: 'Roboto', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .view { display: none; }
         .view.active { display: block; }
@@ -19,7 +19,7 @@
         .logout-button { background: var(--danger-color); margin-top: 10px; }
         .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; }
         .status-box { font-weight: bold; min-height: 20px; margin-top: 10px; word-wrap: break-word; }
-        .error { color: #d93025; } .success { color: #1e8e3e; } .info { color: #007bff; }
+        .error { color: #d93025; } .success { color: var(--success-color); } .info { color: #007bff; }
         .seed-phrase-box { padding: 15px; border: 1px dashed var(--danger-color); border-radius: 8px; margin: 20px 0; background-color: #fff8f8; color: #333; font-size: 18px; letter-spacing: 1px; }
         #my-qr-code img, #qr-display-box img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
         label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
@@ -28,6 +28,21 @@
         .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; margin: 10px auto; }
         .loader.hidden { display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Transaction History Styles */
+        .transaction-history { margin-top: 25px; text-align: left; }
+        .transaction-history h3 { text-align: center; margin-bottom: 15px; color: var(--secondary-color); }
+        .transaction-list { list-style-type: none; padding: 0; max-height: 200px; overflow-y: auto; }
+        .transaction-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+        .transaction-item:last-child { border-bottom: none; }
+        .transaction-details { display: flex; flex-direction: column; }
+        .transaction-type { font-weight: bold; font-size: 16px; }
+        .transaction-type.sent { color: var(--danger-color); }
+        .transaction-type.received { color: var(--success-color); }
+        .transaction-date { font-size: 12px; color: #888; }
+        .transaction-amount { font-weight: bold; font-size: 16px; }
+        .no-transactions { text-align: center; color: #999; padding: 20px; }
+         /* Timer Style */
+        #payment-timer { font-size: 18px; font-weight: bold; color: var(--danger-color); margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -42,7 +57,21 @@
     
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><div class="loader hidden" id="login-loader"></div><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     
-    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><p>Balance:</p><h1 id="balance-display">$0.00</h1><p id="network-status" style="font-size: 12px; color: #1e8e3e;">Ledger: Pinata IPFS</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="wallet-view" class="view"><div class="card">
+        <h2>Your Wallet</h2>
+        <p>Balance:</p>
+        <h1 id="balance-display">$0.00</h1>
+        <p id="network-status" style="font-size: 12px; color: #1e8e3e;">Ledger: Pinata IPFS</p>
+        <button id="show-charge-view-button">Charge with Banknote</button>
+        <button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button>
+        <button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button>
+        <div class="transaction-history">
+            <h3>آخرین تراکنش‌ها</h3>
+            <ul id="transaction-list-ul" class="transaction-list">
+                </ul>
+        </div>
+        <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
+    </div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     
@@ -80,6 +109,7 @@
         <p id="qr-display-instruction"></p>
         <div id="qr-display-box"></div>
         <div id="waiting-on-payment" style="display: none;">
+            <div id="payment-timer"></div>
             <div class="loader"></div>
             <p id="final-status-message" class="status-box" style="font-size:18px;"></p>
         </div>
@@ -104,7 +134,7 @@
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED LOGIC)
         // ===================================================================================
-        const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000 };
+        const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000 }; // 9 minutes
         let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activePollingTimer: null };
 
         const WalletLogic = {
@@ -121,9 +151,10 @@
                 return [confirmation.type, confirmation.senderAddress, amount, confirmation.linkedTxHash].join('|');
             },
 
-            createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash }; },
+            createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + AppConstants.PAYMENT_REQUEST_EXPIRY }; },
             
             processPayment: async (request) => { 
+                if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
                 if (WalletLogic.calculateBalance() < request.amount) throw new Error("Insufficient funds."); 
                 if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); 
                 
@@ -178,11 +209,47 @@
         // UI & EVENT LISTENERS
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
-        function showView(id) { if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+        function showView(id) { if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); if (id === 'wallet-view') { updateBalanceDisplay(); renderTransactionHistory(); } }
         function updateBalanceDisplay() { const balance = WalletLogic.calculateBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; }
         function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; const qr = qrcode(0, 'L'); qr.addData(JSON.stringify(data)); qr.make(); container.innerHTML = qr.createImgTag(6, 10); }
         async function decodeQrFromFile(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = e => { const image = new Image(); image.onload = () => { const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { resolve(JSON.parse(code.data)); } catch { reject(new Error("QR code contains invalid data.")); } } else { reject(new Error("QR Code not found or invalid.")); } }; image.src = e.target.result; }; reader.readAsDataURL(file); }); }
         
+        function renderTransactionHistory() {
+            const listUl = document.getElementById('transaction-list-ul');
+            listUl.innerHTML = ''; 
+            if (!state.userStore || !state.userStore.chain) return;
+
+            const transactions = state.userStore.chain
+                .filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed')
+                .slice(-10) 
+                .reverse(); 
+
+            if (transactions.length === 0) {
+                listUl.innerHTML = '<li class="no-transactions">هیچ تراکنشی یافت نشد</li>';
+                return;
+            }
+
+            transactions.forEach(tx => {
+                const item = document.createElement('li');
+                item.className = 'transaction-item';
+
+                const isSent = tx.type === 'send';
+                const typeText = isSent ? 'ارسال' : 'دریافت';
+                const typeClass = isSent ? 'sent' : 'received';
+                const amount = (tx.amount || 0).toFixed(2);
+                const date = new Date(tx.timestamp).toLocaleString('fa-IR');
+
+                item.innerHTML = `
+                    <div class="transaction-details">
+                        <span class="transaction-type ${typeClass}">${typeText}</span>
+                        <span class="transaction-date">${date}</span>
+                    </div>
+                    <span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${amount}</span>
+                `;
+                listUl.appendChild(item);
+            });
+        }
+
         async function initializeApp() { try { state.falconApi = await pqcSignFalcon1024(); } catch (e) { alert(`Critical error initializing cryptography module: ${e.message}`); return; } if (localStorage.getItem('aura_user_store')) { showView('login-view'); } else { showView('onboarding-view'); } setupEventListeners(); }
 
         function setupEventListeners() {
@@ -193,11 +260,11 @@
             document.getElementById('back-from-charge').addEventListener('click', () => showView('wallet-view'));
             document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
-            document.getElementById('back-from-qr-display').addEventListener('click', () => { updateBalanceDisplay(); showView('wallet-view'); });
+            document.getElementById('back-from-qr-display').addEventListener('click', () => { showView('wallet-view'); });
             document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; setLoader('create-loader', true); setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); }, 50); });
-            document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { updateBalanceDisplay(); showView('wallet-view'); document.getElementById('seed-phrase-display').textContent = ''; resetViewInputs('create-wallet-view'); });
-            document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; } if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { updateBalanceDisplay(); showView('wallet-view'); } else { statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>'; } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
-            document.getElementById('login-button').addEventListener('click', async () => { if (state.isLockedOut) return; const button = document.getElementById('login-button'), statusEl = document.getElementById('login-status'); const pass = document.getElementById('login-password-input').value.trim(); button.disabled = true; setLoader('login-loader', true); statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>'; const success = await WalletLogic.login(pass); if (success) { updateBalanceDisplay(); showView('wallet-view'); resetViewInputs('login-view'); } else { if (state.failedLoginAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) { state.isLockedOut = true; statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`; setTimeout(() => { state.isLockedOut = false; state.failedLoginAttempts = 0; statusEl.textContent = ''; button.disabled = false; }, AppConstants.LOGIN_LOCKOUT_PERIOD); } else { statusEl.innerHTML = `<span class="error">Invalid password. (${AppConstants.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`; } } if (!state.isLockedOut) button.disabled = false; setLoader('login-loader', false); });
+            document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { showView('wallet-view'); document.getElementById('seed-phrase-display').textContent = ''; resetViewInputs('create-wallet-view'); });
+            document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; } if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { showView('wallet-view'); } else { statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>'; } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
+            document.getElementById('login-button').addEventListener('click', async () => { if (state.isLockedOut) return; const button = document.getElementById('login-button'), statusEl = document.getElementById('login-status'); const pass = document.getElementById('login-password-input').value.trim(); button.disabled = true; setLoader('login-loader', true); statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>'; const success = await WalletLogic.login(pass); if (success) { showView('wallet-view'); resetViewInputs('login-view'); } else { if (state.failedLoginAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) { state.isLockedOut = true; statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`; setTimeout(() => { state.isLockedOut = false; state.failedLoginAttempts = 0; statusEl.textContent = ''; button.disabled = false; }, AppConstants.LOGIN_LOCKOUT_PERIOD); } else { statusEl.innerHTML = `<span class="error">Invalid password. (${AppConstants.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`; } } if (!state.isLockedOut) button.disabled = false; setLoader('login-loader', false); });
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
             document.getElementById('reset-app-button').addEventListener('click', () => { if (confirm('Are you sure? All wallet data will be erased from this browser.')) { localStorage.removeItem('aura_user_store'); location.reload(); } });
             
@@ -217,23 +284,42 @@
 
                 document.getElementById('waiting-on-payment').style.display = 'block';
                 const statusMsg = document.getElementById('final-status-message');
+                const timerEl = document.getElementById('payment-timer');
                 statusMsg.innerHTML = '<span class="info">Waiting for sender to pay...</span>';
+                document.querySelector('#waiting-on-payment .loader').style.display = 'block';
                 showView('qr-display-view');
                 
+                let timeLeft = AppConstants.PAYMENT_REQUEST_EXPIRY;
+                const updateTimer = () => {
+                    timeLeft -= 1000;
+                    const minutes = Math.floor(timeLeft / 60000);
+                    const seconds = Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0');
+                    timerEl.textContent = `Expires in: ${minutes}:${seconds}`;
+                    if (timeLeft <= 0) {
+                        clearInterval(state.activePollingTimer);
+                        state.activePollingTimer = null;
+                        statusMsg.innerHTML = '<span class="error">Payment request expired.</span>';
+                        document.querySelector('#waiting-on-payment .loader').style.display = 'none';
+                    }
+                };
+                updateTimer();
+
                 state.activePollingTimer = setInterval(async () => {
+                    updateTimer(); // Update timer on each poll interval as well
+                    if (timeLeft <= 0) return;
+
                     try {
                         const confirmation = await PinataLedger.findConfirmation(request.linkedTxHash);
                         if (confirmation) {
-                            // CAREFUL UPDATE: Stop polling as soon as confirmation is found
                             clearInterval(state.activePollingTimer);
                             state.activePollingTimer = null;
-                            
+                            timerEl.style.display = 'none';
                             statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
                             const success = await WalletLogic.finalizePayment(confirmation);
                             if (success) {
                                 statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
                                 document.querySelector('#waiting-on-payment .loader').style.display = 'none';
-                                updateBalanceDisplay();
+                                updateBalanceDisplay(); 
                             } else {
                                statusMsg.innerHTML = `<span class="error">Failed to finalize payment. Invalid receipt.</span>`;
                             }
@@ -254,6 +340,7 @@
                 try {
                     const request = await decodeQrFromFile(file);
                     if (request.type !== 'AURA_PAYMENT_REQUEST' || !request.amount || !request.receiverAddress) throw new Error("Not a valid payment request QR.");
+                    if (Date.now() > request.expiresAt) throw new Error("This payment request has expired.");
                     if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid.");
                     state.activePaymentRequest = request;
                     document.getElementById('confirm-amount-display').textContent = `$${request.amount.toFixed(2)}`;
@@ -277,7 +364,7 @@
             
             // --- BANKNOTE CHARGING (Unchanged) ---
             document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); document.getElementById('banknote-image-input').disabled = true; document.getElementById('public-key-input').value = ''; document.getElementById('charge-confirmation').style.display = 'none'; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.disabled = false; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); showView('charge-view'); });
-            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const amount = parseFloat(button.dataset.amount), serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An error occurred."); showView('wallet-view'); return; } const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote'); if (!success) { alert("Failed to record banknote on public ledger."); showView('wallet-view'); return; } WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' }); updateBalanceDisplay(); alert(`$${amount.toFixed(2)} added successfully.`); showView('wallet-view'); });
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const amount = parseFloat(button.dataset.amount), serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An error occurred."); showView('wallet-view'); return; } const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote'); if (!success) { alert("Failed to record banknote on public ledger."); showView('wallet-view'); return; } WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' }); showView('wallet-view'); alert(`$${amount.toFixed(2)} added successfully.`); });
             document.getElementById('public-key-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const keyStatus = document.getElementById('key-status'); keyStatus.innerHTML = '<span class="info">Processing key...</span>'; document.getElementById('banknote-image-input').disabled = true; state.masterPublicKey = null; try { const keyData = JSON.parse(await file.text()); if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'."); state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey); keyStatus.innerHTML = '<span class="success">Public key loaded.</span>'; document.getElementById('banknote-image-input').disabled = false; } catch (err) { keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`; } });
             document.getElementById('banknote-image-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const statusEl = document.getElementById('validation-status'); const confirmSection = document.getElementById('charge-confirmation'); confirmSection.style.display = 'none'; if (!state.masterPublicKey) { statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>'; return; } statusEl.innerHTML = '<span class="info">Preparing image...</span>'; try { const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION); const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl); const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; }); const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl); statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>'; const banknoteData = CoreLogic.Banknote.parsePayload(payload); if (await PinataLedger.hasBeenSpent(banknoteData.serial)) { throw new Error("This banknote has already been spent."); } const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi); if (!isSigOneValid) throw new Error("Signature validation failed (internal)."); const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi); if (!isSigTwoValid) throw new Error("Signature validation failed (issuer)."); statusEl.innerHTML = '<span class="success">Banknote is valid!</span>'; document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.dataset.amount = banknoteData.amount; confirmBtn.dataset.serial = banknoteData.serial; confirmSection.style.display = 'block'; } catch (err) { statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; } finally { event.target.value = ''; } });
         }
