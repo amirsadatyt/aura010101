@@ -27,6 +27,7 @@
         input[type="file"] { display: none; }
         .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; margin: 10px auto; }
         .loader.hidden { display: none; }
+        .debug-box { font-size: 11px; text-align: left; padding: 10px; background: #f0f0f0; border: 1px solid #ccc; word-wrap: break-word; white-space: pre-wrap; margin-top: 15px; max-height: 200px; overflow-y: auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -133,49 +134,61 @@
 
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash };
                 
-                // **NEW ARCHITECTURE**: The message that is signed is now also included in the payload.
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign; // Include the exact signed message
+                confirmation.signedMessage = messageToSign; 
                 
                 await PinataLedger.pinConfirmation(confirmation); 
                 return true; 
             },
 
+            // **DEBUGGING VERSION** of finalizePayment
             finalizePayment: async (confirmation) => { 
+                const debugInfo = { step: 'Start', foundPendingTx: false, messagesMatch: null, recreatedMessage: '', receivedMessage: '', signatureValid: null, expectedSigner: '', actualSigner: '' };
+                
                 const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); 
-                if (receiveTxIndex === -1) {
-                    console.error("Finalize Error: Could not find pending transaction.");
-                    return false;
+                debugInfo.foundPendingTx = receiveTxIndex !== -1;
+                if (!debugInfo.foundPendingTx) {
+                    debugInfo.step = 'Find Pending TX';
+                    return { success: false, debug: debugInfo };
                 }
                 
-                // **NEW ARCHITECTURE**: Verify using the `signedMessage` provided in the payload.
-                // This eliminates any possibility of mismatch between sender and receiver.
                 if (!confirmation.signedMessage) {
-                    console.error("Finalize Error: Receipt is missing the 'signedMessage' field.");
-                    return false;
+                    debugInfo.step = 'Check for signedMessage field';
+                    return { success: false, debug: debugInfo };
+                }
+                debugInfo.receivedMessage = confirmation.signedMessage;
+
+                const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                debugInfo.recreatedMessage = locallyRecreatedMessage;
+                debugInfo.messagesMatch = locallyRecreatedMessage === confirmation.signedMessage;
+                if (!debugInfo.messagesMatch) {
+                    debugInfo.step = 'Tamper Check (Message Mismatch)';
+                    return { success: false, debug: debugInfo };
+                }
+                
+                let signerAddress = '';
+                try {
+                    signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
+                } catch(e) {
+                    debugInfo.step = 'ethers.verifyMessage execution';
+                    debugInfo.actualSigner = `Error: ${e.message}`;
+                    return { success: false, debug: debugInfo };
                 }
 
-                // Security Check: Ensure the data in the confirmation matches the signed message.
-                const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                if (locallyRecreatedMessage !== confirmation.signedMessage) {
-                    console.error("Tamper Detection: Confirmation data does not match the signed message!");
-                    return false;
-                }
-                
-                const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); 
-                
-                if (signerAddress !== confirmation.senderAddress) { 
-                    console.error("Signature verification failed!");
-                    console.error("Expected Signer (from receipt):", confirmation.senderAddress);
-                    console.error("Actual Signer (from signature):", signerAddress);
-                    return false; 
+                debugInfo.actualSigner = signerAddress;
+                debugInfo.expectedSigner = confirmation.senderAddress;
+
+                debugInfo.signatureValid = signerAddress === confirmation.senderAddress;
+                if (!debugInfo.signatureValid) { 
+                    debugInfo.step = 'Signature Verification';
+                    return { success: false, debug: debugInfo };
                 } 
                 
                 state.userStore.chain[receiveTxIndex].status = 'completed'; 
                 state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; 
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
-                return true; 
+                return { success: true, debug: debugInfo };
             }
         };
         
@@ -231,13 +244,28 @@
                             clearInterval(state.activePollingTimer);
                             state.activePollingTimer = null;
                             statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>';
-                            const success = await WalletLogic.finalizePayment(confirmation);
-                            if (success) {
+                            
+                            const result = await WalletLogic.finalizePayment(confirmation);
+                            
+                            if (result.success) {
                                 statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
                                 document.querySelector('#waiting-on-payment .loader').style.display = 'none';
                                 updateBalanceDisplay();
                             } else {
-                               statusMsg.innerHTML = `<span class="error">Failed to finalize payment. Invalid receipt.</span>`;
+                               const debug = result.debug;
+                               let errorMessage = `<b class="error">An Error Occurred. Please send this debug info:</b>`;
+                               errorMessage += `<div class="debug-box">`;
+                               errorMessage += `Step Failed: ${debug.step}\n\n`;
+                               errorMessage += `--- Debug Details ---\n`;
+                               errorMessage += `Pending TX Found: ${debug.foundPendingTx}\n`;
+                               errorMessage += `Messages Match: ${debug.messagesMatch}\n`;
+                               errorMessage += `Signature Valid: ${debug.signatureValid}\n\n`;
+                               errorMessage += `Expected Signer:\n${debug.expectedSigner}\n\n`;
+                               errorMessage += `Actual Signer:\n${debug.actualSigner}\n\n`;
+                               errorMessage += `--- Received Message ---\n${debug.receivedMessage}\n\n`;
+                               errorMessage += `--- Recreated Message ---\n${debug.recreatedMessage}`;
+                               errorMessage += `</div>`;
+                               statusMsg.innerHTML = errorMessage;
                             }
                         }
                     } catch (err) {
