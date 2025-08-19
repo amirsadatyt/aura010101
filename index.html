@@ -116,15 +116,16 @@
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; newTx.hash = ethers.solidityPackedKeccak256(['string', 'uint256', 'string', 'string', 'string'], [newTx.type, newTx.amount || 0, newTx.from || '', newTx.to || '', newTx.prevHash]); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); return newTx; },
             calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0); return balance; }, 0); },
             
-            // Gets a standardized, sorted string from the confirmation data to ensure consistent signing
+            // **FIX**: Creates a highly reliable, standardized string for signing and verification.
             getStandardizedConfirmationMessage: (confirmation) => {
-                const dataToSign = {
-                    type: confirmation.type,
-                    senderAddress: confirmation.senderAddress,
-                    amount: confirmation.amount,
-                    linkedTxHash: confirmation.linkedTxHash
-                };
-                return JSON.stringify(dataToSign, Object.keys(dataToSign).sort());
+                // By joining fields with a separator, we create an unambiguous message
+                // that avoids any issues with JSON key ordering.
+                return [
+                    confirmation.type,
+                    confirmation.senderAddress,
+                    confirmation.amount,
+                    confirmation.linkedTxHash
+                ].join('|');
             },
 
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash }; },
@@ -147,7 +148,10 @@
 
             finalizePayment: async (confirmation) => { 
                 const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); 
-                if (receiveTxIndex === -1) return false; 
+                if (receiveTxIndex === -1) {
+                    console.error("Finalize Error: Could not find pending transaction.");
+                    return false;
+                }
                 
                 const message = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 const signerAddress = ethers.verifyMessage(message, confirmation.signature); 
