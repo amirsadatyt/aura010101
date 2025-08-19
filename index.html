@@ -96,15 +96,17 @@
         <input type="number" id="request-amount-input" placeholder="Amount to receive">
         <button id="create-request-qr-button">Generate Payment Request QR</button>
         <div id="receive-status" class="status-box"></div>
-        <button class="back-button" onclick="showView('wallet-view')">Back</button>
+        <button class="back-button" id="back-from-receive">Back</button>
     </div></div>
     
     <div id="send-view" class="view"><div class="card">
         <h2>Send Funds</h2>
-        <p>Scan the recipient's payment request QR code.</p>
-        <label class="qr-upload-label" for="scan-payment-request-input">Upload Payment Request QR</label>
-        <input type="file" id="scan-payment-request-input" accept="image/*">
-        <div id="send-status" class="status-box"></div>
+        <p>Position the recipient's QR code in the frame.</p>
+        <div id="video-container" style="position: relative; width: 100%; max-width: 300px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 2px solid #333; background: #000;">
+            <video id="qr-video" playsinline style="width: 100%; height: auto; display: block;"></video>
+            <div id="loading-message" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center;">Requesting camera access...</div>
+        </div>
+        <canvas id="qr-canvas" style="display: none;"></canvas> <div id="send-status" class="status-box"></div>
         <button class="back-button" id="back-from-send">Back</button>
     </div></div>
     
@@ -150,7 +152,7 @@
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED LOGIC)
         // ===================================================================================
         const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000 }; // 9 minutes
-        let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activePollingTimer: null };
+        let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activePollingTimer: null, cameraStream: null, isScannerActive: false };
 
         const WalletLogic = {
             createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
@@ -221,14 +223,99 @@
             }
         };
         
-        // UI & EVENT LISTENERS
+        // --- UI, SCANNER & EVENT LISTENERS ---
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
-        function showView(id) { if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); if (id === 'wallet-view') { updateBalanceDisplay(); renderTransactionHistory(); } }
         function updateBalanceDisplay() { const balance = WalletLogic.calculateBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; }
         function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; const qr = qrcode(0, 'L'); qr.addData(JSON.stringify(data)); qr.make(); container.innerHTML = qr.createImgTag(6, 10); }
-        async function decodeQrFromFile(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = e => { const image = new Image(); image.onload = () => { const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { resolve(JSON.parse(code.data)); } catch { reject(new Error("QR code contains invalid data.")); } } else { reject(new Error("QR Code not found or invalid.")); } }; image.src = e.target.result; }; reader.readAsDataURL(file); }); }
+
+        function stopScanner() {
+            if (state.cameraStream) {
+                state.cameraStream.getTracks().forEach(track => track.stop());
+                state.cameraStream = null;
+                state.isScannerActive = false;
+            }
+        }
         
+        async function startScanner() {
+            if (state.isScannerActive || !document.getElementById('send-view').classList.contains('active')) return;
+            state.isScannerActive = true;
+    
+            const video = document.getElementById('qr-video');
+            const loadingMessage = document.getElementById('loading-message');
+            const canvasElement = document.getElementById('qr-canvas');
+            const canvas = canvasElement.getContext('2d');
+            const sendStatusEl = document.getElementById('send-status');
+            sendStatusEl.innerHTML = '';
+            loadingMessage.style.display = 'flex';
+            loadingMessage.textContent = 'Requesting camera access...';
+
+            try {
+                state.cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = state.cameraStream;
+                video.setAttribute("playsinline", true);
+                await video.play();
+                loadingMessage.style.display = 'none';
+                requestAnimationFrame(tick);
+            } catch (err) {
+                console.error("Camera Error:", err);
+                loadingMessage.textContent = "Could not access camera.";
+                sendStatusEl.innerHTML = `<span class="error">Camera access is required to scan QR codes.</span>`;
+                state.isScannerActive = false;
+            }
+    
+            function tick() {
+                if (!state.isScannerActive) return;
+    
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvasElement.height = video.videoHeight;
+                    canvasElement.width = video.videoWidth;
+                    canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+                    const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+    
+                    if (code) {
+                        stopScanner();
+                        sendStatusEl.innerHTML = '<span class="info">QR Code Detected! Processing...</span>';
+                        try {
+                            const request = JSON.parse(code.data);
+                             Promise.resolve().then(async () => {
+                                if (request.type !== 'AURA_PAYMENT_REQUEST' || !request.amount || !request.receiverAddress) throw new Error("Not a valid payment request QR.");
+                                if (Date.now() > request.expiresAt) throw new Error("This payment request has expired.");
+                                if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid.");
+    
+                                state.activePaymentRequest = request;
+                                document.getElementById('confirm-amount-display').textContent = `$${request.amount.toFixed(2)}`;
+                                document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress;
+                                showView('send-confirm-view');
+                            }).catch(err => {
+                                sendStatusEl.innerHTML = `<span class="error">${err.message}</span>`;
+                                setTimeout(() => startScanner(), 2000);
+                            });
+                        } catch (err) {
+                            sendStatusEl.innerHTML = `<span class="error">Invalid QR code data.</span>`;
+                            setTimeout(() => startScanner(), 2000);
+                        }
+                        return; 
+                    }
+                }
+                requestAnimationFrame(tick);
+            }
+        }
+
+        function showView(id) { 
+            if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') {
+                stopScanner();
+            }
+            if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } 
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); 
+            document.getElementById(id).classList.add('active'); 
+            if (id === 'wallet-view') { updateBalanceDisplay(); renderTransactionHistory(); }
+            if (id === 'send-view') {
+                startScanner();
+            }
+        }
+
         function renderTransactionHistory() {
             const listUl = document.getElementById('transaction-list-ul');
             listUl.innerHTML = ''; 
@@ -249,7 +336,7 @@
                 item.className = 'transaction-item';
 
                 const isSent = tx.type === 'send';
-                const typeText = isSent ? 'Sent' : 'Received';
+                const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received');
                 const typeClass = isSent ? 'sent' : 'received';
                 const amount = (tx.amount || 0).toFixed(2);
                 const date = new Date(tx.timestamp).toLocaleString('en-US');
@@ -273,6 +360,7 @@
             document.getElementById('back-from-create').addEventListener('click', () => { resetViewInputs('create-wallet-view'); showView('onboarding-view'); });
             document.getElementById('back-from-restore').addEventListener('click', () => { resetViewInputs('restore-wallet-view'); showView('onboarding-view'); });
             document.getElementById('back-from-charge').addEventListener('click', () => showView('wallet-view'));
+            document.getElementById('back-from-receive').addEventListener('click', () => showView('wallet-view'));
             document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
             document.getElementById('back-from-qr-display').addEventListener('click', () => { showView('wallet-view'); });
@@ -335,12 +423,8 @@
                                 statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
                                 document.querySelector('#waiting-on-payment .loader').style.display = 'none';
                                 updateBalanceDisplay(); 
-                                // Automatically go back to the wallet view after 2 seconds
-                                setTimeout(() => {
-                                    showView('wallet-view');
-                                }, 2000);
+                                setTimeout(() => { showView('wallet-view'); }, 2000);
                             } 
-                            // **CHANGE**: No more "else" block here, so no error message is shown for invalid receipt.
                         }
                     } catch (err) {
                         console.error("Polling error:", err);
@@ -349,22 +433,6 @@
                         state.activePollingTimer = null;
                     }
                 }, AppConstants.POLLING_INTERVAL);
-            });
-
-            document.getElementById('scan-payment-request-input').addEventListener('change', async (event) => {
-                const file = event.target.files[0]; if (!file) return;
-                const statusEl = document.getElementById('send-status');
-                statusEl.innerHTML = '<span class="info">Processing QR code...</span>';
-                try {
-                    const request = await decodeQrFromFile(file);
-                    if (request.type !== 'AURA_PAYMENT_REQUEST' || !request.amount || !request.receiverAddress) throw new Error("Not a valid payment request QR.");
-                    if (Date.now() > request.expiresAt) throw new Error("This payment request has expired.");
-                    if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid.");
-                    state.activePaymentRequest = request;
-                    document.getElementById('confirm-amount-display').textContent = `$${request.amount.toFixed(2)}`;
-                    document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress;
-                    showView('send-confirm-view');
-                } catch (err) { statusEl.innerHTML = `<span class="error">${err.message}</span>`; } finally { event.target.value = ''; }
             });
 
             document.getElementById('confirm-payment-button').addEventListener('click', async (event) => {
