@@ -1,229 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
     <meta charset="UTF-8">
     <title>Aura Wallet (Pinata Ledger)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-        :root {
-            --primary-color: #000000;
-            --secondary-color: #333333;
-            --danger-color: #d9534f;
-            --success-color: #28a745;
-            --light-gray: #f5f5f5;
-            --dark-gray: #666666;
-            --text-color: #000000;
-            --background-color: #ffffff;
-            --border-color: #dddddd;
+        :root { 
+            --primary-color: #333333; 
+            --secondary-color: #000000; 
+            --danger-color: #d9534f; 
+            --light-gray: #f5f5f5; 
+            --dark-gray: #555555; 
+            --success-color: #1e8e3e; 
+            --text-light: #ffffff;
+            --text-dark: #212529;
+            --card-bg: #ffffff;
+            --border-color: #dee2e6;
         }
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--light-gray);
-            margin: 0;
-            padding: 0;
-            color: var(--text-color);
-        }
-        .view {
-            display: none;
-            width: 100%;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .view.active {
-            display: flex;
-        }
-        .card {
-            background-color: var(--background-color);
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-            border-top: 5px solid var(--primary-color);
-        }
-        input, textarea {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 16px;
-            text-align: center;
-            font-family: 'Roboto', sans-serif;
-        }
-        textarea {
-            resize: vertical;
-            height: 80px;
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 10px;
-        }
-        button:hover {
-            opacity: 0.9;
-        }
-        button:disabled {
-            background: #999;
-            cursor: not-allowed;
-        }
-        .back-button {
-            background: var(--dark-gray);
-        }
-        .logout-button {
-            background: var(--danger-color);
-        }
-        .link-button {
-            background: none;
-            border: none;
-            color: var(--primary-color);
-            text-decoration: underline;
-            cursor: pointer;
-            padding: 5px;
-            width: auto;
-        }
-        .status-box {
-            font-weight: bold;
-            min-height: 20px;
-            margin-top: 10px;
-            word-wrap: break-word;
-        }
-        .error { color: var(--danger-color); }
-        .success { color: var(--success-color); }
+        body { font-family: 'Roboto', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: var(--text-dark); }
+        .view { display: none; }
+        .view.active { display: block; }
+        .card { background-color: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 380px; text-align: center; border-top: 5px solid var(--secondary-color); }
+        input, textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; text-align: center; font-family: 'Roboto', sans-serif; background-color: #fff; color: #000; }
+        textarea { resize: vertical; height: 80px; }
+        button { width: 100%; padding: 12px; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); color: var(--text-light); border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: all 0.2s; }
+        button:hover { opacity: 0.9; transform: translateY(-2px); }
+        button:disabled { background: #999; cursor: not-allowed; transform: translateY(0); }
+        .back-button { background: var(--dark-gray); margin-top: 10px; }
+        .logout-button { background: var(--danger-color); margin-top: 10px; }
+        .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; }
+        .status-box { font-weight: bold; min-height: 20px; margin-top: 10px; word-wrap: break-word; }
+        .error { color: var(--danger-color); } 
+        .success { color: var(--success-color); } 
         .info { color: #007bff; }
-        .seed-phrase-box {
-            padding: 15px;
-            border: 1px dashed var(--danger-color);
-            border-radius: 8px;
-            margin: 20px 0;
-            background-color: #fff8f8;
-            color: #333;
-            font-size: 18px;
-            letter-spacing: 1px;
-        }
-        #my-qr-code img, #qr-display-box img {
-            margin: 15px auto;
-            display: block;
-            border: 5px solid #eee;
-            border-radius: 5px;
-        }
-        label.qr-upload-label {
-            cursor: pointer;
-            display: block;
-            margin: 15px;
-            padding: 10px;
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-        }
-        label.qr-upload-label:hover {
-            background-color: #f9f9f9;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        .loader {
-            border: 4px solid #f3f3f3;
-            border-radius: 50%;
-            border-top: 4px solid var(--primary-color);
-            width: 20px;
-            height: 20px;
-            -webkit-animation: spin 1s linear infinite;
-            animation: spin 1s linear infinite;
-            margin: 10px auto;
-        }
-        .loader.hidden {
-            display: none;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Transaction History Modal Styles */
-        #transaction-history-view {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.9);
-            z-index: 1000;
-            overflow-y: auto;
-            color: white;
-        }
-        #transaction-history-view h3 {
-            text-align: center;
-            margin-bottom: 15px;
-            color: white;
-        }
-        .transaction-list {
-            list-style-type: none;
-            padding: 0 20px;
-            width: 100%;
-            max-width: 600px;
-            margin: 20px auto;
-        }
-        .transaction-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 10px;
-            border-bottom: 1px solid #444;
-        }
-        .transaction-item:last-child {
-            border-bottom: none;
-        }
-        .transaction-details {
-            display: flex;
-            flex-direction: column;
-        }
-        .transaction-type {
-            font-weight: bold;
-            font-size: 16px;
-        }
-        .transaction-type.sent, .transaction-amount.sent {
-            color: var(--danger-color);
-        }
-        .transaction-type.received, .transaction-amount.received {
-            color: var(--success-color);
-        }
-        .transaction-date {
-            font-size: 12px;
-            color: #ccc;
-        }
-        .transaction-amount {
-            font-weight: bold;
-            font-size: 16px;
-        }
-        .no-transactions {
-            text-align: center;
-            color: #999;
-            padding: 20px;
-        }
-        #close-history-button {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--dark-gray);
-            width: auto;
-            padding: 10px 15px;
-        }
-
-
+        .seed-phrase-box { padding: 15px; border: 1px dashed var(--danger-color); border-radius: 8px; margin: 20px 0; background-color: #fff8f8; color: #333; font-size: 18px; letter-spacing: 1px; }
+        #my-qr-code img, #qr-display-box img { margin: 15px auto; display: block; border: 5px solid #eee; border-radius: 5px; }
+        label.qr-upload-label { cursor: pointer; display: block; margin: 15px; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; }
+        label.qr-upload-label:hover { background-color: #f9f9f9; }
+        input[type="file"] { display: none; }
+        .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; margin: 10px auto; }
+        .loader.hidden { display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Transaction History Styles */
+        .transaction-history { margin-top: 25px; text-align: left; }
+        .transaction-history h3 { text-align: center; margin-bottom: 15px; color: var(--secondary-color); }
+        .transaction-list { list-style-type: none; padding: 0; max-height: 200px; overflow-y: auto; }
+        .transaction-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border-color); }
+        .transaction-item:last-child { border-bottom: none; }
+        .transaction-details { display: flex; flex-direction: column; }
+        .transaction-type { font-weight: bold; font-size: 16px; }
+        .transaction-type.sent { color: var(--danger-color); }
+        .transaction-type.received { color: var(--success-color); }
+        .transaction-date { font-size: 12px; color: #888; }
+        .transaction-amount { font-weight: bold; font-size: 16px; }
+        .transaction-amount.sent { color: var(--danger-color); }
+        .transaction-amount.received { color: var(--success-color); }
+        .no-transactions { text-align: center; color: #999; padding: 20px; }
          /* Timer Style */
         #payment-timer { font-size: 18px; font-weight: bold; color: var(--danger-color); margin-top: 15px; }
     </style>
@@ -246,9 +78,13 @@
         <h1 id="balance-display">$0.00</h1>
         <p id="network-status" style="font-size: 12px; color: var(--success-color);">Ledger: Pinata IPFS</p>
         <button id="show-charge-view-button">Charge with Banknote</button>
-        <button id="show-send-view-button">Send (Aura)</button>
-        <button id="show-receive-view-button">Receive (Aura)</button>
-        <button id="show-history-button" class="back-button">History</button>
+        <button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button>
+        <button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button>
+        <div class="transaction-history">
+            <h3>Recent Transactions</h3>
+            <ul id="transaction-list-ul" class="transaction-list">
+                </ul>
+        </div>
         <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
     </div></div>
     
@@ -295,14 +131,6 @@
         <button class="back-button" id="back-from-qr-display">Back to Wallet</button>
     </div></div>
     
-    <div id="transaction-history-view" class="view">
-        <button id="close-history-button">Close</button>
-        <div class="transaction-history">
-            <h3>Transaction History</h3>
-            <ul id="transaction-list-ul" class="transaction-list"></ul>
-        </div>
-    </div>
-
 
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
@@ -396,7 +224,7 @@
         // UI & EVENT LISTENERS
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
-        function showView(id) { if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); if (id === 'wallet-view') { updateBalanceDisplay(); } }
+        function showView(id) { if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); if (id === 'wallet-view') { updateBalanceDisplay(); renderTransactionHistory(); } }
         function updateBalanceDisplay() { const balance = WalletLogic.calculateBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; }
         function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; const qr = qrcode(0, 'L'); qr.addData(JSON.stringify(data)); qr.make(); container.innerHTML = qr.createImgTag(6, 10); }
         async function decodeQrFromFile(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = e => { const image = new Image(); image.onload = () => { const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { resolve(JSON.parse(code.data)); } catch { reject(new Error("QR code contains invalid data.")); } } else { reject(new Error("QR Code not found or invalid.")); } }; image.src = e.target.result; }; reader.readAsDataURL(file); }); }
@@ -408,11 +236,11 @@
 
             const transactions = state.userStore.chain
                 .filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed')
-                .slice(-50) 
+                .slice(-10) 
                 .reverse(); 
 
             if (transactions.length === 0) {
-                listUl.innerHTML = '<li class="no-transactions">No transactions found</li>';
+                listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>';
                 return;
             }
 
@@ -421,7 +249,7 @@
                 item.className = 'transaction-item';
 
                 const isSent = tx.type === 'send';
-                const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charged' : 'Received');
+                const typeText = isSent ? 'Sent' : 'Received';
                 const typeClass = isSent ? 'sent' : 'received';
                 const amount = (tx.amount || 0).toFixed(2);
                 const date = new Date(tx.timestamp).toLocaleString('en-US');
@@ -448,11 +276,6 @@
             document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
             document.getElementById('back-from-qr-display').addEventListener('click', () => { showView('wallet-view'); });
-
-            // History Modal
-            document.getElementById('show-history-button').addEventListener('click', () => { renderTransactionHistory(); showView('transaction-history-view'); });
-            document.getElementById('close-history-button').addEventListener('click', () => showView('wallet-view'));
-
             document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; setLoader('create-loader', true); setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); }, 50); });
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { showView('wallet-view'); document.getElementById('seed-phrase-display').textContent = ''; resetViewInputs('create-wallet-view'); });
             document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; } if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { showView('wallet-view'); } else { statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>'; } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
@@ -512,10 +335,12 @@
                                 statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`;
                                 document.querySelector('#waiting-on-payment .loader').style.display = 'none';
                                 updateBalanceDisplay(); 
+                                // Automatically go back to the wallet view after 2 seconds
                                 setTimeout(() => {
                                     showView('wallet-view');
                                 }, 2000);
                             } 
+                            // **CHANGE**: No more "else" block here, so no error message is shown for invalid receipt.
                         }
                     } catch (err) {
                         console.error("Polling error:", err);
