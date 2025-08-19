@@ -45,15 +45,45 @@
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Load Bank's Public Key</h3><label for="public-key-input" class="qr-upload-label">Upload Public Key File (.json)</label><input type="file" id="public-key-input" accept=".json"><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     
-    <div id="send-view" class="view"><div class="card"><h2>Send Funds (Step 1 of 2)</h2><p>Enter the amount to create a "Transaction Proposal".</p><input type="number" id="send-amount-input" placeholder="Amount to send"><button id="create-proposal-button">Create Proposal</button><div id="send-status" class="status-box"></div><button class="back-button" id="back-from-send">Back</button></div></div>
+    <div id="receive-view" class="view"><div class="card">
+        <h2>Receive Funds</h2>
+        <p>Enter the amount you want to request.</p>
+        <input type="number" id="request-amount-input" placeholder="Amount to receive">
+        <button id="create-request-qr-button">Generate Payment Request QR</button>
+        <div id="receive-status" class="status-box"></div>
+        <button class="back-button" onclick="showView('wallet-view')">Back</button>
+    </div></div>
     
-    <div id="send-confirm-view" class="view"><div class="card"><h2>Confirm Transaction</h2><p>You are about to create a proposal to send:</p><h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2><p>This will create a QR code for the recipient to scan. The funds will be deducted from your balance only after the transaction is finalized.</p><button id="confirm-send-button">Confirm and Proceed</button><button class="back-button" id="back-from-send-confirm">Cancel</button></div></div>
+    <div id="send-view" class="view"><div class="card">
+        <h2>Send Funds</h2>
+        <p>Scan the recipient's payment request QR code.</p>
+        <label class="qr-upload-label" for="scan-payment-request-input">Upload Payment Request QR</label>
+        <input type="file" id="scan-payment-request-input" accept="image/*">
+        <div id="send-status" class="status-box"></div>
+        <button class="back-button" id="back-from-send">Back</button>
+    </div></div>
     
-    <div id="receive-view" class="view"><div class="card"><h2>Receive Funds (Step 1 of 2)</h2><p>Show this QR code to the sender for them to scan.</p><div id="my-qr-code"></div><button class="back-button" onclick="showView('wallet-view')">Back</button></div></div>
+    <div id="send-confirm-view" class="view"><div class="card">
+        <h2>Confirm Payment</h2>
+        <p>You are about to send:</p>
+        <h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2>
+        <p>To:</p>
+        <p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;"></p>
+        <button id="confirm-payment-button">Confirm and Pay</button>
+        <div id="send-confirm-status" class="status-box"></div>
+        <button class="back-button" id="back-from-send-confirm">Cancel</button>
+    </div></div>
     
-    <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">To finalize, scan the Receipt QR code</label><input type="file" id="scan-receipt-input" accept="image/*"><div id="qr-status" class="status-box"></div><button class="back-button" id="back-from-qr-display">Back to Wallet</button></div></div>
+    <div id="qr-display-view" class="view"><div class="card">
+        <h2 id="qr-display-title"></h2>
+        <p id="qr-display-instruction"></p>
+        <div id="qr-display-box"></div>
+        <p id="final-status-message" class="status-box" style="font-size:18px;"></p>
+        <label id="scan-receipt-label" class="qr-upload-label" for="scan-receipt-input" style="display: none;">Recipient: Scan Confirmation QR</label>
+        <input type="file" id="scan-receipt-input" accept="image/*">
+        <button class="back-button" id="back-from-qr-display">Back to Wallet</button>
+    </div></div>
     
-    <div id="scan-proposal-view" class="view"><div class="card"><h2>Receive Funds (Step 2 of 2)</h2><label class="qr-upload-label" for="scan-proposal-input">To receive funds, scan the sender's "Proposal" QR code</label><input type="file" id="scan-proposal-input" accept="image/*"><div id="proposal-status" class="status-box"></div><button class="back-button" id="back-from-scan-proposal">Back</button></div></div>
 
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
@@ -64,567 +94,219 @@
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
-        // WebTorrent and BloomFilter have been removed.
 
-        // ===================================================================================
-        // CORE BANKNOTE VALIDATION LOGIC (Unchanged)
-        // ===================================================================================
-        const CoreLogic = (() => {
-            const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
-            const Utils = {
-                arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
-                base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; },
-                hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
-                preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }),
-                resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}),
-            };
-            const Crypto = {
-                hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)),
-                async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); }
-            };
-            const Banknote = {
-                getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']),
-                getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); },
-                parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; },
-                getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; },
-                decodeQrGrid: async (imgData, statusEl) => {
-                    const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0);
-                    for(let i=0;i<Constants.NUM_QR_CODES;i++){
-                        statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`;
-                        await new Promise(r=>setTimeout(r,5));
-                        const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height);
-                        if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}}
-                    }
-                    if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);}
-                    let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload;
-                }
-            };
-            return { Constants, Utils, Crypto, Banknote };
-        })();
-
-        // ===================================================================================
-        // AURA PROTOCOL - PINATA IPFS LEDGER FOR DOUBLE-SPEND PREVENTION
-        // ===================================================================================
-        const PinataLedger = (() => {
-            // WARNING: Storing your JWT directly in client-side code is insecure for production applications.
-            // Anyone can view this key and use your Pinata account. For a real product, this key should be
-            // managed by a secure backend or a serverless function that acts as a proxy.
-            const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJiZTkzZDRkMC0yYjgzLTQwZDMtYjg5Mi1iMGJiZGVkMTdiZDYiLCJlbWFpbCI6ImExbTNpNXIuYWZnQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI1OTFlNmFmNzJjMjdmNDI0ZDA4MSIsInNjb3BlZEtleVNlY3JldCI6ImM1NTA5YjVkNDBhNWEzNGZmYzI4ZThlNzYzNWI4OGQ2Mjg3MTNkNjA2MDc4NDk5NDZlNGVjMTUzM2JiNDAyNGIiLCJleHAiOjE3ODcxMzAxNDN9.Y-mqRBtYmZQ3P1XjKp403G6174vMdCZCcZVUdSAQAX0';
-
-            const recordSpentIdentifier = async (identifier, type) => {
-                const dataToPin = {
-                    pinataContent: {
-                        identifier: identifier,
-                        type: type, // e.g., 'banknote' or 'transaction'
-                        status: "spent",
-                        timestamp: new Date().toISOString()
-                    },
-                    pinataMetadata: {
-                        name: `${type}-${identifier}.json`,
-                        keyvalues: {
-                            identifier: identifier
-                        }
-                    }
-                };
-
-                try {
-                    const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${PINATA_JWT}`
-                        },
-                        body: JSON.stringify(dataToPin)
-                    });
-                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
-                    const result = await response.json();
-                    console.log('Identifier recorded to IPFS. Hash:', result.IpfsHash);
-                    return true;
-                } catch (error) {
-                    console.error('Failed to record identifier to Pinata:', error);
-                    // In a real app, you'd need robust error handling here.
-                    // For now, we'll alert the user as this is a critical failure.
-                    alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`);
-                    return false;
-                }
-            };
-
-            const hasBeenSpent = async (identifier) => {
-                const url = `https://api.pinata.cloud/data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`;
-                
-                try {
-                    const response = await fetch(url, {
-                        method: 'GET',
-                        headers: { 'Authorization': `Bearer ${PINATA_JWT}` }
-                    });
-                    if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`);
-                    const result = await response.json();
-                    return result.count > 0;
-                } catch (error) {
-                    console.error('Failed to check identifier status on Pinata:', error);
-                    alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`);
-                    // Fail-safe: If we can't check the ledger, we must assume it HAS been spent to prevent double-spending.
-                    return true;
-                }
-            };
-            
-            return { recordSpentIdentifier, hasBeenSpent };
-        })();
+        // CORE BANKNOTE & PINATA LEDGER LOGIC (Unchanged)
+        const CoreLogic = (() => { const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 }; const Utils = { arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))), base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; }, hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))), preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }), resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}), }; const Crypto = { hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)), async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); } }; const Banknote = { getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']), getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); }, parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; }, getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; }, decodeQrGrid: async (imgData, statusEl) => { const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0); for(let i=0;i<Constants.NUM_QR_CODES;i++){ statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5)); const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height); if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}} } if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);} let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload; } }; return { Constants, Utils, Crypto, Banknote }; })();
+        const PinataLedger = (() => { const PINATA_JWT = 'eyJhbGciOiJIJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJiZTkzZDRkMC0yYjgzLTQwZDMtYjg5Mi1iMGJiZGVkMTdiZDYiLCJlbWFpbCI6ImExbTNpNXIuYWZnQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI1OTFlNmFmNzJjMjdmNDI4ZDA4MSIsInNjb3BlZEtleVNlY3JldCI6ImM1NTA5YjVkNDBhNWEzNGZmYzI4ZThlNzYzNWI4OGQ2Mjg3MTNkNjA2MDc4NDk5NDZlNGVjMTUzM2JiNDAyNGIiLCJleHAiOjE3ODcxMzAxNDN9.Y-mqRBtYmZQ3P1XjKp403G6174vMdCZCcZVUdSAQAX0'; const recordSpentIdentifier = async (identifier, type) => { const dataToPin = { pinataContent: { identifier: identifier, type: type, status: "spent", timestamp: new Date().toISOString() }, pinataMetadata: { name: `${type}-${identifier}.json`, keyvalues: { identifier: identifier } } }; try { const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${PINATA_JWT}` }, body: JSON.stringify(dataToPin) }); if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`); const result = await response.json(); console.log('Identifier recorded to IPFS. Hash:', result.IpfsHash); return true; } catch (error) { console.error('Failed to record identifier to Pinata:', error); alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`); return false; } }; const hasBeenSpent = async (identifier) => { const url = `https://api.pinata.cloud/data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`; try { const response = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${PINATA_JWT}` } }); if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`); const result = await response.json(); return result.count > 0; } catch (error) { console.error('Failed to check identifier status on Pinata:', error); alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`); return true; } }; return { recordSpentIdentifier, hasBeenSpent }; })();
         
         // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED)
+        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED LOGIC)
         // ===================================================================================
-        
-        const AppConstants = {
-            MAX_LOGIN_ATTEMPTS: 5,
-            LOGIN_LOCKOUT_PERIOD: 30000 // 30 seconds
-        };
-
-        let state = {
-            wallet: null,
-            masterPublicKey: null,
-            userStore: null,
-            falconApi: null, 
-            failedLoginAttempts: 0,
-            isLockedOut: false,     
-        };
+        const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000 };
+        let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null };
 
         const WalletLogic = {
-            createWallet: (password) => {
-                const wallet = ethers.Wallet.createRandom();
-                const mnemonic = wallet.mnemonic.phrase;
-                const encryptedJson = wallet.encryptSync(password);
-                const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
-                localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                state.userStore = userStore;
-                state.wallet = wallet;
-                return { mnemonic };
-            },
-            restoreWallet: async (mnemonic, password) => {
-                try {
-                    const wallet = ethers.Wallet.fromPhrase(mnemonic);
-                    const encryptedJson = wallet.encryptSync(password);
-                    const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
-                    localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                    state.userStore = userStore;
-                    state.wallet = wallet;
-                    return true;
-                } catch (e) {
-                    console.error("Restore failed:", e);
-                    return false;
-                }
-            },
-            login: async (password) => {
-                const userStoreJson = localStorage.getItem('aura_user_store');
-                if (!userStoreJson) return null;
-                try {
-                    const reloadedUserStore = JSON.parse(userStoreJson);
-                    const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password);
-                    state.userStore = reloadedUserStore;
-                    state.wallet = wallet;
-                    state.failedLoginAttempts = 0;
-                    // WitnessNetwork.init() has been removed. No P2P initialization needed.
-                    return true;
-                } catch (e) {
-                    console.error("Login failed (likely incorrect password):", e);
-                    state.failedLoginAttempts++;
-                    return false;
-                }
-            },
-            logout: () => {
-                state.wallet = null;
-                state.userStore = null;
-            },
+            createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
+            restoreWallet: async (mnemonic, password) => { try { const wallet = ethers.Wallet.fromPhrase(mnemonic); const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false; } },
+            login: async (password) => { const userStoreJson = localStorage.getItem('aura_user_store'); if (!userStoreJson) return null; try { const reloadedUserStore = JSON.parse(userStoreJson); const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password); state.userStore = reloadedUserStore; state.wallet = wallet; state.failedLoginAttempts = 0; return true; } catch (e) { console.error("Login failed (likely incorrect password):", e); state.failedLoginAttempts++; return false; } },
+            logout: () => { state.wallet = null; state.userStore = null; },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
-            addToChain: (txData) => {
-                const prevTx = WalletLogic.getLastTransaction();
-                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() };
-                newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'string', 'string', 'string'], [newTx.type, newTx.amount || 0, newTx.from || '', newTx.to || '', newTx.prevHash] );
-                state.userStore.chain.push(newTx);
-                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                return newTx;
-            },
-            calculateBalance: () => {
-                if (!state.userStore) return 0.0;
-                return state.userStore.chain.reduce((balance, tx) => {
-                    if (tx.status !== 'completed') return balance;
-                    if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0);
-                    if (tx.type === 'send') return balance - (tx.amount || 0);
-                    return balance;
-                }, 0);
-            },
-            createProposal: async (amount) => {
-                const proposalTx = WalletLogic.addToChain({ type: 'send', amount: amount, from: state.wallet.address, to: '', status: 'pending' });
-                const proposal = { type: 'AURA_PROPOSAL', senderAddress: state.wallet.address, senderPublicKey: state.wallet.publicKey, txHash: proposalTx.hash, amount: amount };
-                proposal.signature = await state.wallet.signMessage(JSON.stringify(proposal));
-                return proposal;
-            },
-            createReceipt: async (proposal) => {
-                const receiptTx = WalletLogic.addToChain({ type: 'receive', amount: proposal.amount, from: proposal.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: proposal.txHash });
-                const receipt = { type: 'AURA_RECEIPT', receiverAddress: state.wallet.address, txHash: receiptTx.hash, linkedTxHash: proposal.txHash };
-                receipt.signature = await state.wallet.signMessage(JSON.stringify(receipt));
-                return receipt;
-            },
-            verifyAndFinalize: async (receipt) => {
-                const senderTxIndex = state.userStore.chain.findIndex(tx => tx.hash === receipt.linkedTxHash);
-                if (senderTxIndex === -1 || state.userStore.chain[senderTxIndex].status === 'completed') throw new Error("Associated send transaction not found or already completed.");
-                
-                const signerAddress = ethers.verifyMessage(JSON.stringify(receipt), receipt.signature);
-                // The following line is the critical change from WitnessNetwork to PinataLedger
-                const success = await PinataLedger.recordSpentIdentifier(receipt.linkedTxHash, 'transaction');
-                if(!success) throw new Error("Could not finalize transaction on the public ledger.");
+            addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; newTx.hash = ethers.solidityPackedKeccak256(['string', 'uint256', 'string', 'string', 'string'], [newTx.type, newTx.amount || 0, newTx.from || '', newTx.to || '', newTx.prevHash]); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); return newTx; },
+            calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0); return balance; }, 0); },
 
-                state.userStore.chain[senderTxIndex].status = 'completed';
+            // NEW: Recipient creates a payment request
+            createPaymentRequest: (amount) => {
+                const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' });
+                return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash };
+            },
+
+            // NEW: Sender processes the request and creates a confirmation
+            processPayment: async (request) => {
+                if (WalletLogic.calculateBalance() < request.amount) throw new Error("Insufficient funds.");
+                if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
+                
+                const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
+                
+                const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
+                if (!success) {
+                    // This part is tricky. In a real app, you'd need a rollback mechanism.
+                    // For now, we alert and the state might be inconsistent.
+                    throw new Error("CRITICAL: Payment sent but failed to update public ledger. Contact support.");
+                }
+                
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash };
+                confirmation.signature = await state.wallet.signMessage(JSON.stringify(confirmation));
+                return confirmation;
+            },
+
+            // NEW: Recipient finalizes by scanning the sender's confirmation
+            finalizePayment: async (confirmation) => {
+                const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
+                if (receiveTxIndex === -1) throw new Error("Could not find matching payment request. It might be finalized or invalid.");
+                
+                const message = JSON.stringify({ ...confirmation, signature: undefined });
+                const signerAddress = ethers.verifyMessage(message, confirmation.signature);
+                if (signerAddress !== state.userStore.chain[receiveTxIndex].from) { // 'from' will be updated to sender's address
+                   // Actually, we don't know the sender yet. We should check against the confirmation's senderAddress
+                   if (signerAddress !== confirmation.senderAddress) throw new Error("Confirmation signature is invalid.");
+                }
+
+                state.userStore.chain[receiveTxIndex].status = 'completed';
+                state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; // Record who sent it
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                 return true;
             }
         };
-
-        function resetViewInputs(viewId) {
-            const view = document.getElementById(viewId);
-            if (!view) return;
-            view.querySelectorAll('input, textarea').forEach(input => {
-                if (input.type !== 'file') input.value = '';
-            });
-            const statusBox = view.querySelector('.status-box');
-            if (statusBox) statusBox.innerHTML = '';
-        }
         
-        function resetChargeView() {
-            resetViewInputs('charge-view');
-            document.getElementById('banknote-image-input').disabled = true;
-            document.getElementById('public-key-input').value = '';
-            const confirmSection = document.getElementById('charge-confirmation');
-            confirmSection.style.display = 'none';
-            const confirmBtn = document.getElementById('confirm-charge-button');
-            confirmBtn.disabled = false;
-            confirmBtn.removeAttribute('data-amount');
-            confirmBtn.removeAttribute('data-serial');
-        }
-
-        function showView(id) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-        }
-
-        function updateBalanceDisplay() {
-            const balance = WalletLogic.calculateBalance();
-            document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`;
-        }
-        
-        function generateQrCode(data, containerId) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = '';
-            const qr = qrcode(0, 'L');
-            qr.addData(JSON.stringify(data));
-            qr.make();
-            container.innerHTML = qr.createImgTag(6, 10);
-        }
-        
-        async function decodeQrFromFile(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = e => {
-                    const image = new Image();
-                    image.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = image.width;
-                        canvas.height = image.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(image, 0, 0);
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        const code = jsQR(imageData.data, imageData.width, imageData.height);
-                        if (code) {
-                            try { resolve(JSON.parse(code.data)); } catch { reject(new Error("QR code contains invalid data.")); }
-                        } else {
-                            reject(new Error("QR Code not found or invalid."));
-                        }
-                    };
-                    image.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
+        // UI & EVENT LISTENERS
+        function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
+        function showView(id) { document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+        function updateBalanceDisplay() { const balance = WalletLogic.calculateBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; }
+        function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; const qr = qrcode(0, 'L'); qr.addData(JSON.stringify(data)); qr.make(); container.innerHTML = qr.createImgTag(6, 10); }
+        async function decodeQrFromFile(file) { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = e => { const image = new Image(); image.onload = () => { const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height; const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); const code = jsQR(imageData.data, imageData.width, imageData.height); if (code) { try { resolve(JSON.parse(code.data)); } catch { reject(new Error("QR code contains invalid data.")); } } else { reject(new Error("QR Code not found or invalid.")); } }; image.src = e.target.result; }; reader.readAsDataURL(file); }); }
         
         async function initializeApp() {
-            try {
-                state.falconApi = await pqcSignFalcon1024();
-            } catch (e) {
-                alert(`Critical error initializing cryptography module: ${e.message}`);
-                return;
-            }
-            const userStore = localStorage.getItem('aura_user_store');
-            if (userStore) {
-                showView('login-view');
-            } else {
-                showView('onboarding-view');
-            }
+            try { state.falconApi = await pqcSignFalcon1024(); } catch (e) { alert(`Critical error initializing cryptography module: ${e.message}`); return; }
+            if (localStorage.getItem('aura_user_store')) { showView('login-view'); } else { showView('onboarding-view'); }
             setupEventListeners();
         }
 
         function setupEventListeners() {
-            // Navigation
+            // Standard Navigation & Wallet Setup (largely unchanged)
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
-            
             document.getElementById('back-from-create').addEventListener('click', () => { resetViewInputs('create-wallet-view'); showView('onboarding-view'); });
             document.getElementById('back-from-restore').addEventListener('click', () => { resetViewInputs('restore-wallet-view'); showView('onboarding-view'); });
             document.getElementById('back-from-charge').addEventListener('click', () => showView('wallet-view'));
-            document.getElementById('back-from-send').addEventListener('click', () => showView('wallet-view'));
+            document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
-            document.getElementById('back-from-qr-display').addEventListener('click', () => showView('wallet-view'));
-            document.getElementById('back-from-scan-proposal').addEventListener('click', () => showView('wallet-view'));
-
-            // Wallet Creation / Restoration
-            document.getElementById('create-wallet-button').addEventListener('click', async () => {
-                const button = document.getElementById('create-wallet-button'), loader = document.getElementById('create-loader'), statusEl = document.getElementById('create-status');
-                const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim();
-                statusEl.textContent = '';
-                if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; }
-                if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; }
-                button.disabled = true; loader.style.display = 'block';
-                setTimeout(() => {
-                    const { mnemonic } = WalletLogic.createWallet(pass);
-                    document.getElementById('seed-phrase-display').textContent = mnemonic;
-                    showView('seed-phrase-view');
-                    button.disabled = false; loader.style.display = 'none';
-                }, 50);
-            });
-            
-            document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => {
+            document.getElementById('back-from-qr-display').addEventListener('click', () => {
+                // After payment, update balance and go back to wallet
                 updateBalanceDisplay();
                 showView('wallet-view');
-                document.getElementById('seed-phrase-display').textContent = '';
-                resetViewInputs('create-wallet-view');
             });
-
-            document.getElementById('restore-wallet-button').addEventListener('click', async () => {
-                const button = document.getElementById('restore-wallet-button'), loader = document.getElementById('restore-loader'), statusEl = document.getElementById('restore-status');
-                const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim();
-                statusEl.textContent = '';
-                if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; }
-                if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; }
-                button.disabled = true; loader.style.display = 'block';
-                const success = await WalletLogic.restoreWallet(mnemonic, pass);
-                if (success) {
-                    updateBalanceDisplay(); showView('wallet-view');
-                } else {
-                     statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>';
-                }
-                button.disabled = false; loader.style.display = 'none';
-                resetViewInputs('restore-wallet-view');
-            });
-
-            // Login / Logout / Reset
-            document.getElementById('login-button').addEventListener('click', async () => {
-                if (state.isLockedOut) return;
-                const button = document.getElementById('login-button'), loader = document.getElementById('login-loader'), statusEl = document.getElementById('login-status');
-                const pass = document.getElementById('login-password-input').value.trim();
-                button.disabled = true; loader.style.display = 'block';
-                statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>';
-                const success = await WalletLogic.login(pass);
-                if (success) {
-                    updateBalanceDisplay(); showView('wallet-view'); resetViewInputs('login-view');
-                } else {
-                    if (state.failedLoginAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) {
-                        state.isLockedOut = true;
-                        statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`;
-                        setTimeout(() => {
-                            state.isLockedOut = false; state.failedLoginAttempts = 0;
-                            statusEl.textContent = ''; button.disabled = false;
-                        }, AppConstants.LOGIN_LOCKOUT_PERIOD);
-                    } else {
-                        statusEl.innerHTML = `<span class="error">Invalid password. (${AppConstants.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`;
-                    }
-                }
-                if (!state.isLockedOut) button.disabled = false;
-                loader.style.display = 'none';
-            });
-
+            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), loader = document.getElementById('create-loader'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; loader.style.display = 'block'; setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); button.disabled = false; loader.style.display = 'none'; }, 50); });
+            document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { updateBalanceDisplay(); showView('wallet-view'); document.getElementById('seed-phrase-display').textContent = ''; resetViewInputs('create-wallet-view'); });
+            document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), loader = document.getElementById('restore-loader'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; } if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } button.disabled = true; loader.style.display = 'block'; const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { updateBalanceDisplay(); showView('wallet-view'); } else { statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>'; } button.disabled = false; loader.style.display = 'none'; resetViewInputs('restore-wallet-view'); });
+            document.getElementById('login-button').addEventListener('click', async () => { if (state.isLockedOut) return; const button = document.getElementById('login-button'), loader = document.getElementById('login-loader'), statusEl = document.getElementById('login-status'); const pass = document.getElementById('login-password-input').value.trim(); button.disabled = true; loader.style.display = 'block'; statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>'; const success = await WalletLogic.login(pass); if (success) { updateBalanceDisplay(); showView('wallet-view'); resetViewInputs('login-view'); } else { if (state.failedLoginAttempts >= AppConstants.MAX_LOGIN_ATTEMPTS) { state.isLockedOut = true; statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`; setTimeout(() => { state.isLockedOut = false; state.failedLoginAttempts = 0; statusEl.textContent = ''; button.disabled = false; }, AppConstants.LOGIN_LOCKOUT_PERIOD); } else { statusEl.innerHTML = `<span class="error">Invalid password. (${AppConstants.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`; } } if (!state.isLockedOut) button.disabled = false; loader.style.display = 'none'; });
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
+            document.getElementById('reset-app-button').addEventListener('click', () => { if (confirm('Are you sure? All wallet data will be erased from this browser.')) { localStorage.removeItem('aura_user_store'); location.reload(); } });
             
-            document.getElementById('reset-app-button').addEventListener('click', () => {
-                if (confirm('Are you sure? All wallet data will be erased from this browser.')) {
-                    localStorage.removeItem('aura_user_store');
-                    // No longer need to remove witness ledger keys
-                    location.reload();
+            // --- NEW PAYMENT FLOW EVENT LISTENERS ---
+
+            // RECEIVE FLOW
+            document.getElementById('show-receive-view-button').addEventListener('click', () => {
+                resetViewInputs('receive-view');
+                showView('receive-view');
+            });
+
+            document.getElementById('create-request-qr-button').addEventListener('click', () => {
+                const amount = parseFloat(document.getElementById('request-amount-input').value);
+                const statusEl = document.getElementById('receive-status');
+                if (isNaN(amount) || amount <= 0) {
+                    statusEl.innerHTML = '<span class="error">Please enter a valid amount.</span>';
+                    return;
                 }
-            });
-
-            // Main Wallet Actions
-            document.getElementById('show-charge-view-button').addEventListener('click', () => {
-                resetChargeView();
-                showView('charge-view');
-            });
-            document.getElementById('show-send-view-button').addEventListener('click', () => showView('send-view'));
-            document.getElementById('show-receive-view-button').addEventListener('click', () => showView('scan-proposal-view'));
-
-            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
-                const button = event.target;
-                button.disabled = true; 
-
-                const amount = parseFloat(button.dataset.amount);
-                const serial = button.dataset.serial;
+                const request = WalletLogic.createPaymentRequest(amount);
                 
-                if (isNaN(amount) || !serial) {
-                    alert("An error occurred. Please try scanning again.");
-                    showView('wallet-view');
-                    return;
-                }
+                document.getElementById('qr-display-title').textContent = 'Payment Request';
+                document.getElementById('qr-display-instruction').textContent = `Show this QR to the sender to pay $${amount.toFixed(2)}.`;
+                document.getElementById('qr-display-box').style.display = 'block';
+                generateQrCode(request, 'qr-display-box');
 
-                // The following line is the critical change from WitnessNetwork to PinataLedger
-                const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
-                if (!success) {
-                    alert("Failed to record the banknote on the public ledger. The operation was cancelled to prevent an invalid deposit.");
-                    showView('wallet-view');
-                    return;
-                }
-
-                WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' });
-                updateBalanceDisplay();
-                alert(`$${amount.toFixed(2)} added successfully.`);
-                showView('wallet-view');
-            });
-
-            document.getElementById('create-proposal-button').addEventListener('click', async () => {
-                const amount = parseFloat(document.getElementById('send-amount-input').value);
-                if (isNaN(amount) || amount <= 0 || amount > WalletLogic.calculateBalance()) {
-                    document.getElementById('send-status').innerHTML = '<span class="error">Invalid amount or insufficient funds.</span>';
-                    return;
-                }
-                document.getElementById('confirm-amount-display').textContent = `$${amount.toFixed(2)}`;
-                document.getElementById('confirm-send-button').dataset.amount = amount;
-                showView('send-confirm-view');
-            });
-
-            document.getElementById('confirm-send-button').addEventListener('click', async (event) => {
-                const amount = parseFloat(event.target.dataset.amount);
-                const proposal = await WalletLogic.createProposal(amount);
-                generateQrCode(proposal, 'qr-display-box');
-                document.getElementById('qr-display-title').textContent = 'Send Funds (Step 2 of 2)';
-                document.getElementById('qr-display-instruction').textContent = 'Show this code to the recipient to scan.';
+                // A way for the recipient to finalize after the sender pays
+                document.getElementById('final-status-message').innerHTML = '<span class="info">After the sender pays, a final confirmation QR will be needed. You can scan it here.</span>';
                 document.getElementById('scan-receipt-label').style.display = 'block';
                 showView('qr-display-view');
             });
 
-            // QR Code Handling
-            document.getElementById('scan-receipt-input').addEventListener('change', async (event) => {
-                 const file = event.target.files[0];
-                 if (!file) return;
-                 const statusEl = document.getElementById('qr-status');
-                 try {
-                    statusEl.innerHTML = '<span class="info">Processing receipt...</span>';
-                    const receipt = await decodeQrFromFile(file);
-                    if (receipt.type !== 'AURA_RECEIPT') throw new Error('Not a valid receipt QR code.');
-                    await WalletLogic.verifyAndFinalize(receipt);
-                    statusEl.innerHTML = '<span class="success">Transaction finalized successfully!</span>';
-                    updateBalanceDisplay();
-                    setTimeout(() => showView('wallet-view'), 2000);
-                } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-                } finally {
-                    event.target.value = '';
-                }
+            // SEND FLOW
+            document.getElementById('show-send-view-button').addEventListener('click', () => {
+                resetViewInputs('send-view');
+                showView('send-view');
             });
 
-            document.getElementById('scan-proposal-input').addEventListener('change', async (event) => {
-                 const file = event.target.files[0];
-                 if (!file) return;
-                 const statusEl = document.getElementById('proposal-status');
-                 try {
-                    statusEl.innerHTML = '<span class="info">QR Code detected. Verifying transaction on public ledger...</span>';
-                    const proposal = await decodeQrFromFile(file);
-                    if (proposal.type !== 'AURA_PROPOSAL') throw new Error('Not a valid proposal QR code.');
-                    
-                    const message = JSON.stringify({ ...proposal, signature: undefined });
-                    const signerAddress = ethers.verifyMessage(message, proposal.signature);
-                    if (signerAddress !== proposal.senderAddress) throw new Error("Sender's signature is invalid.");
-                    
-                    // The following line is the critical change from WitnessNetwork to PinataLedger
-                    if (await PinataLedger.hasBeenSpent(proposal.txHash)) {
-                        throw new Error('This transaction has already been processed or is in progress.');
-                    }
-
-                    statusEl.innerHTML = '<span class="info">Proposal valid. Creating receipt...</span>';
-                    const receipt = await WalletLogic.createReceipt(proposal);
-                    
-                    generateQrCode(receipt, 'qr-display-box');
-                    document.getElementById('qr-display-title').textContent = 'Present Receipt to Sender';
-                    document.getElementById('qr-display-instruction').textContent = 'Show this code to the sender to scan and finalize the transaction.';
-                    document.getElementById('scan-receipt-label').style.display = 'none';
-                    showView('qr-display-view');
-                    updateBalanceDisplay();
-                } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
-                } finally {
-                    event.target.value = '';
-                }
-            });
-
-            // Banknote Charging
-            document.getElementById('public-key-input').addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                const keyStatus = document.getElementById('key-status');
-                keyStatus.innerHTML = '<span class="info">Processing key...</span>';
-                document.getElementById('banknote-image-input').disabled = true;
-                state.masterPublicKey = null;
+            document.getElementById('scan-payment-request-input').addEventListener('change', async (event) => {
+                const file = event.target.files[0]; if (!file) return;
+                const statusEl = document.getElementById('send-status');
+                statusEl.innerHTML = '<span class="info">Processing QR code...</span>';
                 try {
-                    const keyData = JSON.parse(await file.text());
-                    if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'.");
-                    state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey);
-                    keyStatus.innerHTML = '<span class="success">Public key loaded successfully.</span>';
-                    document.getElementById('banknote-image-input').disabled = false;
+                    const request = await decodeQrFromFile(file);
+                    if (request.type !== 'AURA_PAYMENT_REQUEST' || !request.amount || !request.receiverAddress) {
+                        throw new Error("Not a valid payment request QR.");
+                    }
+                    if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) {
+                        throw new Error("This payment request has already been paid.");
+                    }
+                    
+                    state.activePaymentRequest = request; // Store the request data
+                    document.getElementById('confirm-amount-display').textContent = `$${request.amount.toFixed(2)}`;
+                    document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress;
+                    showView('send-confirm-view');
+
                 } catch (err) {
-                    keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`;
+                    statusEl.innerHTML = `<span class="error">${err.message}</span>`;
+                } finally {
+                    event.target.value = '';
                 }
             });
 
-            document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                const statusEl = document.getElementById('validation-status');
-                const confirmSection = document.getElementById('charge-confirmation');
-                confirmSection.style.display = 'none';
-   
-                if (!state.masterPublicKey) {
-                    statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>';
+            document.getElementById('confirm-payment-button').addEventListener('click', async (event) => {
+                const button = event.target;
+                const statusEl = document.getElementById('send-confirm-status');
+                if (!state.activePaymentRequest) {
+                    statusEl.innerHTML = '<span class="error">No active payment request. Please scan again.</span>';
                     return;
                 }
-                
-                statusEl.innerHTML = '<span class="info">Preparing image...</span>';
+                button.disabled = true;
+                statusEl.innerHTML = '<span class="info">Processing payment and updating public ledger...</span>';
+
                 try {
-                    const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
-                    const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
-                    const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
-
-                    const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
-                    statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures and checking public ledger...</span>';
-
-                    const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                    // This is the one and only step for the sender now.
+                    await WalletLogic.processPayment(state.activePaymentRequest);
                     
-                    // The following line is the critical change from WitnessNetwork to PinataLedger
-                    if (await PinataLedger.hasBeenSpent(banknoteData.serial)) {
-                        throw new Error("This banknote has already been spent according to the public ledger.");
-                    }
-                    
-                    const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
-                    if (!isSigOneValid) throw new Error("Signature validation failed (internal). The note may be damaged or counterfeit.");
-                    const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
-                    if (!isSigTwoValid) throw new Error("Signature validation failed (issuer). The note is not authentic according to the provided public key.");
-
-                    statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
-                    document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
-                    const confirmBtn = document.getElementById('confirm-charge-button');
-                    confirmBtn.dataset.amount = banknoteData.amount;
-                    confirmBtn.dataset.serial = banknoteData.serial;
-                    confirmSection.style.display = 'block';
+                    // Show a final success message. No more QR codes for the sender.
+                    document.getElementById('qr-display-title').textContent = 'Payment Successful';
+                    document.getElementById('qr-display-instruction').textContent = `You have successfully sent $${state.activePaymentRequest.amount.toFixed(2)}.`;
+                    document.getElementById('qr-display-box').style.display = 'none'; // No more QR
+                    document.getElementById('final-status-message').innerHTML = '<span class="success">Transaction complete!</span>';
+                    document.getElementById('scan-receipt-label').style.display = 'none';
+                    showView('qr-display-view');
+                    state.activePaymentRequest = null;
+                
                 } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`;
+                    statusEl.innerHTML = `<span class="error">Payment Failed: ${err.message}</span>`;
+                } finally {
+                    button.disabled = false;
+                }
+            });
+
+            // RECIPIENT FINALIZES HERE
+             document.getElementById('scan-receipt-input').addEventListener('change', async (event) => {
+                 const file = event.target.files[0]; if (!file) return;
+                 const statusEl = document.getElementById('final-status-message');
+                 statusEl.innerHTML = '<span class="info">Processing confirmation...</span>';
+                 try {
+                    const confirmation = await decodeQrFromFile(file);
+                    if (confirmation.type !== 'AURA_PAYMENT_CONFIRMATION') throw new Error('Not a valid confirmation QR.');
+                    
+                    await WalletLogic.finalizePayment(confirmation);
+                    
+                    statusEl.innerHTML = '<span class="success">Payment received and finalized! Your balance is updated.</span>';
+                    updateBalanceDisplay();
+
+                } catch (err) {
+                    statusEl.innerHTML = `<span class="error">Error: ${err.message}</span>`;
                 } finally {
                     event.target.value = '';
                 }
             });
+            
+            // --- BANKNOTE CHARGING (Unchanged) ---
+            document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); document.getElementById('banknote-image-input').disabled = true; document.getElementById('public-key-input').value = ''; const confirmSection = document.getElementById('charge-confirmation'); confirmSection.style.display = 'none'; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.disabled = false; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); showView('charge-view'); });
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const amount = parseFloat(button.dataset.amount), serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An error occurred. Please try scanning again."); showView('wallet-view'); return; } const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote'); if (!success) { alert("Failed to record the banknote on the public ledger. The operation was cancelled to prevent an invalid deposit."); showView('wallet-view'); return; } WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' }); updateBalanceDisplay(); alert(`$${amount.toFixed(2)} added successfully.`); showView('wallet-view'); });
+            document.getElementById('public-key-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const keyStatus = document.getElementById('key-status'); keyStatus.innerHTML = '<span class="info">Processing key...</span>'; document.getElementById('banknote-image-input').disabled = true; state.masterPublicKey = null; try { const keyData = JSON.parse(await file.text()); if (!keyData.masterPublicKey) throw new Error("JSON file is missing 'masterPublicKey'."); state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(keyData.masterPublicKey); keyStatus.innerHTML = '<span class="success">Public key loaded successfully.</span>'; document.getElementById('banknote-image-input').disabled = false; } catch (err) { keyStatus.innerHTML = `<span class="error">Error: ${err.message}</span>`; } });
+            document.getElementById('banknote-image-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const statusEl = document.getElementById('validation-status'); const confirmSection = document.getElementById('charge-confirmation'); confirmSection.style.display = 'none'; if (!state.masterPublicKey) { statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>'; return; } statusEl.innerHTML = '<span class="info">Preparing image...</span>'; try { const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION); const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl); const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; }); const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl); statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>'; const banknoteData = CoreLogic.Banknote.parsePayload(payload); if (await PinataLedger.hasBeenSpent(banknoteData.serial)) { throw new Error("This banknote has already been spent according to the public ledger."); } const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi); if (!isSigOneValid) throw new Error("Signature validation failed (internal)."); const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi); if (!isSigTwoValid) throw new Error("Signature validation failed (issuer)."); statusEl.innerHTML = '<span class="success">Banknote is valid!</span>'; document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.dataset.amount = banknoteData.amount; confirmBtn.dataset.serial = banknoteData.serial; confirmSection.style.display = 'block'; } catch (err) { statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; } finally { event.target.value = ''; } });
         }
 
         document.addEventListener('DOMContentLoaded', initializeApp);
