@@ -174,7 +174,7 @@
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION (MODIFIED LOGIC)
         // ===================================================================================
-        const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, TREASURY_ADDRESS: '0xF848aC6b7E16CF32A972ECE1529c73313375c6d5', FEE_PERCENTAGE: 0.009 }; // 0.9%
+        const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, TREASURY_ADDRESS: '0xF848aC6b7E16CF32A972ECE1529c73313375c6d5', FEE_PERCENTAGE: 0.009, PRECISION: 8 }; // 0.9%
         let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false };
 
         const WalletLogic = {
@@ -183,11 +183,26 @@
             login: async (password) => { const userStoreJson = localStorage.getItem('aura_user_store'); if (!userStoreJson) return null; try { const reloadedUserStore = JSON.parse(userStoreJson); const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password); state.userStore = reloadedUserStore; state.wallet = wallet; state.failedLoginAttempts = 0; return true; } catch (e) { console.error("Login failed (likely incorrect password):", e); state.failedLoginAttempts++; return false; } },
             logout: () => { state.wallet = null; state.userStore = null; },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
-            addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; newTx.hash = ethers.solidityPackedKeccak256(['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, newTx.amount || 0, newTx.fee || 0, newTx.from || '', newTx.to || '', newTx.prevHash]); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); return newTx; },
+            addToChain: (txData) => {
+                const prevTx = WalletLogic.getLastTransaction(); 
+                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; 
+                
+                // **FIX**: Convert amounts to a fixed-point integer (BigInt) before hashing to prevent underflow errors.
+                const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
+                const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
+
+                newTx.hash = ethers.solidityPackedKeccak256(
+                    ['string', 'uint256', 'uint256', 'string', 'string', 'string'], 
+                    [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash]
+                ); 
+                state.userStore.chain.push(newTx); 
+                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
+                return newTx; 
+            },
             calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0) - (tx.fee || 0); return balance; }, 0); },
             
             getStandardizedConfirmationMessage: (confirmation) => {
-                const amount = Number(confirmation.amount).toFixed(8);
+                const amount = Number(confirmation.amount).toFixed(AppConstants.PRECISION);
                 return [confirmation.type, confirmation.senderAddress, amount, confirmation.linkedTxHash].join('|');
             },
 
@@ -566,23 +581,32 @@
                 statusEl.innerHTML = '<span class="info">Processing payment and publishing receipt to ledger...</span>';
 
                 try {
+                    let success = false;
+                    let message = '';
                     if (state.activePaymentRequest) {
                         await WalletLogic.processPayment(state.activePaymentRequest);
-                        alert(`Payment of $${state.activePaymentRequest.amount.toFixed(2)} was sent successfully!`);
+                        message = `Payment of $${state.activePaymentRequest.amount.toFixed(2)} was sent successfully!`;
+                        success = true;
                     } else if (state.activeManualSend) {
                         await WalletLogic.directSend(state.activeManualSend.address, state.activeManualSend.amount);
-                        alert(`Payment of $${state.activeManualSend.amount.toFixed(2)} was sent successfully!`);
+                        message = `Payment of $${state.activeManualSend.amount.toFixed(2)} was sent successfully!`;
+                        success = true;
                     } else {
                         throw new Error("No active payment request.");
                     }
-                    updateBalanceDisplay();
-                    showView('wallet-view');
+
+                    // **FIX**: Only clear state and change view on success.
+                    if (success) {
+                        alert(message);
+                        state.activePaymentRequest = null;
+                        state.activeManualSend = null;
+                        updateBalanceDisplay();
+                        showView('wallet-view');
+                    }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="error">Payment Failed: ${err.message}</span>`;
                 } finally {
                     button.disabled = false;
-                    state.activePaymentRequest = null;
-                    state.activeManualSend = null;
                 }
             });
             
