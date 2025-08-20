@@ -62,6 +62,37 @@
         .address-text { font-family: monospace; font-size: 14px; margin-right: 10px; }
         .copy-button { padding: 5px 10px; font-size: 12px; width: auto; background: var(--dark-gray); min-width: 60px; }
         #confirm-amount-display { line-height: 1.5; }
+        
+        /* Styles for Transaction Detail Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            width: 400px;
+            max-width: 90%;
+            text-align: left;
+            padding: 25px;
+        }
+        .modal-content h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .modal-content p {
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        .modal-content p strong {
+            color: var(--primary-color);
+        }
     </style>
 </head>
 <body>
@@ -156,12 +187,30 @@
         </div>
         <button class="back-button" id="back-from-qr-display">Back to Wallet</button>
     </div></div>
-    
 
+    <div id="transaction-detail-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content card">
+            <h2>Transaction Details</h2>
+            <div id="modal-details-content">
+                <p><strong>Status:</strong> <span id="detail-status"></span></p>
+                <p><strong>Type:</strong> <span id="detail-type"></span></p>
+                <p><strong>Date & Time:</strong> <span id="detail-datetime"></span></p>
+                <p><strong>Amount:</strong> <span id="detail-amount"></span></p>
+                <p><strong>Fee:</strong> <span id="detail-fee"></span></p>
+                <p style="word-wrap: break-word;"><strong>From:</strong> <span id="detail-from"></span></p>
+                <p style="word-wrap: break-word;"><strong>To:</strong> <span id="detail-to"></span></p>
+                <p style="word-wrap: break-word;"><strong>Transaction Hash:</strong> <span id="detail-hash"></span></p>
+            </div>
+            <button id="download-tx-button">Download as JPG</button>
+            <button id="close-modal-button" class="back-button">Close</button>
+        </div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <script type="module">
         import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
@@ -442,20 +491,62 @@
 
         function renderTransactionHistory() {
             const listUl = document.getElementById('transaction-list-ul');
-            listUl.innerHTML = ''; 
+            listUl.innerHTML = '';
             if (!state.userStore || !state.userStore.chain) return;
-            const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse(); 
-            if (transactions.length === 0) { listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>'; return; }
+            const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse();
+            if (transactions.length === 0) {
+                listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>';
+                return;
+            }
             transactions.forEach(tx => {
-                const item = document.createElement('li'); item.className = 'transaction-item';
+                const item = document.createElement('li');
+                item.className = 'transaction-item';
+                item.style.cursor = 'pointer'; // Make item look clickable
                 const isSent = tx.type === 'send';
                 const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received');
                 const typeClass = isSent ? 'sent' : 'received';
                 const totalAmount = isSent ? (tx.amount || 0) + (tx.fee || 0) : (tx.amount || 0);
                 const date = new Date(tx.timestamp).toLocaleString('en-US');
                 item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`;
+                
+                // Add click event listener to show details
+                item.addEventListener('click', () => showTransactionDetails(tx));
+                
                 listUl.appendChild(item);
             });
+        }
+        
+        function showTransactionDetails(tx) {
+            const modal = document.getElementById('transaction-detail-modal');
+            
+            // Populate the modal with transaction data
+            document.getElementById('detail-status').textContent = tx.status || 'N/A';
+            document.getElementById('detail-type').textContent = tx.type || 'N/A';
+            document.getElementById('detail-datetime').textContent = new Date(tx.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' });
+            document.getElementById('detail-amount').textContent = `$${(tx.amount || 0).toFixed(2)}`;
+            document.getElementById('detail-fee').textContent = `$${(tx.fee || 0).toFixed(2)}`;
+            document.getElementById('detail-from').textContent = tx.from || 'N/A';
+            document.getElementById('detail-to').textContent = tx.to || 'N/A';
+            document.getElementById('detail-hash').textContent = tx.hash || 'N/A';
+
+            // Show the modal
+            modal.style.display = 'flex';
+
+            // Handle close button click
+            document.getElementById('close-modal-button').onclick = () => {
+                modal.style.display = 'none';
+            };
+
+            // Handle download button click
+            document.getElementById('download-tx-button').onclick = () => {
+                const contentToCapture = document.getElementById('modal-details-content');
+                html2canvas(contentToCapture, { scale: 2 }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `transaction_${tx.hash.substring(0, 10)}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.9);
+                    link.click();
+                });
+            };
         }
 
         async function initializeApp() { try { state.falconApi = await pqcSignFalcon1024(); } catch (e) { alert(`Critical error initializing cryptography module: ${e.message}`); return; } if (localStorage.getItem('aura_user_store')) { showView('login-view'); } else { showView('onboarding-view'); } setupEventListeners(); }
