@@ -215,7 +215,6 @@
             calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0) - (tx.fee || 0); return balance; }, 0); },
             getStandardizedConfirmationMessage: (confirmation) => {
                 const amount = Number(confirmation.amount).toFixed(AppConstants.PRECISION);
-                // Including receiverAddress in the signed message for added security.
                 return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|');
             },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + AppConstants.PAYMENT_REQUEST_EXPIRY }; },
@@ -238,8 +237,15 @@
                 confirmation.signedMessage = messageToSign; 
                 await PinataLedger.pinConfirmation(confirmation); 
 
-                // **NEW**: Instant fee transfer to treasury
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash };
+                // Fee transfer to treasury
+                const feeConfirmation = { 
+                    type: 'AURA_PAYMENT_CONFIRMATION', 
+                    senderAddress: state.wallet.address, 
+                    receiverAddress: AppConstants.TREASURY_ADDRESS, 
+                    amount: fee, 
+                    // **FIX**: Create a unique linked hash for the fee to prevent collisions when treasury is the recipient.
+                    linkedTxHash: sendTx.hash + "-fee" 
+                };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
@@ -261,8 +267,15 @@
                 confirmation.signedMessage = messageToSign;
                 await PinataLedger.pinConfirmation(confirmation);
                 
-                // **NEW**: Instant fee transfer to treasury
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash };
+                // Fee transfer to treasury
+                const feeConfirmation = { 
+                    type: 'AURA_PAYMENT_CONFIRMATION', 
+                    senderAddress: state.wallet.address, 
+                    receiverAddress: AppConstants.TREASURY_ADDRESS, 
+                    amount: fee, 
+                    // **FIX**: Create a unique linked hash for the fee to prevent collisions when treasury is the recipient.
+                    linkedTxHash: sendTx.hash + "-fee" 
+                };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
@@ -284,7 +297,6 @@
                 return true; 
             },
             processDiscoveredTransaction: async (confirmation) => {
-                // Ensure receiver address matches current wallet address to prevent crediting wrong transactions
                 if (confirmation.receiverAddress !== state.wallet.address) {
                     return false;
                 }
