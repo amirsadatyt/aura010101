@@ -41,7 +41,6 @@
         .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid var(--primary-color); width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; margin: 10px auto; }
         .loader.hidden { display: none; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Transaction History Styles */
         .transaction-history { margin-top: 25px; text-align: left; }
         .transaction-history h3 { text-align: center; margin-bottom: 15px; color: var(--secondary-color); }
         .transaction-list { list-style-type: none; padding: 0; max-height: 200px; overflow-y: auto; }
@@ -56,43 +55,19 @@
         .transaction-amount.sent { color: var(--danger-color); }
         .transaction-amount.received { color: var(--success-color); }
         .no-transactions { text-align: center; color: #999; padding: 20px; }
-         /* Timer Style */
         #payment-timer { font-size: 18px; font-weight: bold; color: var(--danger-color); margin-top: 15px; }
         .address-display-box { background: #f0f2f5; padding: 10px; border-radius: 6px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
         .address-text { font-family: monospace; font-size: 14px; margin-right: 10px; }
         .copy-button { padding: 5px 10px; font-size: 12px; width: auto; background: var(--dark-gray); min-width: 60px; }
         #confirm-amount-display { line-height: 1.5; }
-        
-        /* Styles for Transaction Detail Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            width: 400px;
-            max-width: 90%;
-            text-align: left;
-            padding: 25px;
-        }
-        .modal-content h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .modal-content p {
-            margin-bottom: 12px;
-            font-size: 14px;
-        }
-        .modal-content p strong {
-            color: var(--primary-color);
-        }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { width: 400px; max-width: 90%; text-align: left; padding: 25px; }
+        .modal-content h2 { text-align: center; margin-bottom: 20px; }
+        .modal-content p { margin-bottom: 12px; font-size: 14px; }
+        .modal-content p strong { color: var(--primary-color); }
+        .status-indicator { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .status-indicator.online { background-color: var(--success-color); }
+        .status-indicator.offline { background-color: var(--danger-color); }
     </style>
 </head>
 <body>
@@ -116,14 +91,17 @@
         <p>Balance:</p>
         <h1 id="balance-display">$0.00</h1>
         <div id="sync-status" class="status-box" style="font-size: 14px;"></div>
-        <p id="network-status" style="font-size: 12px; color: var(--success-color);">Ledger: Pinata IPFS</p>
-        <button id="show-charge-view-button">Charge with Banknote</button>
-        <button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button>
-        <button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button>
+        <div style="font-size: 12px; margin-top: 5px;">
+            <span id="server-status-indicator" class="status-indicator"></span>
+            <span id="server-status-text"></span>
+        </div>
+        <p id="network-status" style="font-size: 12px; color: var(--dark-gray);">Ledger: Pinata IPFS</p>
+        <button id="show-charge-view-button" disabled>Charge with Banknote</button>
+        <button id="show-send-view-button" style="margin-top:10px;" disabled>Send (Aura)</button>
+        <button id="show-receive-view-button" style="margin-top:10px;" disabled>Receive (Aura)</button>
         <div class="transaction-history">
             <h3>Recent Transactions</h3>
-            <ul id="transaction-list-ul" class="transaction-list">
-                </ul>
+            <ul id="transaction-list-ul" class="transaction-list"></ul>
         </div>
         <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
     </div></div>
@@ -145,16 +123,13 @@
     
     <div id="send-view" class="view"><div class="card">
         <h2>Send Funds</h2>
-        
         <p>Enter recipient address and amount.</p>
         <div>
             <input type="text" id="send-address-input" placeholder="Recipient's Aura Address" style="margin-bottom: 10px;">
             <input type="number" id="send-amount-input" placeholder="Amount to send" style="margin-bottom: 10px;">
             <button id="send-manual-button">Continue</button>
         </div>
-
         <p style="text-align:center; margin: 20px 0; font-weight: bold;">- OR -</p>
-
         <p>Scan a recipient's payment request QR code.</p>
         <div id="video-container" style="position: relative; width: 100%; max-width: 300px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 2px solid #333; background: #000;">
             <video id="qr-video" playsinline style="width: 100%; height: auto; display: block;"></video>
@@ -217,7 +192,6 @@
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-        // CORE BANKNOTE & PINATA LEDGER LOGIC
         const CoreLogic = (() => { const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 }; const Utils = { arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))), base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; }, hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))), preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }), resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}), }; const Crypto = { hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)), async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); } }; const Banknote = { getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']), getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); }, parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; }, getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; }, decodeQrGrid: async (imgData, statusEl) => { const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0); for(let i=0;i<Constants.NUM_QR_CODES;i++){ statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5)); const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height); if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}} } if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);} let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload; } }; return { Constants, Utils, Crypto, Banknote }; })();
         const PinataLedger = (() => {
             const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJiZTkzZDRkMC0yYjgzLTQwZDMtYjg5Mi1iMGJiZGVkMTdiZDYiLCJlbWFpbCI6ImExbTNpNXIuYWZnQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI0Y2UzOTU0ZjIxZGRhYTdlMmM1NiIsInNjb3BlZEtleVNlY3JldCI6ImU3YTA3NmZjZTJjN2Q0NzM0OWY0MTFjYmE5ODE5YmZiNzVjYTY2MzZmYTVhMDdiNDk2MTJmYWU3MjlhZmQxNmIiLCJleHAiOjE3ODcxMzI1NTh9.dV4M4P4LaqxiZ91ye3F4n5oP98sIqGQVA2waPrGDFJc';
@@ -226,7 +200,7 @@
             const hasBeenSpent = async (identifier) => { try { const result = await apiCall(`data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`, { method: 'GET', headers: { Authorization: `Bearer ${PINATA_JWT}` } }); return result.count > 0; } catch (error) { console.error('Failed to check identifier status on Pinata:', error); alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`); return true; } };
             const pinConfirmation = async (confirmation) => {
                 const metadata = { name: `confirmation-${confirmation.linkedTxHash}.json`, keyvalues: { type: 'confirmation', txHash: confirmation.linkedTxHash } };
-                if (confirmation.receiverAddress) { metadata.keyvalues.receiverAddress = confirmation.receiverAddress; } // This is crucial for the sync functionality
+                if (confirmation.receiverAddress) { metadata.keyvalues.receiverAddress = confirmation.receiverAddress; }
                 const dataToPin = { pinataContent: confirmation, pinataMetadata: metadata };
                 await apiCall('pinning/pinJSONToIPFS', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${PINATA_JWT}` }, body: JSON.stringify(dataToPin) });
             };
@@ -239,12 +213,9 @@
             return { recordSpentIdentifier, hasBeenSpent, pinConfirmation, findConfirmation, findDirectSends };
         })();
         
-        // ===================================================================================
-        // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
-        // ===================================================================================
         const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, TREASURY_ADDRESS: '0xF848aC6b7E16CF32A972ECE1529c73313375c6d5', FEE_PERCENTAGE: 0.009, PRECISION: 8 };
-        let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false };
-
+        let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, isServerOnline: false };
+        
         const WalletLogic = {
             createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
             restoreWallet: async (mnemonic, password) => { try { const wallet = ethers.Wallet.fromPhrase(mnemonic); const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false; } },
@@ -252,11 +223,11 @@
             logout: () => { state.wallet = null; state.userStore = null; },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => {
-                const prevTx = WalletLogic.getLastTransaction(); 
+                const prevTx = WalletLogic.getLastTransaction();
                 const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; 
                 const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
                 const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
-                newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] ); 
+                newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] );
                 state.userStore.chain.push(newTx); 
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
                 return newTx; 
@@ -271,60 +242,60 @@
                 const fee = request.amount * AppConstants.FEE_PERCENTAGE;
                 const totalDebit = request.amount + fee;
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
-                if (WalletLogic.calculateBalance() < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`); 
-                if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); 
+                if (WalletLogic.calculateBalance() < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
+                if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
                 
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); 
-                
+                // --- MODIFIED LOGIC: Write to public ledger FIRST ---
                 const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); 
-                if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); 
+                if (!success) {
+                    throw new Error("CRITICAL: Failed to write to public ledger. Payment has been aborted to protect your funds.");
+                }
                 
-                // Confirmation for the main recipient
+                // Only if public record is successful, proceed with local changes
+                const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
+
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign; 
-                await PinataLedger.pinConfirmation(confirmation); 
+                await PinataLedger.pinConfirmation(confirmation);
 
-                // Fee transfer to treasury
-                const feeConfirmation = { 
-                    type: 'AURA_PAYMENT_CONFIRMATION', 
-                    senderAddress: state.wallet.address, 
-                    receiverAddress: AppConstants.TREASURY_ADDRESS, 
-                    amount: fee, 
-                    // **FIX**: Create a unique linked hash for the fee to prevent collisions when treasury is the recipient.
-                    linkedTxHash: sendTx.hash + "-fee" 
-                };
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
                 await PinataLedger.pinConfirmation(feeConfirmation);
                 
-                return true; 
+                return true;
             },
             directSend: async (recipientAddress, amount) => {
                 const fee = amount * AppConstants.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
                 if (WalletLogic.calculateBalance() < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
-                
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
-                
-                // Confirmation for the main recipient
+
+                // This is a direct send, so we create a temporary local TX to get a hash for public recording
+                const tempTx = { type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'pending_public' };
+                const prevTx = WalletLogic.getLastTransaction();
+                const amountInt = ethers.parseUnits((tempTx.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
+                const feeInt = ethers.parseUnits((tempTx.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
+                const tempHash = ethers.solidityPackedKeccak256(['string', 'uint256', 'uint256', 'string', 'string', 'string'], [tempTx.type, amountInt, feeInt, tempTx.from || '', tempTx.to || '', prevTx.hash]);
+
+                // --- MODIFIED LOGIC: Write to public ledger FIRST ---
+                const success = await PinataLedger.recordSpentIdentifier(tempHash, 'transaction');
+                 if (!success) {
+                    throw new Error("CRITICAL: Failed to write to public ledger. Payment has been aborted to protect your funds.");
+                }
+
+                // Only if public record is successful, commit the transaction locally
+                const sendTx = WalletLogic.addToChain({ ...tempTx, status: 'completed' }); // This will re-hash but it's okay, the hash is now final.
+
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await PinataLedger.pinConfirmation(confirmation);
-                
-                // Fee transfer to treasury
-                const feeConfirmation = { 
-                    type: 'AURA_PAYMENT_CONFIRMATION', 
-                    senderAddress: state.wallet.address, 
-                    receiverAddress: AppConstants.TREASURY_ADDRESS, 
-                    amount: fee, 
-                    // **FIX**: Create a unique linked hash for the fee to prevent collisions when treasury is the recipient.
-                    linkedTxHash: sendTx.hash + "-fee" 
-                };
+
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
@@ -333,44 +304,32 @@
                 return true;
             },
             finalizePayment: async (confirmation) => { 
-                const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); 
+                const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
                 if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; }
                 if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; }
                 const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Tamper Detection: Confirmation data mismatch."); return false; }
-                const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); 
+                const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
                 if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; } 
-                state.userStore.chain[receiveTxIndex].status = 'completed'; 
+                state.userStore.chain[receiveTxIndex].status = 'completed';
                 state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; 
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
                 return true; 
             },
             processDiscoveredTransaction: async (confirmation) => {
-                if (confirmation.receiverAddress !== state.wallet.address) {
-                    return false;
-                }
+                if (confirmation.receiverAddress !== state.wallet.address) { return false; }
                 const alreadyExists = state.userStore.chain.some(tx => tx.linkedTxHash === confirmation.linkedTxHash);
                 if (alreadyExists) return false;
-
                 if (!confirmation.signedMessage) { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; }
                 const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; }
                 const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
                 if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; }
-
-                WalletLogic.addToChain({
-                    type: 'receive',
-                    amount: confirmation.amount,
-                    from: confirmation.senderAddress,
-                    to: state.wallet.address,
-                    status: 'completed',
-                    linkedTxHash: confirmation.linkedTxHash
-                });
+                WalletLogic.addToChain({ type: 'receive', amount: confirmation.amount, from: confirmation.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: confirmation.linkedTxHash });
                 return true;
             }
         };
-        
-        // --- UI, SCANNER & EVENT LISTENERS ---
+
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
         function updateBalanceDisplay() { const balance = WalletLogic.calculateBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; }
@@ -378,10 +337,42 @@
         function abbreviateAddress(address) { if (!address) return ''; return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`; }
         function stopScanner() { if (state.cameraStream) { state.cameraStream.getTracks().forEach(track => track.stop()); state.cameraStream = null; state.isScannerActive = false; } }
         
-        async function syncWalletWithLedger() {
+        async function checkServerStatus() {
+            const statusIndicator = document.getElementById('server-status-indicator');
+            const statusText = document.getElementById('server-status-text');
+            const chargeBtn = document.getElementById('show-charge-view-button');
+            const sendBtn = document.getElementById('show-send-view-button');
+            const receiveBtn = document.getElementById('show-receive-view-button');
+
+            try {
+                // We test connectivity by trying to reach the Pinata gateway, which is essential for the app.
+                await fetch('https://gateway.pinata.cloud/ipfs/Qmaisz6NMhDB51cCvNWa1GMS7LU1pAxdF4LdPp4Pm5waLR', { method: 'HEAD', mode: 'cors' });
+                state.isServerOnline = true;
+                statusIndicator.className = 'status-indicator online';
+                statusText.textContent = 'Online';
+                statusText.style.color = 'var(--success-color)';
+                chargeBtn.disabled = false;
+                sendBtn.disabled = false;
+                receiveBtn.disabled = false;
+            } catch (error) {
+                console.warn('Server connectivity check failed:', error);
+                state.isServerOnline = false;
+                statusIndicator.className = 'status-indicator offline';
+                statusText.textContent = 'Offline - Transactions Disabled';
+                statusText.style.color = 'var(--danger-color)';
+                chargeBtn.disabled = true;
+                sendBtn.disabled = true;
+                receiveBtn.disabled = true;
+            }
+        }
+
+        async function reconcileWithLedger() {
             const syncStatusEl = document.getElementById('sync-status');
-            if (!syncStatusEl || !state.wallet) return;
-            syncStatusEl.innerHTML = '<span class="info">Syncing with ledger...</span>';
+            if (!syncStatusEl || !state.wallet || !state.isServerOnline) {
+                if(syncStatusEl && !state.isServerOnline) syncStatusEl.innerHTML = '<span class="error">Offline. Cannot reconcile balance.</span>';
+                return;
+            }
+            syncStatusEl.innerHTML = '<span class="info">Reconciling with server...</span>';
             try {
                 const discovered = await PinataLedger.findDirectSends(state.wallet.address);
                 let newTxCount = 0;
@@ -391,16 +382,18 @@
                     }
                 }
                 if (newTxCount > 0) {
-                    syncStatusEl.innerHTML = `<span class="success">Synced! ${newTxCount} new transaction(s) found.</span>`;
+                    syncStatusEl.innerHTML = `<span class="success">Reconciliation complete. ${newTxCount} new transaction(s) found.</span>`;
                     updateBalanceDisplay();
                     renderTransactionHistory();
                 } else {
                     syncStatusEl.innerHTML = '<span class="success">Wallet is up to date.</span>';
                 }
+                // Also update the main balance display, as reconciliation might have changed it.
+                updateBalanceDisplay();
                 setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000);
             } catch (error) {
-                console.error("Failed to sync with ledger:", error);
-                syncStatusEl.innerHTML = '<span class="error">Could not sync with ledger.</span>';
+                console.error("Failed to reconcile with ledger:", error);
+                syncStatusEl.innerHTML = '<span class="error">Could not reconcile with ledger.</span>';
             }
         }
 
@@ -419,16 +412,15 @@
             function tick() {
                 if (!state.isScannerActive) return;
                 if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth;
+                    canvasElement.height = video.videoHeight;
+                    canvasElement.width = video.videoWidth;
                     canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
                     const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
                     const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-                    
                     if (code) {
                         stopScanner();
                         sendStatusEl.innerHTML = '<span class="info">QR Code Detected! Processing...</span>';
                         let isPaymentRequest = false;
-
                         try {
                             const request = JSON.parse(code.data);
                             if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) {
@@ -441,6 +433,7 @@
                                     state.activeManualSend = null;
                                     const fee = request.amount * AppConstants.FEE_PERCENTAGE; 
                                     const total = request.amount + fee;
+        
                                     document.getElementById('confirm-amount-display').innerHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(AppConstants.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`;
                                     document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress;
                                     showView('send-confirm-view');
@@ -449,9 +442,7 @@
                                     setTimeout(() => startScanner(), 2000);
                                 });
                             }
-                        } catch (e) {
-                            // Not a JSON payment request, will check if it's an address below.
-                        }
+                        } catch (e) {}
 
                         if (!isPaymentRequest) {
                             if (ethers.isAddress(code.data)) {
@@ -470,17 +461,18 @@
             }
         }
 
-        function showView(id) { 
+        async function showView(id) { 
             if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner();
             if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } 
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); 
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
             document.getElementById(id).classList.add('active'); 
 
-            if (id === 'wallet-view') { 
-                updateBalanceDisplay(); 
+            if (id === 'wallet-view') {
+                await checkServerStatus();
+                updateBalanceDisplay();
                 renderTransactionHistory(); 
                 document.getElementById('address-display').textContent = abbreviateAddress(state.wallet.address);
-                syncWalletWithLedger();
+                reconcileWithLedger();
             }
             if (id === 'send-view') startScanner();
             if (id === 'receive-view') {
@@ -501,25 +493,20 @@
             transactions.forEach(tx => {
                 const item = document.createElement('li');
                 item.className = 'transaction-item';
-                item.style.cursor = 'pointer'; // Make item look clickable
+                item.style.cursor = 'pointer';
                 const isSent = tx.type === 'send';
                 const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received');
                 const typeClass = isSent ? 'sent' : 'received';
                 const totalAmount = isSent ? (tx.amount || 0) + (tx.fee || 0) : (tx.amount || 0);
                 const date = new Date(tx.timestamp).toLocaleString('en-US');
                 item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`;
-                
-                // Add click event listener to show details
                 item.addEventListener('click', () => showTransactionDetails(tx));
-                
                 listUl.appendChild(item);
             });
         }
         
         function showTransactionDetails(tx) {
             const modal = document.getElementById('transaction-detail-modal');
-            
-            // Populate the modal with transaction data
             document.getElementById('detail-status').textContent = tx.status || 'N/A';
             document.getElementById('detail-type').textContent = tx.type || 'N/A';
             document.getElementById('detail-datetime').textContent = new Date(tx.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' });
@@ -528,16 +515,8 @@
             document.getElementById('detail-from').textContent = tx.from || 'N/A';
             document.getElementById('detail-to').textContent = tx.to || 'N/A';
             document.getElementById('detail-hash').textContent = tx.hash || 'N/A';
-
-            // Show the modal
             modal.style.display = 'flex';
-
-            // Handle close button click
-            document.getElementById('close-modal-button').onclick = () => {
-                modal.style.display = 'none';
-            };
-
-            // Handle download button click
+            document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; };
             document.getElementById('download-tx-button').onclick = () => {
                 const contentToCapture = document.getElementById('modal-details-content');
                 html2canvas(contentToCapture, { scale: 2 }).then(canvas => {
@@ -549,7 +528,20 @@
             };
         }
 
-        async function initializeApp() { try { state.falconApi = await pqcSignFalcon1024(); } catch (e) { alert(`Critical error initializing cryptography module: ${e.message}`); return; } if (localStorage.getItem('aura_user_store')) { showView('login-view'); } else { showView('onboarding-view'); } setupEventListeners(); }
+        async function initializeApp() { 
+            try { 
+                state.falconApi = await pqcSignFalcon1024(); 
+            } catch (e) { 
+                alert(`Critical error initializing cryptography module: ${e.message}`); 
+                return; 
+            } 
+            if (localStorage.getItem('aura_user_store')) { 
+                showView('login-view'); 
+            } else { 
+                showView('onboarding-view'); 
+            } 
+            setupEventListeners(); 
+        }
 
         function setupEventListeners() {
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
@@ -570,7 +562,6 @@
             document.getElementById('copy-address-button').addEventListener('click', () => { const button = document.getElementById('copy-address-button'); navigator.clipboard.writeText(state.wallet.address).then(() => { button.textContent = 'Copied!'; setTimeout(() => { button.textContent = 'Copy'; }, 1500); }); });
             document.getElementById('show-receive-view-button').addEventListener('click', () => { resetViewInputs('receive-view'); showView('receive-view'); });
             document.getElementById('show-send-view-button').addEventListener('click', () => { resetViewInputs('send-view'); showView('send-view'); });
-
             document.getElementById('send-manual-button').addEventListener('click', () => {
                 const statusEl = document.getElementById('send-status'), recipientAddress = document.getElementById('send-address-input').value.trim(), amount = parseFloat(document.getElementById('send-amount-input').value);
                 statusEl.innerHTML = ''; 
@@ -579,6 +570,7 @@
                 const fee = amount * AppConstants.FEE_PERCENTAGE, total = amount + fee;
                 if (WalletLogic.calculateBalance() < total) { statusEl.innerHTML = `<span class="error">Insufficient funds.</span>`; return; }
                 state.activeManualSend = { address: recipientAddress, amount: amount }; state.activePaymentRequest = null;
+                
                 document.getElementById('confirm-amount-display').innerHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(AppConstants.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`;
                 document.getElementById('confirm-recipient-address-display').textContent = recipientAddress;
                 showView('send-confirm-view');
@@ -618,7 +610,6 @@
                     } catch (err) { console.error("Polling error:", err); statusMsg.innerHTML = `<span class="error">Network error while checking for payment.</span>`; clearInterval(state.activePollingTimer); state.activePollingTimer = null; }
                 }, AppConstants.POLLING_INTERVAL);
             });
-
             document.getElementById('confirm-payment-button').addEventListener('click', async (event) => {
                 const button = event.target, statusEl = document.getElementById('send-confirm-status');
                 button.disabled = true; statusEl.innerHTML = '<span class="info">Processing payment...</span>';
@@ -642,20 +633,80 @@
                 } catch (err) { statusEl.innerHTML = `<span class="error">Payment Failed: ${err.message}</span>`;
                 } finally { button.disabled = false; }
             });
-            
             document.getElementById('show-charge-view-button').addEventListener('click', () => { 
                 resetViewInputs('charge-view'); 
                 document.getElementById('banknote-image-input').disabled = true; document.getElementById('charge-confirmation').style.display = 'none'; 
                 const confirmBtn = document.getElementById('confirm-charge-button'); 
                 confirmBtn.disabled = false; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); 
-                const masterPublicKeyBase64 = "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";
+                
+                const masterPublicKeyBase64 = "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";
                 state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(masterPublicKeyBase64);
                 document.getElementById('key-status').innerHTML = '<span class="success">Bank public key loaded.</span>';
                 document.getElementById('banknote-image-input').disabled = false;
                 showView('charge-view'); 
             });
-            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const amount = parseFloat(button.dataset.amount), serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An error occurred."); showView('wallet-view'); return; } const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote'); if (!success) { alert("Failed to record banknote on public ledger."); showView('wallet-view'); return; } WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' }); showView('wallet-view'); alert(`$${amount.toFixed(2)} added successfully.`); });
-            document.getElementById('banknote-image-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const statusEl = document.getElementById('validation-status'); const confirmSection = document.getElementById('charge-confirmation'); confirmSection.style.display = 'none'; if (!state.masterPublicKey) { statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>'; return; } statusEl.innerHTML = '<span class="info">Preparing image...</span>'; try { const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION); const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl); const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; }); const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl); statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>'; const banknoteData = CoreLogic.Banknote.parsePayload(payload); if (await PinataLedger.hasBeenSpent(banknoteData.serial)) { throw new Error("This banknote has already been spent."); } const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi); if (!isSigOneValid) throw new Error("Signature validation failed (internal)."); const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi); if (!isSigTwoValid) throw new Error("Signature validation failed (issuer)."); statusEl.innerHTML = '<span class="success">Banknote is valid!</span>'; document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.dataset.amount = banknoteData.amount; confirmBtn.dataset.serial = banknoteData.serial; confirmSection.style.display = 'block'; } catch (err) { statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; } finally { event.target.value = ''; } });
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
+                const button = event.target;
+                button.disabled = true;
+                const amount = parseFloat(button.dataset.amount);
+                const serial = button.dataset.serial;
+                if (isNaN(amount) || !serial) {
+                    alert("An error occurred. Could not confirm charge.");
+                    showView('wallet-view');
+                    return;
+                }
+                // --- MODIFIED LOGIC: Write to public ledger FIRST ---
+                const success = await PinataLedger.recordSpentIdentifier(serial, 'banknote');
+                if (!success) {
+                    // The alert in `recordSpentIdentifier` will already notify the user.
+                    // We just need to abort the process here.
+                    showView('wallet-view');
+                    return;
+                }
+
+                // Only add to chain if public record was successful.
+                WalletLogic.addToChain({ type: 'charge', amount: amount, serial: serial, status: 'completed' });
+                showView('wallet-view');
+                alert(`$${amount.toFixed(2)} added successfully.`);
+            });
+            document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
+                const file = event.target.files[0]; if (!file) return;
+                const statusEl = document.getElementById('validation-status');
+                const confirmSection = document.getElementById('charge-confirmation');
+                confirmSection.style.display = 'none';
+                if (!state.masterPublicKey) { statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>'; return; }
+                statusEl.innerHTML = '<span class="info">Preparing image...</span>';
+                try {
+                    const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
+                    const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl);
+                    const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; });
+                    const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
+                    statusEl.innerHTML = '<span class="info">Scan complete. Verifying banknote on ledger...</span>';
+                    const banknoteData = CoreLogic.Banknote.parsePayload(payload);
+                    
+                    if (await PinataLedger.hasBeenSpent(banknoteData.serial)) {
+                        throw new Error("This banknote has already been spent according to the public ledger.");
+                    }
+                    statusEl.innerHTML = '<span class="info">Ledger check complete. Verifying signatures...</span>';
+                    
+                    const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi);
+                    if (!isSigOneValid) throw new Error("Signature validation failed (internal).");
+                    
+                    const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi);
+                    if (!isSigTwoValid) throw new Error("Signature validation failed (issuer).");
+                    
+                    statusEl.innerHTML = '<span class="success">Banknote is valid!</span>';
+                    document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`;
+                    const confirmBtn = document.getElementById('confirm-charge-button');
+                    confirmBtn.dataset.amount = banknoteData.amount;
+                    confirmBtn.dataset.serial = banknoteData.serial;
+                    confirmSection.style.display = 'block';
+                } catch (err) {
+                    statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`;
+                } finally {
+                    event.target.value = '';
+                }
+            });
         }
         document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
