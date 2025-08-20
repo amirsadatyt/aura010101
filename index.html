@@ -171,24 +171,23 @@
         // CORE BANKNOTE & PINATA LEDGER LOGIC
         const CoreLogic = (() => { const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 }; const Utils = { arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))), base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; }, hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))), preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }), resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}), }; const Crypto = { hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)), async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); } }; const Banknote = { getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']), getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); }, parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; }, getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; }, decodeQrGrid: async (imgData, statusEl) => { const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0); for(let i=0;i<Constants.NUM_QR_CODES;i++){ statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5)); const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height); if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}} } if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);} let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload; } }; return { Constants, Utils, Crypto, Banknote }; })();
         const PinataLedger = (() => {
-            const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJiZTkzZDRkMC0yYjgzLTQwZDMtYjg5Mi1iMGJiZGVkMTdiZDYiLCJlbWFpbCI6ImExbTNpNXIuYWZnQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI0Y2UzOTU0ZjIxZGRhYTdlMmM1NiIsInNjb3BlZEtleVNlY3JldCI6ImU3YTA3NmZjZTJjN2Q0NzM0OWY0MTFjYmE5ODE5YmZiNzVjYTY2MzZmYTVhMDdiNDk2MTJmYWU3MjlhZmQxNmIiLCJleHAiOjE3ODcxMzI1NTh9.dV4M4P4LaqxiZ91ye3F4n5oP98sIqGQVA2waPrGDFJc';
+            const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJiZTkzZDRkMC0yYjgzLTQwZDMtYjg5Mi1iMGJiZGVkMTdiZDYiLCJlbWFpbCI6ImExbTNpNXIuYWZnQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY繩索加密金鑰eyJzY29wZWRLZXlLZXkiOiI0Y2UzOTU0ZjIxZGRhYTdlMmM1NiIsInNjb3BlZEtleVNlY3JldCI6ImU3YTA3NmZjZTJjN2Q0NzM0OWY0MTFjYmE5ODE5YmZiNzVjYTY2MzZmYTVhMDdiNDk2MTJmYWU3MjlhZmQxNmIiLCJleHAiOjE3ODcxMzI1NTh9.dV4M4P4LaqxiZ91ye3F4n5oP98sIqGQVA2waPrGDFJc';
             const apiCall = async (endpoint, options) => { const response = await fetch(`https://api.pinata.cloud/${endpoint}`, options); if (!response.ok) throw new Error(`Pinata API error! Status: ${response.status}`); return response.json(); };
             const recordSpentIdentifier = async (identifier, type) => { const dataToPin = { pinataContent: { identifier: identifier, type: type, status: "spent", timestamp: new Date().toISOString() }, pinataMetadata: { name: `${type}-${identifier}.json`, keyvalues: { identifier: identifier } } }; try { await apiCall('pinning/pinJSONToIPFS', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${PINATA_JWT}` }, body: JSON.stringify(dataToPin) }); return true; } catch (error) { console.error('Failed to record identifier to Pinata:', error); alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`); return false; } };
             const hasBeenSpent = async (identifier) => { try { const result = await apiCall(`data/pinList?metadata[keyvalues]={"identifier":{"value":"${identifier}","op":"eq"}}&status=pinned`, { method: 'GET', headers: { Authorization: `Bearer ${PINATA_JWT}` } }); return result.count > 0; } catch (error) { console.error('Failed to check identifier status on Pinata:', error); alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`); return true; } };
             const pinConfirmation = async (confirmation) => {
                 const metadata = { name: `confirmation-${confirmation.linkedTxHash}.json`, keyvalues: { type: 'confirmation', txHash: confirmation.linkedTxHash } };
-                if (confirmation.receiverAddress) { metadata.keyvalues.receiverAddress = confirmation.receiverAddress; } // **FIX**: Index by receiverAddress
+                if (confirmation.receiverAddress) { metadata.keyvalues.receiverAddress = confirmation.receiverAddress; }
                 const dataToPin = { pinataContent: confirmation, pinataMetadata: metadata };
                 await apiCall('pinning/pinJSONToIPFS', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${PINATA_JWT}` }, body: JSON.stringify(dataToPin) });
             };
             const findConfirmation = async (txHash) => { const result = await apiCall(`data/pinList?metadata[keyvalues]={"type":{"value":"confirmation","op":"eq"},"txHash":{"value":"${txHash}","op":"eq"}}&status=pinned`, { method: 'GET', headers: { Authorization: `Bearer ${PINATA_JWT}` } }); if (result.count > 0) { const hash = result.rows[0].ipfs_pin_hash; const contentResponse = await fetch(`https://gateway.pinata.cloud/ipfs/${hash}`); return contentResponse.json(); } return null; };
-            const findDirectSends = async (receiverAddress) => { // **FIX**: New function to discover direct sends
+            const findDirectSends = async (receiverAddress) => {
                 const result = await apiCall(`data/pinList?metadata[keyvalues]={"type":{"value":"confirmation","op":"eq"},"receiverAddress":{"value":"${receiverAddress}","op":"eq"}}&status=pinned`, { method: 'GET', headers: { Authorization: `Bearer ${PINATA_JWT}` } });
                 if (result.count === 0) return [];
                 return Promise.all(result.rows.map(async (row) => (await fetch(`https://gateway.pinata.cloud/ipfs/${row.ipfs_pin_hash}`)).json()));
             };
-            const pinFeeRecord = async (feeRecord) => { const dataToPin = { pinataContent: feeRecord, pinataMetadata: { name: `fee-${feeRecord.linkedTxHash}.json`, keyvalues: { type: 'fee', txHash: feeRecord.linkedTxHash } } }; await apiCall('pinning/pinJSONToIPFS', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${PINATA_JWT}` }, body: JSON.stringify(dataToPin) }); };
-            return { recordSpentIdentifier, hasBeenSpent, pinConfirmation, findConfirmation, findDirectSends, pinFeeRecord };
+            return { recordSpentIdentifier, hasBeenSpent, pinConfirmation, findConfirmation, findDirectSends };
         })();
         
         // ===================================================================================
@@ -215,6 +214,29 @@
             },
             calculateBalance: () => { if (!state.userStore) return 0.0; return state.userStore.chain.reduce((balance, tx) => { if (tx.status !== 'completed') return balance; if (tx.type === 'charge' || tx.type === 'receive') return balance + (tx.amount || 0); if (tx.type === 'send') return balance - (tx.amount || 0) - (tx.fee || 0); return balance; }, 0); },
             getStandardizedConfirmationMessage: (confirmation) => { const amount = Number(confirmation.amount).toFixed(AppConstants.PRECISION); return [confirmation.type, confirmation.senderAddress, amount, confirmation.linkedTxHash].join('|'); },
+            _sendFeeToTreasury: async (feeAmount, originalTxHash) => { // **FIX**: New internal function to handle fee transactions
+                const feeTx = WalletLogic.addToChain({
+                    type: 'send',
+                    amount: feeAmount,
+                    fee: 0, // No fee on fee transactions
+                    from: state.wallet.address,
+                    to: AppConstants.TREASURY_ADDRESS,
+                    status: 'completed',
+                    note: `Fee for tx ${originalTxHash}`
+                });
+                const confirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: AppConstants.TREASURY_ADDRESS,
+                    amount: feeAmount,
+                    linkedTxHash: feeTx.hash,
+                    note: `Fee for tx ${originalTxHash}`
+                };
+                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                confirmation.signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signedMessage = messageToSign;
+                await PinataLedger.pinConfirmation(confirmation);
+            },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + AppConstants.PAYMENT_REQUEST_EXPIRY }; },
             processPayment: async (request) => { 
                 const fee = request.amount * AppConstants.FEE_PERCENTAGE;
@@ -222,7 +244,7 @@
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
                 if (WalletLogic.calculateBalance() < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`); 
                 if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); 
-                WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); 
+                const mainTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: 0, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); 
                 const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); 
                 if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); 
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, amount: request.amount, linkedTxHash: request.linkedTxHash };
@@ -230,22 +252,20 @@
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign; 
                 await PinataLedger.pinConfirmation(confirmation); 
-                const feeRecord = { type: 'AURA_FEE_RECORD', senderAddress: state.wallet.address, treasuryAddress: AppConstants.TREASURY_ADDRESS, feeAmount: fee, linkedTxHash: request.linkedTxHash, timestamp: new Date().toISOString() };
-                await PinataLedger.pinFeeRecord(feeRecord);
+                if (fee > 0) await WalletLogic._sendFeeToTreasury(fee, mainTx.hash); // **FIX**: Send fee as a transaction
                 return true; 
             },
             directSend: async (recipientAddress, amount) => {
                 const fee = amount * AppConstants.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
                 if (WalletLogic.calculateBalance() < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
+                const mainTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: 0, from: state.wallet.address, to: recipientAddress, status: 'completed' });
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: mainTx.hash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await PinataLedger.pinConfirmation(confirmation);
-                const feeRecord = { type: 'AURA_FEE_RECORD', senderAddress: state.wallet.address, treasuryAddress: AppConstants.TREASURY_ADDRESS, feeAmount: fee, linkedTxHash: sendTx.hash, timestamp: new Date().toISOString() };
-                await PinataLedger.pinFeeRecord(feeRecord);
+                if (fee > 0) await WalletLogic._sendFeeToTreasury(fee, mainTx.hash); // **FIX**: Send fee as a transaction
                 return true;
             },
             finalizePayment: async (confirmation) => { 
@@ -261,16 +281,14 @@
                 localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
                 return true; 
             },
-            processDiscoveredTransaction: async (confirmation) => { // **FIX**: New function to process found sends
-                const alreadyExists = state.userStore.chain.some(tx => tx.linkedTxHash === confirmation.linkedTxHash);
+            processDiscoveredTransaction: async (confirmation) => {
+                const alreadyExists = state.userStore.chain.some(tx => tx.linkedTxHash === confirmation.linkedTxHash || tx.hash === confirmation.linkedTxHash);
                 if (alreadyExists) return false;
-
                 if (!confirmation.signedMessage) { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; }
                 const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; }
                 const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
                 if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; }
-
                 WalletLogic.addToChain({
                     type: 'receive',
                     amount: confirmation.amount,
@@ -291,7 +309,7 @@
         function abbreviateAddress(address) { if (!address) return ''; return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`; }
         function stopScanner() { if (state.cameraStream) { state.cameraStream.getTracks().forEach(track => track.stop()); state.cameraStream = null; state.isScannerActive = false; } }
         
-        async function syncWalletWithLedger() { // **FIX**: New sync function
+        async function syncWalletWithLedger() {
             const syncStatusEl = document.getElementById('sync-status');
             if (!syncStatusEl || !state.wallet) return;
             syncStatusEl.innerHTML = '<span class="info">Syncing with ledger...</span>';
@@ -368,7 +386,7 @@
                 updateBalanceDisplay(); 
                 renderTransactionHistory(); 
                 document.getElementById('address-display').textContent = abbreviateAddress(state.wallet.address);
-                syncWalletWithLedger(); // **FIX**: Sync wallet on view
+                syncWalletWithLedger();
             }
             if (id === 'send-view') startScanner();
             if (id === 'receive-view') {
@@ -386,7 +404,7 @@
             transactions.forEach(tx => {
                 const item = document.createElement('li'); item.className = 'transaction-item';
                 const isSent = tx.type === 'send';
-                const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received');
+                const typeText = tx.to === AppConstants.TREASURY_ADDRESS ? 'Fee' : (isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received'));
                 const typeClass = isSent ? 'sent' : 'received';
                 const totalAmount = isSent ? (tx.amount || 0) + (tx.fee || 0) : (tx.amount || 0);
                 const date = new Date(tx.timestamp).toLocaleString('en-US');
