@@ -213,7 +213,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <script type="module">
-        import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.min.js";
+        import { ethers } from "./ethers.min.js";
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
@@ -253,7 +253,7 @@
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => {
                 const prevTx = WalletLogic.getLastTransaction(); 
-                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp || Date.now() }; 
+                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: Date.now() }; 
                 const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
                 const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
                 newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] ); 
@@ -280,7 +280,7 @@
                 if (!success) throw new Error("CRITICAL: Payment sent but failed to update public ledger."); 
                 
                 // Confirmation for the main recipient
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash, timestamp: new Date().toISOString() };
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign; 
@@ -292,8 +292,8 @@
                     senderAddress: state.wallet.address, 
                     receiverAddress: AppConstants.TREASURY_ADDRESS, 
                     amount: fee, 
-                    linkedTxHash: sendTx.hash + "-fee",
-                    timestamp: new Date().toISOString()
+                    // **FIX**: Create a unique linked hash for the fee to prevent collisions when treasury is the recipient.
+                    linkedTxHash: sendTx.hash + "-fee" 
                 };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
@@ -310,7 +310,7 @@
                 const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
                 
                 // Confirmation for the main recipient
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash, timestamp: new Date().toISOString() };
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
@@ -322,8 +322,8 @@
                     senderAddress: state.wallet.address, 
                     receiverAddress: AppConstants.TREASURY_ADDRESS, 
                     amount: fee, 
-                    linkedTxHash: sendTx.hash + "-fee",
-                    timestamp: new Date().toISOString()
+                    // **FIX**: Create a unique linked hash for the fee to prevent collisions when treasury is the recipient.
+                    linkedTxHash: sendTx.hash + "-fee" 
                 };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
@@ -364,8 +364,7 @@
                     from: confirmation.senderAddress,
                     to: state.wallet.address,
                     status: 'completed',
-                    linkedTxHash: confirmation.linkedTxHash,
-                    timestamp: new Date(confirmation.timestamp).getTime()
+                    linkedTxHash: confirmation.linkedTxHash
                 });
                 return true;
             }
