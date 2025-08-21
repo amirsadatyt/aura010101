@@ -298,39 +298,91 @@
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign; 
                 await PinataLedger.pinConfirmation(confirmation);
-
-                // Fee transfer to treasury - UPDATED WITH CONDITION
-                if (state.wallet.address !== AppConstants.TREASURY_ADDRESS) {
-                    const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
-                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                    feeConfirmation.signedMessage = feeMessageToSign;
-                    await PinataLedger.pinConfirmation(feeConfirmation);
-                }
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
+                await PinataLedger.pinConfirmation(feeConfirmation);
                 return true;
             },
+            // ===================================================================================
+            // ### BUG FIX STARTS HERE ###
+            // The directSend function was rewritten to be atomic. It now ensures the transaction
+            // is successfully written to the public ledger BEFORE updating the local state.
+            // This prevents the user's balance from being debited if the transaction fails
+            // midway due to network errors or other issues.
+            // ===================================================================================
             directSend: async (recipientAddress, amount) => {
                 const fee = amount * AppConstants.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
-                if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
+
+                // 1. Perform balance check against the authoritative balance.
+                if (state.currentBalance < totalDebit) {
+                    throw new Error(`Insufficient funds to cover amount + fee.`);
+                }
+                
+                // 2. Prepare transaction data to calculate its future hash.
+                // Do NOT add to the local chain yet.
+                const prevTx = WalletLogic.getLastTransaction();
+                const txDataForHash = {
+                    type: 'send',
+                    amount: amount,
+                    fee: fee,
+                    from: state.wallet.address,
+                    to: recipientAddress,
+                    prevHash: prevTx.hash
+                };
+
+                // 3. Replicate the hash calculation that addToChain would perform.
+                // This is necessary so the public ledger record contains the correct final hash.
+                const amountInt = ethers.parseUnits((txDataForHash.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
+                const feeInt = ethers.parseUnits((txDataForHash.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
+                const txHash = ethers.solidityPackedKeccak256(
+                    ['string', 'uint256', 'uint256', 'string', 'string', 'string'],
+                    [txDataForHash.type, amountInt, feeInt, txDataForHash.from || '', txDataForHash.to || '', txDataForHash.prevHash]
+                );
+
+                // 4. Prepare the signed confirmation objects for the public ledger.
                 // Confirmation for the main recipient
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: txHash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
-                await PinataLedger.pinConfirmation(confirmation);
+                
+                // Confirmation for the treasury fee
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: txHash + "-fee" };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
 
-                // Fee transfer to treasury - UPDATED WITH CONDITION
-                if (state.wallet.address !== AppConstants.TREASURY_ADDRESS) {
-                    const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
-                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                    feeConfirmation.signedMessage = feeMessageToSign;
+                // 5. Attempt to write both confirmations to the public ledger.
+                // This is the critical, irreversible step.
+                try {
+                    await PinataLedger.pinConfirmation(confirmation);
                     await PinataLedger.pinConfirmation(feeConfirmation);
+                } catch (ledgerError) {
+                    // If any ledger write fails, the entire transaction is aborted.
+                    // The user's local state has not been touched.
+                    console.error("Ledger write failed, transaction aborted:", ledgerError);
+                    throw new Error("Failed to write transaction to the public ledger. Please try again.");
                 }
+
+                // 6. ONLY if all public ledger writes succeed, commit the transaction
+                // to the local state.
+                WalletLogic.addToChain({
+                    type: 'send',
+                    amount: amount,
+                    fee: fee,
+                    from: state.wallet.address,
+                    to: recipientAddress,
+                    status: 'completed'
+                });
+
                 return true;
             },
+            // ===================================================================================
+            // ### BUG FIX ENDS HERE ###
+            // ===================================================================================
             finalizePayment: async (confirmation) => { 
                 const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
                 if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; }
