@@ -1,0 +1,143 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+// --- Use your self-hosted URLs and the allowed CDN ---
+import { ethers } from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/ethers.min.js' 
+import pqcSignFalcon1024 from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pqc-sign-falcon-1024.min.js'
+import pako from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pako.min.js'
+import { shake256 } from 'https://cdn.skypack.dev/js-sha3' // The only external CDN as requested
+
+// Utility functions (mirrored from your client code)
+const Utils = {
+  base64ToUint8Array: (s) => {
+    const bs = atob(s);
+    const b = new Uint8Array(bs.length);
+    for(let i=0; i<bs.length; i++) b[i] = bs.charCodeAt(i);
+    return b;
+  },
+  hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
+  arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
+};
+
+const Crypto = {
+  hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)),
+  async verifySignature(sig, data, pk, api) {
+    const h = this.hashMessageForSigning(data);
+    return api.verify(sig, h, pk);
+  }
+};
+
+const Banknote = {
+  getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']),
+  getStandardizedDataForMasterSig: (d) => {
+    const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)};
+    return JSON.stringify(t, Object.keys(t).sort());
+  },
+  parsePayload: (b64) => {
+    const c = Utils.base64ToUint8Array(b64);
+    const j = pako.inflate(c, { to: 'string' });
+    const p = JSON.parse(j);
+    return {
+      amount: p.a, serial: p.s, timestamp: p.t,
+      ephemeralPublicKey: Utils.base64ToUint8Array(p.epk),
+      signatureOne: Utils.base64ToUint8Array(p.s1),
+      signatureTwo: Utils.base64ToUint8Array(p.s2)
+    };
+  }
+};
+
+serve(async (req) => {
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+  );
+
+  const { action, payload } = await req.json();
+
+  try {
+    // ACTION: Validate a scanned banknote
+    if (action === 'validate_banknote') {
+      const { banknotePayload } = payload;
+      const banknoteData = Banknote.parsePayload(banknotePayload);
+
+      const { data: spentCheck, error: spentError } = await supabaseClient
+        .from('spent_identifiers')
+        .select('identifier')
+        .eq('identifier', banknoteData.serial)
+        .single();
+
+      if (spentCheck) throw new Error("This banknote has already been spent.");
+      if (spentError && spentError.code !== 'PGRST116') throw spentError;
+
+      const falconApi = await pqcSignFalcon1024();
+      const masterPublicKey = Utils.base64ToUint8Array(Deno.env.get('MASTER_PUBLIC_KEY'));
+
+      const isSigOneValid = await Crypto.verifySignature(banknoteData.signatureOne, Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, falconApi);
+      if (!isSigOneValid) throw new Error("Signature validation failed (internal).");
+
+      const isSigTwoValid = await Crypto.verifySignature(banknoteData.signatureTwo, Banknote.getStandardizedDataForMasterSig(banknoteData), masterPublicKey, falconApi);
+      if (!isSigTwoValid) throw new Error("Signature validation failed (issuer).");
+
+      return new Response(JSON.stringify({ success: true, amount: banknoteData.amount, serial: banknoteData.serial }), { headers: { "Content-Type": "application/json" } });
+    }
+
+    // ACTION: Record a charge or a user-to-user transaction
+    if (action === 'record_transaction') {
+      const { confirmation } = payload;
+
+      if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
+          const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
+          if (signerAddress !== confirmation.senderAddress) {
+              throw new Error("Invalid transaction signature.");
+          }
+      }
+
+      const identifier = confirmation.linkedTxHash;
+      const { data: spentCheck } = await supabaseClient
+        .from('spent_identifiers')
+        .select('identifier')
+        .eq('identifier', identifier)
+        .single();
+
+      if (spentCheck) throw new Error("This transaction/banknote has already been processed.");
+
+      const { error: rpcError } = await supabaseClient.rpc('record_new_transaction', {
+          p_identifier: identifier,
+          p_type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'banknote' : 'transaction',
+          p_tx_hash: identifier,
+          p_sender: confirmation.senderAddress,
+          p_receiver: confirmation.receiverAddress,
+          p_amount: confirmation.amount,
+          p_details: confirmation
+      });
+
+      if (rpcError) throw rpcError;
+
+      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    }
+
+    // ACTION: Fetch incoming and outgoing transactions for a user
+    if (action === 'get_transactions') {
+        const { address } = payload;
+
+        const [incomingRes, outgoingRes] = await Promise.all([
+            supabaseClient.from('transactions').select('details').eq('receiver_address', address),
+            supabaseClient.from('transactions').select('details').eq('sender_address', address)
+        ]);
+
+        if (incomingRes.error) throw incomingRes.error;
+        if (outgoingRes.error) throw outgoingRes.error;
+
+        const incomingTxs = incomingRes.data.map(tx => tx.details);
+        const outgoingTxs = outgoingRes.data.map(tx => tx.details);
+
+        return new Response(JSON.stringify({ incomingTxs, outgoingTxs }), { headers: { "Content-Type": "application/json" } });
+    }
+
+    throw new Error("Invalid action.");
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { "Content-Type": "application/json" } });
+  }
+});
