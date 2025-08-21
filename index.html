@@ -305,61 +305,24 @@
                 await PinataLedger.pinConfirmation(feeConfirmation);
                 return true;
             },
-            // ===================================================================================
-            // === BUG FIX: Logic updated to be atomic and prevent incorrect debit on failure ===
-            // ===================================================================================
             directSend: async (recipientAddress, amount) => {
                 const fee = amount * AppConstants.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
-
-                // Authoritative check against the latest balance fetched just before this call
-                if (state.currentBalance < totalDebit) {
-                    throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)} but only have $${state.currentBalance.toFixed(2)}.`);
-                }
-
-                // Add to local chain optimistically with a 'pending' status
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'pending_ledger' });
-
-                try {
-                    // Confirmation for the main recipient
-                    const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
-                    const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                    confirmation.signature = await state.wallet.signMessage(messageToSign);
-                    confirmation.signedMessage = messageToSign;
-                    await PinataLedger.pinConfirmation(confirmation);
-
-                    // Fee transfer to treasury
-                    const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
-                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                    feeConfirmation.signedMessage = feeMessageToSign;
-                    await PinataLedger.pinConfirmation(feeConfirmation);
-                    
-                    // If all ledger writes are successful, update local status to 'completed'
-                    const finalTxIndex = state.userStore.chain.findIndex(tx => tx.hash === sendTx.hash);
-                    if (finalTxIndex !== -1) {
-                        state.userStore.chain[finalTxIndex].status = 'completed';
-                        localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                    }
-
-                    return true;
-
-                } catch (error) {
-                    // CRITICAL: Rollback local state if any ledger write fails
-                    console.error("Ledger write failed, rolling back local transaction.", error);
-                    
-                    // Find and remove the 'pending' transaction we just added
-                    const txIndexToRemove = state.userStore.chain.findIndex(tx => tx.hash === sendTx.hash);
-                    if (txIndexToRemove > -1) {
-                         state.userStore.chain.splice(txIndexToRemove, 1);
-                    }
-                    
-                    // Save the corrected chain to local storage
-                    localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                    
-                    // Re-throw the error so it can be caught by the UI handler and shown to the user
-                    throw new Error(`Failed to write to public ledger. Transaction has been safely cancelled. Reason: ${error.message}`);
-                }
+                if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
+                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
+                // Confirmation for the main recipient
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
+                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                confirmation.signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signedMessage = messageToSign;
+                await PinataLedger.pinConfirmation(confirmation);
+                // Fee transfer to treasury
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
+                await PinataLedger.pinConfirmation(feeConfirmation);
+                return true;
             },
             finalizePayment: async (confirmation) => { 
                 const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
@@ -522,7 +485,7 @@
             const listUl = document.getElementById('transaction-list-ul');
             listUl.innerHTML = '';
             if (!state.userStore || !state.userStore.chain) return;
-            const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && (tx.status === 'completed' || tx.status === 'pending_ledger')).slice(-10).reverse();
+            const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse();
             if (transactions.length === 0) {
                 listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>';
                 return;
@@ -536,7 +499,7 @@
                 const typeClass = isSent ? 'sent' : 'received';
                 const totalAmount = isSent ? (tx.amount || 0) + (tx.fee || 0) : (tx.amount || 0);
                 const date = new Date(tx.timestamp).toLocaleString('en-US');
-                item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText} ${tx.status === 'pending_ledger' ? '(Pending)' : ''}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`;
+                item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`;
                 item.addEventListener('click', () => showTransactionDetails(tx));
                 listUl.appendChild(item);
             });
@@ -586,16 +549,14 @@
             document.getElementById('copy-address-button').addEventListener('click', () => { const button = document.getElementById('copy-address-button'); navigator.clipboard.writeText(state.wallet.address).then(() => { button.textContent = 'Copied!'; setTimeout(() => { button.textContent = 'Copy'; }, 1500); }); });
             document.getElementById('show-receive-view-button').addEventListener('click', () => { resetViewInputs('receive-view'); showView('receive-view'); });
             document.getElementById('show-send-view-button').addEventListener('click', () => { resetViewInputs('send-view'); showView('send-view'); });
-            document.getElementById('send-manual-button').addEventListener('click', async () => { 
+            document.getElementById('send-manual-button').addEventListener('click', async () => { // *** MODIFIED: Make async
                 const statusEl = document.getElementById('send-status'), recipientAddress = document.getElementById('send-address-input').value.trim(), amount = parseFloat(document.getElementById('send-amount-input').value);
                 statusEl.innerHTML = ''; 
                 if (!ethers.isAddress(recipientAddress)) { statusEl.innerHTML = '<span class="error">Invalid recipient address.</span>'; return; }
                 if (isNaN(amount) || amount <= 0) { statusEl.innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; }
                 const fee = amount * AppConstants.FEE_PERCENTAGE, total = amount + fee;
-                
-                // Use the cached authoritative balance for a quick preliminary check
+                // *** MODIFIED: Use the cached authoritative balance for the check
                 if (state.currentBalance < total) { statusEl.innerHTML = `<span class="error">Insufficient funds.</span>`; return; }
-                
                 state.activeManualSend = { address: recipientAddress, amount: amount }; state.activePaymentRequest = null;
                 document.getElementById('confirm-amount-display').innerHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(AppConstants.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`;
                 document.getElementById('confirm-recipient-address-display').textContent = recipientAddress;
@@ -639,7 +600,7 @@
                 const button = event.target, statusEl = document.getElementById('send-confirm-status');
                 button.disabled = true; statusEl.innerHTML = '<span class="info">Processing payment...</span>';
                 try {
-                    // *** BUG FIX: Refresh the authoritative balance right before payment to prevent race conditions and use of stale data
+                    // *** NEW: Refresh the authoritative balance right before payment to prevent race conditions
                     await WalletLogic.getServerAuthoritativeBalance();
                     
                     let success = false, message = '';
