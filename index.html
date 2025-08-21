@@ -298,11 +298,15 @@
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign; 
                 await PinataLedger.pinConfirmation(confirmation);
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
-                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                feeConfirmation.signedMessage = feeMessageToSign;
-                await PinataLedger.pinConfirmation(feeConfirmation);
+
+                // Fee transfer to treasury - UPDATED WITH CONDITION
+                if (state.wallet.address !== AppConstants.TREASURY_ADDRESS) {
+                    const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                    feeConfirmation.signedMessage = feeMessageToSign;
+                    await PinataLedger.pinConfirmation(feeConfirmation);
+                }
                 return true;
             },
             directSend: async (recipientAddress, amount) => {
@@ -316,12 +320,15 @@
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await PinataLedger.pinConfirmation(confirmation);
-                // Fee transfer to treasury
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
-                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                feeConfirmation.signedMessage = feeMessageToSign;
-                await PinataLedger.pinConfirmation(feeConfirmation);
+
+                // Fee transfer to treasury - UPDATED WITH CONDITION
+                if (state.wallet.address !== AppConstants.TREASURY_ADDRESS) {
+                    const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                    feeConfirmation.signedMessage = feeMessageToSign;
+                    await PinataLedger.pinConfirmation(feeConfirmation);
+                }
                 return true;
             },
             finalizePayment: async (confirmation) => { 
