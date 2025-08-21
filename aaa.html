@@ -4,8 +4,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // --- Use your self-hosted URLs and the allowed CDN ---
 import { ethers } from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/ethers.min.js' 
 import pqcSignFalcon1024 from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pqc-sign-falcon-1024.min.js'
-import pako from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pako.min.js'
-import { shake256 } from 'https://cdn.skypack.dev/js-sha3' // The only external CDN as requested
+import * as pako from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pako.min.js' // <-- THIS LINE IS THE FIX
+import { shake256 } from 'https://cdn.skypack.dev/js-sha3'
 
 // Utility functions (mirrored from your client code)
 const Utils = {
@@ -66,7 +66,7 @@ serve(async (req) => {
         .select('identifier')
         .eq('identifier', banknoteData.serial)
         .single();
-
+      
       if (spentCheck) throw new Error("This banknote has already been spent.");
       if (spentError && spentError.code !== 'PGRST116') throw spentError;
 
@@ -85,7 +85,7 @@ serve(async (req) => {
     // ACTION: Record a charge or a user-to-user transaction
     if (action === 'record_transaction') {
       const { confirmation } = payload;
-
+      
       if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
           const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
           if (signerAddress !== confirmation.senderAddress) {
@@ -101,7 +101,7 @@ serve(async (req) => {
         .single();
 
       if (spentCheck) throw new Error("This transaction/banknote has already been processed.");
-
+        
       const { error: rpcError } = await supabaseClient.rpc('record_new_transaction', {
           p_identifier: identifier,
           p_type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'banknote' : 'transaction',
@@ -125,7 +125,7 @@ serve(async (req) => {
             supabaseClient.from('transactions').select('details').eq('receiver_address', address),
             supabaseClient.from('transactions').select('details').eq('sender_address', address)
         ]);
-
+        
         if (incomingRes.error) throw incomingRes.error;
         if (outgoingRes.error) throw outgoingRes.error;
 
