@@ -224,12 +224,20 @@
             const findIncomingTxs = async (receiverAddress) => {
                 const result = await apiCall(`data/pinList?metadata[keyvalues]={"type":{"value":"confirmation","op":"eq"},"receiverAddress":{"value":"${receiverAddress}","op":"eq"}}&status=pinned`, { method: 'GET', headers: { Authorization: `Bearer ${PINATA_JWT}` } });
                 if (result.count === 0) return [];
-                return Promise.all(result.rows.map(async (row) => (await fetch(`https://gateway.pinata.cloud/ipfs/${row.ipfs_pin_hash}`)).json()));
+                return Promise.all(result.rows.map(async (row) => {
+                    const content = await (await fetch(`https://gateway.pinata.cloud/ipfs/${row.ipfs_pin_hash}`)).json();
+                    content.timestamp = new Date(row.date_pinned).getTime();
+                    return content;
+                }));
             };
             const findOutgoingTxs = async (senderAddress) => {
                 const result = await apiCall(`data/pinList?metadata[keyvalues]={"type":{"value":"confirmation","op":"eq"},"senderAddress":{"value":"${senderAddress}","op":"eq"}}&status=pinned`, { method: 'GET', headers: { Authorization: `Bearer ${PINATA_JWT}` } });
                 if (result.count === 0) return [];
-                return Promise.all(result.rows.map(async (row) => (await fetch(`https://gateway.pinata.cloud/ipfs/${row.ipfs_pin_hash}`)).json()));
+                return Promise.all(result.rows.map(async (row) => {
+                    const content = await (await fetch(`https://gateway.pinata.cloud/ipfs/${row.ipfs_pin_hash}`)).json();
+                    content.timestamp = new Date(row.date_pinned).getTime();
+                    return content;
+                }));
             };
             return { recordSpentIdentifier, hasBeenSpent, pinConfirmation, findConfirmation, findIncomingTxs, findOutgoingTxs };
         })();
@@ -246,20 +254,19 @@
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => {
                 const prevTx = WalletLogic.getLastTransaction();
-                // *** FIXED: Use original timestamp if available, otherwise use current time ***
-                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp ? new Date(txData.timestamp).getTime() : Date.now() };
+                const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp || Date.now() }; 
                 const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
                 const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION);
-                newTx.hash = ethers.solidityPackedKeccak256(['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash]);
-                state.userStore.chain.push(newTx);
-                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                return newTx;
+                newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] );
+                state.userStore.chain.push(newTx); 
+                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
+                return newTx; 
             },
             calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => {
                 const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
                 const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
                 const finalBalance = incomingTotal - outgoingTotal;
-                state.currentBalance = finalBalance;
+                state.currentBalance = finalBalance; 
                 return finalBalance;
             },
             getServerAuthoritativeBalance: async () => {
@@ -275,26 +282,25 @@
                 return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|');
             },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + AppConstants.PAYMENT_REQUEST_EXPIRY }; },
-            processPayment: async (request) => {
+            processPayment: async (request) => { 
                 const fee = request.amount * AppConstants.FEE_PERCENTAGE;
                 const totalDebit = request.amount + fee;
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
                 if (await PinataLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
                 const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
-                const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
+                const success = await PinataLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); 
                 if (!success) {
-                    state.userStore.chain.pop();
+                    state.userStore.chain.pop(); 
                     localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
                     throw new Error("CRITICAL: Payment sent but failed to update public ledger.");
                 }
-                // *** FIXED: Added timestamp to confirmation object ***
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash, timestamp: new Date().toISOString() };
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign;
+                confirmation.signedMessage = messageToSign; 
                 await PinataLedger.pinConfirmation(confirmation);
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee", timestamp: new Date().toISOString() };
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
@@ -306,38 +312,37 @@
                 const totalDebit = amount + fee;
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
                 const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
-                // *** FIXED: Added timestamp to confirmation object ***
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash, timestamp: new Date().toISOString() };
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await PinataLedger.pinConfirmation(confirmation);
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee", timestamp: new Date().toISOString() };
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: AppConstants.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
                 await PinataLedger.pinConfirmation(feeConfirmation);
                 return true;
             },
-            finalizePayment: async (confirmation) => {
+            finalizePayment: async (confirmation) => { 
                 const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
                 if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; }
                 if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; }
                 const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Tamper Detection: Confirmation data mismatch."); return false; }
                 const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
-                if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; }
+                if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; } 
                 state.userStore.chain[receiveTxIndex].status = 'completed';
-                state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress;
-                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                return true;
+                state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; 
+                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); 
+                return true; 
             },
             processDiscoveredTransaction: async (confirmation) => {
                 if (confirmation.receiverAddress !== state.wallet.address) { return false; }
                 const alreadyExists = state.userStore.chain.some(tx => tx.linkedTxHash === confirmation.linkedTxHash || tx.hash === confirmation.linkedTxHash);
                 if (alreadyExists) return false;
                 if (!confirmation.signedMessage && confirmation.senderAddress !== 'BANKNOTE_ISSUER') { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; }
-
+                
                 if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
                     const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                     if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; }
@@ -345,7 +350,6 @@
                     if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; }
                 }
 
-                // *** FIXED: Pass original timestamp to addToChain ***
                 WalletLogic.addToChain({
                     type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive',
                     amount: confirmation.amount,
@@ -378,6 +382,7 @@
         async function syncWalletWithLedger() {
             const syncStatusEl = document.getElementById('sync-status');
             if (!syncStatusEl || !state.wallet) return;
+
             syncStatusEl.innerHTML = '<span class="info">Syncing with ledger...</span>';
             try {
                 const [incomingTxs, outgoingTxs] = await Promise.all([
@@ -386,10 +391,7 @@
                 ]);
 
                 let newTxCount = 0;
-                // Sort transactions by timestamp to process them in chronological order, preventing hash mismatches
-                const sortedTxs = incomingTxs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-                for (const confirmation of sortedTxs) {
+                for (const confirmation of incomingTxs) {
                     if (await WalletLogic.processDiscoveredTransaction(confirmation)) {
                         newTxCount++;
                     }
@@ -458,6 +460,7 @@
                                 }).catch(err => {
                                     sendStatusEl.innerHTML = `<span class="error">${err.message}</span>`;
                                     setTimeout(() => startScanner(), 2000);
+               
                                 });
                             }
                         } catch (e) { /* Not a JSON payment request */ }
@@ -545,6 +548,7 @@
                     link.download = `transaction_${tx.hash.substring(0, 10)}.jpg`;
                     link.href = canvas.toDataURL('image/jpeg', 0.9);
                     link.click();
+     
                 });
             };
         }
@@ -628,7 +632,7 @@
                 const button = event.target, statusEl = document.getElementById('send-confirm-status');
                 button.disabled = true; statusEl.innerHTML = '<span class="info">Processing payment...</span>';
                 try {
-                    await WalletLogic.getServerAuthoritativeBalance();
+                    await WalletLogic.getServerAuthoritativeBalance(); 
              
                     let success = false, message = '';
                     if (state.activePaymentRequest) {
@@ -670,11 +674,13 @@
                 const statusEl = document.getElementById('validation-status');
                 statusEl.innerHTML = '';
                 const amount = parseFloat(button.dataset.amount);
+   
                              const serial = button.dataset.serial;
 
                 if (isNaN(amount) || !serial) {
                     alert("An internal error occurred with charge data.");
                     await showView('wallet-view');
+                 
                    return;
                 }
 
@@ -687,14 +693,13 @@
                     }
 
                     statusEl.innerHTML = '<span class="info">Creating public transaction record...</span>';
-                    // *** FIXED: Added timestamp to confirmation object ***
                     const chargeConfirmation = {
                         type: 'AURA_PAYMENT_CONFIRMATION',
                         senderAddress: 'BANKNOTE_ISSUER',
                         receiverAddress: state.wallet.address,
-                        amount: amount,
-                        linkedTxHash: 'charge-' + serial,
-                        timestamp: new Date().toISOString()
+                      
+                         amount: amount,
+                        linkedTxHash: 'charge-' + serial
                     };
                     await PinataLedger.pinConfirmation(chargeConfirmation);
                     WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.wallet.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial });
