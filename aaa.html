@@ -1,18 +1,42 @@
-// --- SHIM FOR BROWSER-ONLY LIBRARIES (FIX #1) ---
-// This creates a fake 'location' object to prevent browser-specific libraries from crashing.
+// --- ENHANCED SHIM FOR BROWSER-ONLY LIBRARIES (MUST BE FIRST) ---
+// This MUST be at the very top, before any imports
 if (typeof globalThis.location === 'undefined') {
-  globalThis.location = { href: '' } as any;
+  globalThis.location = {
+    href: '',
+    origin: '',
+    protocol: 'https:',
+    host: '',
+    hostname: '',
+    port: '',
+    pathname: '/',
+    search: '',
+    hash: '',
+    assign: () => {},
+    replace: () => {},
+    reload: () => {},
+    toString: () => ''
+  } as any;
+}
+
+if (typeof globalThis.window === 'undefined') {
+  globalThis.window = globalThis as any;
+}
+
+if (typeof globalThis.document === 'undefined') {
+  globalThis.document = {
+    createElement: () => ({ href: '' }),
+    createElementNS: () => ({ href: '' }),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: () => null
+  } as any;
 }
 // --- END SHIM ---
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// --- CORRECTED IMPORTS (FIX #2) ---
-// Make sure these URLs point to your files in Supabase Storage.
-import ethers from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/ethers.min.js' 
-import pqcSignFalcon1024 from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pqc-sign-falcon-1024.min.js'
-import * as pako from 'https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pako.min.js'
+// --- DYNAMIC IMPORTS ARE USED BELOW, NO STATIC IMPORTS HERE ---
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3'
 
 // Utility functions
@@ -27,10 +51,38 @@ const Crypto = {
   async verifySignature(sig, data, pk, api) { const h = this.hashMessageForSigning(data); return api.verify(sig, h, pk); }
 };
 
+// --- LAZY LOADING HELPER ---
+let pakoCache = null;
+let falconCache = null;
+let ethersCache = null;
+
+async function getPako() {
+  if (!pakoCache) {
+    pakoCache = await import('https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pako.min.js');
+  }
+  return pakoCache;
+}
+
+async function getFalcon() {
+  if (!falconCache) {
+    const module = await import('https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pqc-sign-falcon-1024.min.js');
+    falconCache = await module.default();
+  }
+  return falconCache;
+}
+
+async function getEthers() {
+  if (!ethersCache) {
+    ethersCache = await import('https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/ethers.min.js');
+  }
+  return ethersCache;
+}
+
 const Banknote = {
   getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']),
   getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); },
-  parsePayload: (b64) => {
+  parsePayload: async (b64) => {
+    const pako = await getPako();
     const c = Utils.base64ToUint8Array(b64);
     const j = pako.inflate(c, { to: 'string' });
     const p = JSON.parse(j);
@@ -50,12 +102,12 @@ serve(async (req) => {
   try {
     if (action === 'validate_banknote') {
       const { banknotePayload } = payload;
-      const banknoteData = Banknote.parsePayload(banknotePayload);
+      const banknoteData = await Banknote.parsePayload(banknotePayload); // Now async
       const { data: spentCheck, error: spentError } = await supabaseClient.from('spent_identifiers').select('identifier').eq('identifier', banknoteData.serial).single();
       if (spentCheck) throw new Error("This banknote has already been spent.");
       if (spentError && spentError.code !== 'PGRST116') throw spentError;
 
-      const falconApi = await pqcSignFalcon1024();
+      const falconApi = await getFalcon();
       const masterPublicKey = Utils.base64ToUint8Array(Deno.env.get('MASTER_PUBLIC_KEY'));
 
       const isSigOneValid = await Crypto.verifySignature(banknoteData.signatureOne, Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, falconApi);
@@ -70,6 +122,7 @@ serve(async (req) => {
     if (action === 'record_transaction') {
       const { confirmation } = payload;
       if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
+          const ethers = await getEthers(); // Dynamic import
           const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
           if (signerAddress !== confirmation.senderAddress) { throw new Error("Invalid transaction signature."); }
       }
