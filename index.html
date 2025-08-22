@@ -472,6 +472,7 @@
     <script src="jsQR.js"></script>
     <script src="crypto-js.min.js"></script>
     <script src="html2canvas.min.js"></script>
+    
     <script type="module">
         import {
             ethers
@@ -843,7 +844,8 @@
             POLLING_INTERVAL: 5000,
             PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000,
             FEE_PERCENTAGE: 0.009,
-            PRECISION: 8
+            PRECISION: 8,
+            FEE_RECIPIENT_PLACEHOLDER: '0x0000000000000000000000000000000000000000'
         };
         let state = {
             wallet: null,
@@ -1021,12 +1023,11 @@
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
 
-                // Create fee-related data
                 const feeLinkedTxHash = sendTx.hash + "-fee";
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage({
                     type: 'AURA_PAYMENT_CONFIRMATION',
                     senderAddress: state.wallet.address,
-                    receiverAddress: "PLACEHOLDER",
+                    receiverAddress: AppConstants.FEE_RECIPIENT_PLACEHOLDER,
                     amount: fee,
                     linkedTxHash: feeLinkedTxHash
                 });
@@ -1061,12 +1062,11 @@
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
 
-                // Create fee-related data
                 const feeLinkedTxHash = sendTx.hash + "-fee";
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage({
                     type: 'AURA_PAYMENT_CONFIRMATION',
                     senderAddress: state.wallet.address,
-                    receiverAddress: "PLACEHOLDER",
+                    receiverAddress: AppConstants.FEE_RECIPIENT_PLACEHOLDER,
                     amount: fee,
                     linkedTxHash: feeLinkedTxHash
                 });
