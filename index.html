@@ -96,10 +96,11 @@
             <h3>Recent Transactions</h3>
             <ul id="transaction-list-ul" class="transaction-list"></ul>
         </div>
+      
         <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
     </div></div>
     
-    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Bank Public Key</h3><p>The bank's public key is loaded for verification.</p><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
+    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Bank Public Key</h3><p>The bank's public key is pre-loaded for verification.</p><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     
     <div id="receive-view" class="view"><div class="card">
         <h2>Receive Funds</h2>
@@ -149,8 +150,8 @@
         <p id="qr-display-instruction"></p>
         <div id="qr-display-box"></div>
         <div id="waiting-on-payment" style="display: none;">
-         <div id="payment-timer"></div>
-         <div class="loader"></div>
+            <div id="payment-timer"></div>
+            <div class="loader"></div>
             <p id="final-status-message" class="status-box" style="font-size:18px;"></p>
         </div>
         <button class="back-button" id="back-from-qr-display">Back to Wallet</button>
@@ -173,7 +174,7 @@
             <button id="close-modal-button" class="back-button">Close</button>
         </div>
     </div>
- 
+    
     <script src="pako.min.js"></script>
     <script src="qrcode.js"></script>
     <script src="jsQR.js"></script>
@@ -185,125 +186,95 @@
         import pqcSignFalcon1024 from './pqc-sign-falcon-1024.min.js';
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
-        // --- CORE BANKNOTE LOGIC (NO CHANGES) ---
+        // --- SUPABASE CONFIGURATION ---
+        const SUPABASE_URL = 'https://lahcfohgcaapvgdzirsu.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhaGNmb2hnY2FhcHZnZHppcnN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjI5MjEsImV4cCI6MjA3MTM5ODkyMX0.6-Ug9nivwEd-e92o9o1_tKXUn_iRaTOzOMgW-x3qDL8'; // <-- REPLACE WITH YOUR SUPABASE ANON KEY
+        const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/api`;
+
+        // CORE BANKNOTE & LEDGER LOGIC
         const CoreLogic = (() => { const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 }; const Utils = { arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))), base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; }, hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))), preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }), resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}), }; const Crypto = { hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)), async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data); return api.verify(sig, h, pk); } }; const Banknote = { getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']), getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); }, parsePayload: (b64) => { const c=Utils.base64ToUint8Array(b64); const j=pako.inflate(c,{to:'string'}); const p=JSON.parse(j); return {amount:p.a,serial:p.s,timestamp:p.t,ephemeralPublicKey:Utils.base64ToUint8Array(p.epk),signatureOne:Utils.base64ToUint8Array(p.s1),signatureTwo:Utils.base64ToUint8Array(p.s2)}; }, getLayout: (w) => { const s=790; const c=w/s; return {qrSize:Math.round(250*c),xSpacing:Math.round(20*c),ySpacing:Math.round(20*c)}; }, decodeQrGrid: async (imgData, statusEl) => { const l=Banknote.getLayout(imgData.width); const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0); for(let i=0;i<Constants.NUM_QR_CODES;i++){ statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5)); const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize); const code=jsQR(d.data,d.width,d.height); if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}} } if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);} let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload; } }; return { Constants, Utils, Crypto, Banknote }; })();
         
-        // --- PERFORMANCE OPTIMIZATION MODULES (NO CHANGES) ---
+        // --- PERFORMANCE OPTIMIZATION MODULES ---
         const CacheManager = { cache: new Map(), DEFAULT_CACHE_DURATION: 30000, set(key, data, duration = this.DEFAULT_CACHE_DURATION) { this.cache.set(key, { data, expiresAt: Date.now() + duration }); }, get(key) { const cached = this.cache.get(key); if (!cached) return null; if (Date.now() > cached.expiresAt) { this.cache.delete(key); return null; } return cached.data; }, invalidate(pattern) { for (const key of this.cache.keys()) { if (key.includes(pattern)) { this.cache.delete(key); } } } };
         const NetworkOptimizer = { getSyncStrategy() { const speed = navigator.connection?.effectiveType || '4g'; switch (speed) { case 'slow-2g': case '2g': return { interval: 45000, useCache: true, cacheDuration: 120000 }; case '3g': return { interval: 20000, useCache: true, cacheDuration: 60000 }; case '4g': default: return { interval: 10000, useCache: true, cacheDuration: 20000 }; } } };
+        const BackgroundSync = { isRunning: false, syncIntervalId: null, start() { if (this.isRunning) return; console.log("Starting background sync..."); this.isRunning = true; const strategy = NetworkOptimizer.getSyncStrategy(); const performSyncCycle = () => { if (!this.isRunning) return; this.performSync().catch(err => console.error("Background sync error:", err)); }; performSyncCycle(); this.syncIntervalId = setInterval(performSyncCycle, strategy.interval); }, async performSync() { if (!state.wallet) { this.stop(); return; } const syncStatusEl = document.getElementById('sync-status'); try { const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.wallet.address), SupabaseLedger.findOutgoingTxs(state.wallet.address) ]); let newTxCount = 0; for (const confirmation of incomingTxs) { if (await WalletLogic.processDiscoveredTransaction(confirmation)) { newTxCount++; } } const balance = WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; if (newTxCount > 0) { renderTransactionHistory(); if (syncStatusEl) { syncStatusEl.innerHTML = `<span class="success">⚡ New transaction(s) detected!</span>`; setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000); } } } catch (error) { console.error("Background sync failed:", error); if (syncStatusEl) syncStatusEl.innerHTML = '<span class="error">Sync failed. Retrying...</span>'; } }, stop() { if (!this.isRunning) return; console.log("Stopping background sync..."); clearInterval(this.syncIntervalId); this.syncIntervalId = null; this.isRunning = false; } };
         
-        // --- BACKGROUND SYNC (MODIFIED TO USE SupabaseLedger) ---
-        const BackgroundSync = {
-            isRunning: false,
-            syncIntervalId: null,
-            start() { if (this.isRunning) return; console.log("Starting background sync..."); this.isRunning = true; const strategy = NetworkOptimizer.getSyncStrategy(); const performSyncCycle = () => { if (!this.isRunning) return; this.performSync().catch(err => console.error("Background sync error:", err)); }; performSyncCycle(); this.syncIntervalId = setInterval(performSyncCycle, strategy.interval); },
-            async performSync() {
-                if (!state.wallet) { this.stop(); return; }
-                const syncStatusEl = document.getElementById('sync-status');
-                try {
-                    const [incomingTxs, outgoingTxs] = await Promise.all([
-                        SupabaseLedger.findIncomingTxs(state.wallet.address),
-                        SupabaseLedger.findOutgoingTxs(state.wallet.address)
-                    ]);
-                    let newTxCount = 0;
-                    for (const confirmation of incomingTxs) { if (await WalletLogic.processDiscoveredTransaction(confirmation)) { newTxCount++; } }
-                    const balance = WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs);
-                    document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`;
-                    if (newTxCount > 0) { renderTransactionHistory(); if (syncStatusEl) { syncStatusEl.innerHTML = `<span class="success">⚡ New transaction(s) detected!</span>`; setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000); } }
-                } catch (error) { console.error("Background sync failed:", error); if (syncStatusEl) syncStatusEl.innerHTML = '<span class="error">Sync failed. Retrying...</span>'; }
-            },
-            stop() { if (!this.isRunning) return; console.log("Stopping background sync..."); clearInterval(this.syncIntervalId); this.syncIntervalId = null; this.isRunning = false; }
-        };
-
-        // --- NEW: SUPABASE LEDGER MODULE (REPLACES PinataLedger) ---
+        // --- SUPABASE LEDGER MODULE ---
         const SupabaseLedger = (() => {
-            // IMPORTANT: Replace with your actual Supabase URL and Anon Key
-            const SUPABASE_URL = 'https://osmviqdbvsuwoakytgow.supabase.co';
-            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zbXZpcWRidnN1d29ha3l0Z293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjA4MTcsImV4cCI6MjA3MTM5NjgxN30.yIhTK2JbuWc4CfFOHYc_X1leSEVRxurKbyyXXyBbLYk';
-
-            // Helper function to call Supabase Edge Functions
-            const apiCall = async (functionName, body, method = 'POST') => {
-                const options = {
-                    method: method,
+            const apiCall = async (action, payload) => {
+                const response = await fetch(EDGE_FUNCTION_URL, {
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'apikey': SUPABASE_ANON_KEY,
                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    },
+                    body: JSON.stringify({ action, payload })
+                });
+                const result = await response.json();
+                if (!response.ok || result.error) {
+                    throw new Error(result.error || `Supabase API error! Status: ${response.status}`);
+                }
+                return result.data;
+            };
+
+            return {
+                getMasterPublicKey: async () => {
+                    const result = await apiCall('getMasterKey');
+                    return result.public_key;
+                },
+                recordSpentIdentifier: async (identifier, type) => {
+                    try {
+                        await apiCall('recordSpentIdentifier', { identifier, type });
+                        return true;
+                    } catch (error) {
+                        console.error('Failed to record identifier to Supabase:', error);
+                        alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`);
+                        return false;
                     }
-                };
-                if (body) {
-                    options.body = JSON.stringify(body);
-                }
-                const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, options);
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Supabase Edge Function '${functionName}' error: ${response.status} ${errorText}`);
-                }
-                return response.json();
-            };
-
-            const getMasterPublicKey = async () => {
-                const result = await apiCall('get-master-key', null, 'GET');
-                if (!result.public_key) throw new Error("Master public key could not be fetched.");
-                return result.public_key;
-            };
-
-            const recordSpentIdentifier = async (identifier, type) => {
-                try {
-                    await apiCall('record-spent-identifier', { identifier, type });
-                    return true;
-                } catch (error) {
-                    console.error('Failed to record identifier to Supabase:', error);
-                    alert(`Critical Error: Could not write to the public ledger. Transaction cannot be safely completed. Reason: ${error.message}`);
-                    return false;
-                }
-            };
-
-            const hasBeenSpent = async (identifier) => {
-                try {
-                    const result = await apiCall('has-been-spent', { identifier });
-                    return result.isSpent;
-                } catch (error) {
-                    console.error('Failed to check identifier status on Supabase:', error);
-                    alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`);
-                    return true; // Fail safe
+                },
+                hasBeenSpent: async (identifier) => {
+                    try {
+                        const result = await apiCall('hasBeenSpent', { identifier });
+                        return result.spent;
+                    } catch (error) {
+                        console.error('Failed to check identifier status on Supabase:', error);
+                        alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`);
+                        return true; // Fail safe
+                    }
+                },
+                pinConfirmation: (confirmation) => apiCall('pinConfirmation', { confirmation }),
+                findConfirmation: (txHash) => apiCall('findConfirmation', { txHash }),
+                findIncomingTxs: async (receiverAddress) => {
+                    const cacheKey = `incoming_${receiverAddress}`;
+                    const strategy = NetworkOptimizer.getSyncStrategy();
+                    if (strategy.useCache) {
+                        const cached = CacheManager.get(cacheKey);
+                        if (cached) return cached;
+                    }
+                    const txs = await apiCall('findIncomingTxs', { receiverAddress });
+                    if (strategy.useCache) CacheManager.set(cacheKey, txs, strategy.cacheDuration);
+                    return txs;
+                },
+                findOutgoingTxs: async (senderAddress) => {
+                    const cacheKey = `outgoing_${senderAddress}`;
+                    const strategy = NetworkOptimizer.getSyncStrategy();
+                    if (strategy.useCache) {
+                        const cached = CacheManager.get(cacheKey);
+                        if (cached) return cached;
+                    }
+                    const txs = await apiCall('findOutgoingTxs', { senderAddress });
+                    if (strategy.useCache) CacheManager.set(cacheKey, txs, strategy.cacheDuration);
+                    return txs;
                 }
             };
-
-            const pinConfirmation = async (confirmation) => {
-                await apiCall('pin-confirmation', { confirmation });
-            };
-
-            const findConfirmation = async (txHash) => {
-                try {
-                    const result = await apiCall('find-confirmation', { txHash });
-                    return result.confirmation; // Expects the edge function to return { confirmation: data } or { confirmation: null }
-                } catch (error) {
-                     console.error(`Error finding confirmation for ${txHash}:`, error);
-                     return null;
-                }
-            };
-
-            const findIncomingTxs = async (receiverAddress) => {
-                const result = await apiCall('find-transactions', { address: receiverAddress, type: 'incoming' });
-                return result.transactions || [];
-            };
-
-            const findOutgoingTxs = async (senderAddress) => {
-                const result = await apiCall('find-transactions', { address: senderAddress, type: 'outgoing' });
-                return result.transactions || [];
-            };
-
-            return { getMasterPublicKey, recordSpentIdentifier, hasBeenSpent, pinConfirmation, findConfirmation, findIncomingTxs, findOutgoingTxs };
         })();
-        
+
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
         // ===================================================================================
         const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, TREASURY_ADDRESS: '0xF848aC6b7E16CF32A972ECE1529c73313375c6d5', FEE_PERCENTAGE: 0.009, PRECISION: 8 };
         let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, currentBalance: 0, transactionIndex: new Map() };
         
-        // --- WALLET LOGIC (MODIFIED TO USE SupabaseLedger) ---
         const WalletLogic = {
             createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
             restoreWallet: async (mnemonic, password) => { try { const wallet = ethers.Wallet.fromPhrase(mnemonic); const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false; } },
@@ -322,7 +293,6 @@
             processDiscoveredTransaction: async (confirmation) => { if (confirmation.receiverAddress !== state.wallet.address) { return false; } const txKey = confirmation.linkedTxHash || confirmation.hash; if (state.transactionIndex.has(txKey)) return false; if (!confirmation.signedMessage && confirmation.senderAddress !== 'BANKNOTE_ISSUER') { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; } if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') { const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation); if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; } const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; } } WalletLogic.addToChain({ type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive', amount: confirmation.amount, from: confirmation.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: confirmation.linkedTxHash, timestamp: confirmation.timestamp }); return true; }
         };
 
-        // --- UI, SCANNER & EVENT LISTENERS (NO MAJOR CHANGES) ---
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
         async function updateBalanceAndRender() { try { const balance = await WalletLogic.getServerAuthoritativeBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; renderTransactionHistory(); } catch (error) { console.error("Could not update balance:", error); document.getElementById('balance-display').textContent = 'Error'; } }
@@ -333,35 +303,8 @@
         async function showView(id) { if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner(); if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); const viewElement = document.getElementById(id); if(viewElement) viewElement.classList.add('active'); if (id === 'wallet-view') { document.getElementById('balance-display').textContent = 'Loading...'; if(state.wallet) document.getElementById('address-display').textContent = abbreviateAddress(state.wallet.address); await updateBalanceAndRender(); BackgroundSync.start(); } if (id === 'send-view') { startScanner(); } if (id === 'receive-view') { document.getElementById('full-receive-address').textContent = state.wallet.address; generateQrCode(state.wallet.address, 'static-qr-code'); } }
         function renderTransactionHistory() { const listUl = document.getElementById('transaction-list-ul'); listUl.innerHTML = ''; if (!state.userStore || !state.userStore.chain) return; const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse(); if (transactions.length === 0) { listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>'; return; } transactions.forEach(tx => { const item = document.createElement('li'); item.className = 'transaction-item'; item.style.cursor = 'pointer'; const isSent = tx.type === 'send'; const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received'); const typeClass = isSent ? 'sent' : 'received'; const totalAmount = tx.amount || 0; const date = new Date(tx.timestamp).toLocaleString('en-US'); item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`; item.addEventListener('click', () => showTransactionDetails(tx)); listUl.appendChild(item); }); }
         function showTransactionDetails(tx) { const modal = document.getElementById('transaction-detail-modal'); document.getElementById('detail-status').textContent = tx.status || 'N/A'; document.getElementById('detail-type').textContent = tx.type || 'N/A'; document.getElementById('detail-datetime').textContent = new Date(tx.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }); document.getElementById('detail-amount').textContent = `$${(tx.amount || 0).toFixed(2)}`; document.getElementById('detail-fee').textContent = `$${(tx.fee || 0).toFixed(2)}`; document.getElementById('detail-from').textContent = tx.from || 'N/A'; document.getElementById('detail-to').textContent = tx.to || 'N/A'; document.getElementById('detail-hash').textContent = tx.hash || 'N/A'; modal.style.display = 'flex'; document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; }; document.getElementById('download-tx-button').onclick = () => { const contentToCapture = document.getElementById('modal-details-content'); html2canvas(contentToCapture, { scale: 2 }).then(canvas => { const link = document.createElement('a'); link.download = `transaction_${tx.hash.substring(0, 10)}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.9); link.click(); }); }; }
+        async function initializeApp() { try { state.falconApi = await pqcSignFalcon1024(); } catch (e) { alert(`Critical error initializing cryptography module: ${e.message}`); return; } if (localStorage.getItem('aura_user_store')) { showView('login-view'); } else { showView('onboarding-view'); } setupEventListeners(); }
         
-        // --- MODIFIED: APP INITIALIZATION ---
-        async function initializeApp() {
-            try {
-                // Initialize cryptography module first
-                state.falconApi = await pqcSignFalcon1024();
-
-                // Then, fetch the master public key from Supabase
-                const masterPublicKeyBase64 = await SupabaseLedger.getMasterPublicKey();
-                state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(masterPublicKeyBase64);
-                console.log("Master Public Key successfully loaded from Supabase.");
-
-            } catch (e) {
-                alert(`Critical error during initialization: ${e.message}`);
-                // Hide all views and show an error message if initialization fails
-                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-                document.body.innerHTML = `<div class="card" style="border-color: var(--danger-color);"><h1>Initialization Failed</h1><p>Could not connect to the application backend. Please check your Supabase configuration and network connection. Error: ${e.message}</p></div>`;
-                return;
-            }
-
-            // Check for existing wallet and show appropriate view
-            if (localStorage.getItem('aura_user_store')) {
-                showView('login-view');
-            } else {
-                showView('onboarding-view');
-            }
-            setupEventListeners();
-        }
-
         function setupEventListeners() {
             document.getElementById('go-to-create-wallet').addEventListener('click', () => showView('create-wallet-view'));
             document.getElementById('go-to-restore-wallet').addEventListener('click', () => showView('restore-wallet-view'));
@@ -384,7 +327,23 @@
             document.getElementById('send-manual-button').addEventListener('click', async () => { const statusEl = document.getElementById('send-status'), recipientAddress = document.getElementById('send-address-input').value.trim(), amount = parseFloat(document.getElementById('send-amount-input').value); statusEl.innerHTML = ''; if (!ethers.isAddress(recipientAddress)) { statusEl.innerHTML = '<span class="error">Invalid recipient address.</span>'; return; } if (isNaN(amount) || amount <= 0) { statusEl.innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const fee = amount * AppConstants.FEE_PERCENTAGE, total = amount + fee; if (state.currentBalance < total) { statusEl.innerHTML = `<span class="error">Insufficient funds.</span>`; return; } state.activeManualSend = { address: recipientAddress, amount: amount }; state.activePaymentRequest = null; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(AppConstants.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = recipientAddress; await showView('send-confirm-view'); });
             document.getElementById('create-request-qr-button').addEventListener('click', () => { const amount = parseFloat(document.getElementById('request-amount-input').value); if (isNaN(amount) || amount <= 0) { document.getElementById('receive-status').innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const request = WalletLogic.createPaymentRequest(amount); document.getElementById('qr-display-title').textContent = 'Payment Request'; document.getElementById('qr-display-instruction').textContent = `Show this QR to the sender to pay $${amount.toFixed(2)}.`; document.getElementById('qr-display-box').style.display = 'block'; generateQrCode(JSON.stringify(request), 'qr-display-box'); document.getElementById('waiting-on-payment').style.display = 'block'; const statusMsg = document.getElementById('final-status-message'), timerEl = document.getElementById('payment-timer'); statusMsg.innerHTML = '<span class="info">Waiting for sender to pay...</span>'; document.querySelector('#waiting-on-payment .loader').style.display = 'block'; showView('qr-display-view'); let timeLeft = AppConstants.PAYMENT_REQUEST_EXPIRY; const updateTimer = () => { timeLeft -= 1000; const minutes = Math.floor(timeLeft / 60000), seconds = Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0'); timerEl.textContent = `Expires in: ${minutes}:${seconds}`; if (timeLeft <= 0) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; statusMsg.innerHTML = '<span class="error">Payment request expired.</span>'; document.querySelector('#waiting-on-payment .loader').style.display = 'none'; } }; updateTimer(); state.activePollingTimer = setInterval(async () => { updateTimer(); if (timeLeft <= 0) return; try { const confirmation = await SupabaseLedger.findConfirmation(request.linkedTxHash); if (confirmation) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; timerEl.style.display = 'none'; statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>'; if (await WalletLogic.finalizePayment(confirmation)) { statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`; document.querySelector('#waiting-on-payment .loader').style.display = 'none'; setTimeout(async () => { await showView('wallet-view'); }, 2000); } } } catch (err) { console.error("Polling error:", err); statusMsg.innerHTML = `<span class="error">Network error while checking for payment.</span>`; clearInterval(state.activePollingTimer); state.activePollingTimer = null; } }, AppConstants.POLLING_INTERVAL); });
             document.getElementById('confirm-payment-button').addEventListener('click', async (event) => { const button = event.target, statusEl = document.getElementById('send-confirm-status'); button.disabled = true; statusEl.innerHTML = '<span class="info">Processing payment...</span>'; try { await WalletLogic.getServerAuthoritativeBalance(); let success = false, message = ''; if (state.activePaymentRequest) { await WalletLogic.processPayment(state.activePaymentRequest); message = `Payment of $${state.activePaymentRequest.amount.toFixed(2)} sent!`; success = true; } else if (state.activeManualSend) { await WalletLogic.directSend(state.activeManualSend.address, state.activeManualSend.amount); message = `Payment of $${state.activeManualSend.amount.toFixed(2)} sent!`; success = true; } else { throw new Error("No active payment request."); } if (success) { statusEl.innerHTML = `<span class="success">${message}</span>`; await BackgroundSync.performSync(); await new Promise(resolve => setTimeout(resolve, 1500)); state.activePaymentRequest = null; state.activeManualSend = null; await showView('wallet-view'); } } catch (err) { statusEl.innerHTML = `<span class="error">Payment Failed: ${err.message}</span>`; } finally { button.disabled = false; } });
-            document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); document.getElementById('banknote-image-input').disabled = true; document.getElementById('charge-confirmation').style.display = 'none'; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.disabled = false; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); if (state.masterPublicKey) { document.getElementById('key-status').innerHTML = '<span class="success">Bank public key loaded.</span>'; document.getElementById('banknote-image-input').disabled = false; } else { document.getElementById('key-status').innerHTML = '<span class="error">Bank public key is not available. Please restart.</span>'; } showView('charge-view'); });
+            document.getElementById('show-charge-view-button').addEventListener('click', async () => { 
+                resetViewInputs('charge-view'); 
+                document.getElementById('banknote-image-input').disabled = true; document.getElementById('charge-confirmation').style.display = 'none'; 
+                const confirmBtn = document.getElementById('confirm-charge-button'); 
+                confirmBtn.disabled = false; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); 
+                
+                try {
+                    const masterPublicKeyBase64 = await SupabaseLedger.getMasterPublicKey();
+                    state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(masterPublicKeyBase64);
+                    document.getElementById('key-status').innerHTML = '<span class="success">Bank public key loaded.</span>';
+                    document.getElementById('banknote-image-input').disabled = false;
+                } catch (error) {
+                    console.error("Failed to load master public key:", error);
+                    document.getElementById('key-status').innerHTML = `<span class="error">Could not load bank key: ${error.message}</span>`;
+                }
+                showView('charge-view'); 
+            });
             document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const statusEl = document.getElementById('validation-status'); statusEl.innerHTML = ''; const amount = parseFloat(button.dataset.amount); const serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An internal error occurred with charge data."); await showView('wallet-view'); return; } try { statusEl.innerHTML = '<span class="info">Recording banknote on public ledger...</span>'; const spentSuccess = await SupabaseLedger.recordSpentIdentifier(serial, 'banknote'); if (!spentSuccess) { throw new Error("Failed to record banknote as spent on the public ledger."); } statusEl.innerHTML = '<span class="info">Creating public transaction record...</span>'; const chargeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: 'BANKNOTE_ISSUER', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: 'charge-' + serial }; await SupabaseLedger.pinConfirmation(chargeConfirmation); WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.wallet.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial }); CacheManager.invalidate(state.wallet.address); await BackgroundSync.performSync(); alert(`$${amount.toFixed(2)} added successfully.`); await showView('wallet-view'); } catch (err) { console.error("Charge failed:", err); statusEl.innerHTML = `<span class="error">Charge Failed: ${err.message}</span>`; button.disabled = false; } });
             document.getElementById('banknote-image-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const statusEl = document.getElementById('validation-status'); const confirmSection = document.getElementById('charge-confirmation'); confirmSection.style.display = 'none'; if (!state.masterPublicKey) { statusEl.innerHTML = '<span class="error">Please load the bank\'s public key first.</span>'; return; } statusEl.innerHTML = '<span class="info">Preparing image...</span>'; try { const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION); const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl); const imageData = await new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);res(x.getImageData(0,0,i.width,i.height));}; i.onerror=rej; i.src=processedDataUrl; }); const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl); statusEl.innerHTML = '<span class="info">Scan complete. Verifying signatures...</span>'; const banknoteData = CoreLogic.Banknote.parsePayload(payload); if (await SupabaseLedger.hasBeenSpent(banknoteData.serial)) { throw new Error("This banknote has already been spent."); } const isSigOneValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureOne, CoreLogic.Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, state.falconApi); if (!isSigOneValid) throw new Error("Signature validation failed (internal)."); const isSigTwoValid = await CoreLogic.Crypto.verifySignature(banknoteData.signatureTwo, CoreLogic.Banknote.getStandardizedDataForMasterSig(banknoteData), state.masterPublicKey, state.falconApi); if (!isSigTwoValid) throw new Error("Signature validation failed (issuer)."); statusEl.innerHTML = '<span class="success">Banknote is valid!</span>'; document.getElementById('validated-amount').textContent = `$${banknoteData.amount.toFixed(2)}`; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.dataset.amount = banknoteData.amount; confirmBtn.dataset.serial = banknoteData.serial; confirmSection.style.display = 'block'; } catch (err) { statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; } finally { event.target.value = ''; } });
         }
