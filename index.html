@@ -183,10 +183,8 @@
     
     <script type="module">
         import { ethers } from "./ethers.min.js";
-        // REMOVED: Falcon and SHA3 imports as they are now server-side for validation
         
         // --- ADDED SUPABASE INITIALIZATION ---
-        // ⚠️ IMPORTANT: Replace with your actual Supabase URL and Anon Key
         const SUPABASE_URL = 'https://hoppdalxbmktxexylbkl.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhvcHBkYWx4Ym1rdHhleHlsYmtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1NDQzMTcsImV4cCI6MjA3MTEyMDMxN30.GJYiCnxwMJfbRume5v7DS1RChZx3z0XlsXP1JcE8kXQ';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -202,18 +200,37 @@
             isRunning: false,
             syncIntervalId: null,
             start() { if (this.isRunning) return; console.log("Starting background sync..."); this.isRunning = true; const strategy = NetworkOptimizer.getSyncStrategy(); const performSyncCycle = () => { if (!this.isRunning) return; this.performSync().catch(err => console.error("Background sync error:", err)); }; performSyncCycle(); this.syncIntervalId = setInterval(performSyncCycle, strategy.interval); },
+            
+            // ### FIX 3: CORRECTED BackgroundSync.performSync ###
             async performSync() {
                 if (!state.wallet) { this.stop(); return; }
                 const syncStatusEl = document.getElementById('sync-status');
                 try {
-                    // MODIFIED: Calls SupabaseLedger
                     const [incomingTxs, outgoingTxs] = await SupabaseLedger.findTxs(state.wallet.address);
                     let newTxCount = 0;
-                    for (const confirmation of incomingTxs) { if (await WalletLogic.processDiscoveredTransaction(confirmation)) { newTxCount++; } }
+                    for (const confirmation of incomingTxs || []) { 
+                        if (await WalletLogic.processDiscoveredTransaction(confirmation)) { 
+                            newTxCount++; 
+                        } 
+                    }
                     const balance = WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs);
                     document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`;
-                    if (newTxCount > 0) { renderTransactionHistory(); if (syncStatusEl) { syncStatusEl.innerHTML = `<span class="success">⚡ New transaction(s) detected!</span>`; setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000); } }
-                } catch (error) { console.error("Background sync failed:", error); if (syncStatusEl) syncStatusEl.innerHTML = '<span class="error">Sync failed. Retrying...</span>'; }
+                    if (newTxCount > 0) { 
+                        renderTransactionHistory(); 
+                        if (syncStatusEl) { 
+                            syncStatusEl.innerHTML = `<span class="success">⚡ New transaction(s) detected!</span>`; 
+                            setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000); 
+                        } 
+                    }
+                } catch (error) { 
+                    console.error("Background sync failed:", error); 
+                    if (syncStatusEl) {
+                        // Show error briefly, then clear it
+                        syncStatusEl.innerHTML = '<span class="error">Sync failed. Retrying...</span>';
+                        setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 3000);
+                    }
+                    // Don't throw - let sync continue on next interval
+                }
             },
             stop() { if (!this.isRunning) return; console.log("Stopping background sync..."); clearInterval(this.syncIntervalId); this.syncIntervalId = null; this.isRunning = false; }
         };
@@ -259,7 +276,24 @@
             buildTransactionIndex: () => { state.transactionIndex.clear(); if (!state.userStore || !state.userStore.chain) return; state.userStore.chain.forEach(tx => { const txKey = tx.linkedTxHash || tx.hash; state.transactionIndex.set(txKey, tx); }); },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp || Date.now() }; const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION); const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(AppConstants.PRECISION), AppConstants.PRECISION); newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] ); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); const txKey = newTx.linkedTxHash || newTx.hash; state.transactionIndex.set(txKey, newTx); return newTx; },
-            calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => { const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const finalBalance = incomingTotal - outgoingTotal; state.currentBalance = finalBalance; return finalBalance; },
+            
+            // ### FIX 1: CORRECTED calculateBalanceFromTxs ###
+            calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => {
+                const incomingTotal = (incomingTxs || []).reduce((sum, tx) => {
+                    const amount = parseFloat(tx.amount) || 0;
+                    return sum + amount;
+                }, 0);
+                
+                const outgoingTotal = (outgoingTxs || []).reduce((sum, tx) => {
+                    const amount = parseFloat(tx.amount) || 0;
+                    const fee = parseFloat(tx.fee) || 0;
+                    return sum + amount + fee; // Include fees in outgoing total
+                }, 0);
+                
+                const finalBalance = Math.max(0, incomingTotal - outgoingTotal); // Prevent negative balance display
+                state.currentBalance = finalBalance; 
+                return finalBalance; 
+            },
             getServerAuthoritativeBalance: async () => { if (!state.userStore) return 0.0; const [incomingTxs, outgoingTxs] = await SupabaseLedger.findTxs(state.wallet.address); return WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); },
             getStandardizedConfirmationMessage: (confirmation) => { const amount = Number(confirmation.amount).toFixed(AppConstants.PRECISION); return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|'); },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + AppConstants.PAYMENT_REQUEST_EXPIRY }; },
@@ -280,7 +314,6 @@
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
                 
-                // MODIFIED: Calls SupabaseLedger to record both transactions
                 await SupabaseLedger.recordTransaction(confirmation);
                 await SupabaseLedger.recordTransaction(feeConfirmation);
                 
@@ -302,7 +335,6 @@
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
 
-                // MODIFIED: Calls SupabaseLedger to record both transactions
                 await SupabaseLedger.recordTransaction(confirmation);
                 await SupabaseLedger.recordTransaction(feeConfirmation);
 
@@ -342,7 +374,22 @@
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
         
-        async function updateBalanceAndRender() { try { const balance = await WalletLogic.getServerAuthoritativeBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; renderTransactionHistory(); } catch (error) { console.error("Could not update balance:", error); document.getElementById('balance-display').textContent = 'Error'; } }
+        // ### FIX 2: CORRECTED updateBalanceAndRender ###
+        async function updateBalanceAndRender() { 
+            try { 
+                const balance = await WalletLogic.getServerAuthoritativeBalance(); 
+                document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; 
+                renderTransactionHistory(); 
+            } catch (error) { 
+                console.error("Could not update balance:", error); 
+                // Keep previous balance instead of showing "Error"
+                if (state.currentBalance !== undefined) {
+                    document.getElementById('balance-display').textContent = `$${state.currentBalance.toFixed(2)}`;
+                } else {
+                    document.getElementById('balance-display').textContent = '$0.00';
+                }
+            } 
+        }
         function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; const qr = qrcode(0, 'L'); qr.addData(data); qr.make(); container.innerHTML = qr.createImgTag(6, 10); }
         function abbreviateAddress(address) { if (!address) return ''; return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`; }
         function stopScanner() { if (state.cameraStream) { state.cameraStream.getTracks().forEach(track => track.stop()); state.cameraStream = null; state.isScannerActive = false; } }
@@ -374,13 +421,10 @@
                                 isPaymentRequest = true;
                                 Promise.resolve().then(async () => {
                                     if (Date.now() > request.expiresAt) throw new Error("This payment request has expired.");
-                                    
-                                    // MODIFIED: Check if paid by querying SupabaseLedger
                                     const [ , outgoingTxs] = await SupabaseLedger.findTxs(state.wallet.address);
                                     if (outgoingTxs.some(tx => tx.linkedTxHash === request.linkedTxHash)) {
                                         throw new Error("This payment request has already been paid.");
                                     }
-
                                     state.activePaymentRequest = request; state.activeManualSend = null;
                                     const fee = request.amount * AppConstants.FEE_PERCENTAGE; const total = request.amount + fee;
                                     document.getElementById('confirm-amount-display').innerHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(AppConstants.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`;
@@ -456,7 +500,6 @@
                 state.activePollingTimer = setInterval(async () => {
                     updateTimer(); if (timeLeft <= 0) return;
                     try {
-                        // MODIFIED: Polls for incoming transactions from Supabase
                         const [incomingTxs, ] = await SupabaseLedger.findTxs(state.wallet.address);
                         const confirmation = incomingTxs.find(tx => tx.linkedTxHash === request.linkedTxHash);
 
@@ -489,7 +532,6 @@
                 document.getElementById('charge-confirmation').style.display = 'none'; 
                 const confirmBtn = document.getElementById('confirm-charge-button'); 
                 confirmBtn.disabled = false; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial');
-                // REMOVED: All client-side master public key logic. No longer needed.
                 showView('charge-view'); 
             });
             document.getElementById('confirm-charge-button').addEventListener('click', async (event) => {
@@ -501,7 +543,6 @@
                     statusEl.innerHTML = '<span class="info">Creating public transaction record...</span>';
                     const chargeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: 'BANKNOTE_ISSUER', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: 'charge-' + serial };
                     
-                    // MODIFIED: Calls SupabaseLedger to record the transaction
                     await SupabaseLedger.recordTransaction(chargeConfirmation);
                     
                     WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.wallet.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial });
@@ -523,8 +564,6 @@
                     statusEl.innerHTML = '<span class="info">Scan complete. Sending to server for validation...</span>';
                     const payload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
 
-                    // --- MODIFIED: SERVER-SIDE VALIDATION ---
-                    // This single call replaces all client-side crypto checks.
                     const validationResult = await SupabaseLedger.validateBanknote(payload);
 
                     if (validationResult.success) {
@@ -535,7 +574,6 @@
                         confirmBtn.dataset.serial = validationResult.serial;
                         confirmSection.style.display = 'block';
                     }
-                    // The 'else' case is handled by the catch block
                 } catch (err) { 
                     statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; 
                 } finally { 
