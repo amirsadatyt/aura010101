@@ -1,86 +1,91 @@
 // --- ENHANCED SHIM FOR BROWSER-ONLY LIBRARIES (MUST BE FIRST) ---
-// This MUST be at the very top, before any imports
+// Supabase Edge Functions run in Deno, a server environment. Some libraries
+// meant for browsers might crash if they can't find global objects like
+// 'window' or 'location'. This shim prevents those errors.
 if (typeof globalThis.location === 'undefined') {
-  globalThis.location = {
-    href: '',
-    origin: '',
-    protocol: 'https:',
-    host: '',
-    hostname: '',
-    port: '',
-    pathname: '/',
-    search: '',
-    hash: '',
-    assign: () => {},
-    replace: () => {},
-    reload: () => {},
-    toString: () => ''
-  } as any;
+  globalThis.location = { href: '' } as any;
 }
-
 if (typeof globalThis.window === 'undefined') {
   globalThis.window = globalThis as any;
 }
-
 if (typeof globalThis.document === 'undefined') {
-  globalThis.document = {
-    createElement: () => ({ href: '' }),
-    createElementNS: () => ({ href: '' }),
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    getElementById: () => null
-  } as any;
+  globalThis.document = { querySelector: () => null } as any;
 }
 // --- END SHIM ---
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-// --- DYNAMIC IMPORTS ARE USED BELOW, NO STATIC IMPORTS HERE ---
 import { shake256 } from 'https://cdn.skypack.dev/js-sha3'
 
-// Utility functions
+// --- CORS HEADERS ---
+// These headers are essential for allowing your web app to call this function.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*', // Or specify your app's domain for better security
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
+
+// --- UTILITY & CRYPTO HELPERS ---
 const Utils = {
-  base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; },
+  base64ToUint8Array: (s) => { const bs = atob(s); const b = new Uint8Array(bs.length); for (let i = 0; i < bs.length; i++)b[i] = bs.charCodeAt(i); return b; },
   hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
   arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
 };
 
 const Crypto = {
   hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)),
-  async verifySignature(sig, data, pk, api) { const h = this.hashMessageForSigning(data); return api.verify(sig, h, pk); }
+  async verifySignature(sig, data, pk, api) {
+    const h = this.hashMessageForSigning(data);
+    return api.verify(sig, h, pk);
+  }
 };
 
-// --- LAZY LOADING HELPER ---
+// --- LAZY LOADING CACHE ---
+// These variables will hold the libraries after they're loaded once.
 let pakoCache = null;
 let falconCache = null;
 let ethersCache = null;
 
+// Asynchronously loads the Pako library (for decompression) when needed.
 async function getPako() {
   if (!pakoCache) {
-    pakoCache = await import('https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pako.min.js');
+    // Using a reliable CDN for common libraries is often better than self-hosting.
+    const module = await import('https://esm.sh/pako@2.1.0');
+    pakoCache = module.default || module;
   }
   return pakoCache;
 }
 
+// Asynchronously loads the Falcon library (for post-quantum signatures).
 async function getFalcon() {
   if (!falconCache) {
-    const module = await import('https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/pqc-sign-falcon-1024.min.js');
-    falconCache = await module.default();
+    // This specialized library is best loaded from your own Supabase Storage.
+    // Make sure the URL points to your public file.
+    const falconURL = Deno.env.get('https://cdn.jsdelivr.net/npm/@dashlane/pqc-sign-falcon-1024-browser@1.0.0/dist/pqc-sign-falcon-1024.min.js');
+    if (!falconURL) throw new Error("Missing FALCON_MODULE_URL environment variable.");
+    
+    const module = await import(falconURL);
+    const falconFactory = module.default || module;
+    falconCache = await falconFactory();
   }
   return falconCache;
 }
 
+// Asynchronously loads the Ethers.js library (for Ethereum signatures).
 async function getEthers() {
   if (!ethersCache) {
-    ethersCache = await import('https://hoppdalxbmktxexylbkl.supabase.co/storage/v1/object/public/libraries/ethers.min.js');
+    const module = await import('https://esm.sh/ethers@5.7.2');
+    ethersCache = module.ethers || module.default || module;
   }
   return ethersCache;
 }
 
 const Banknote = {
-  getStandardizedDataForSigning: (d) => JSON.stringify({timestamp:d.timestamp,serial:d.serial},['timestamp','serial']),
-  getStandardizedDataForMasterSig: (d) => { const t={ephemeralPublicKey:Utils.arrayBufferToBase64(d.ephemeralPublicKey),signatureOne:Utils.arrayBufferToBase64(d.signatureOne)}; return JSON.stringify(t, Object.keys(t).sort()); },
+  getStandardizedDataForSigning: (d) => JSON.stringify({ timestamp: d.timestamp, serial: d.serial }, ['timestamp', 'serial']),
+  getStandardizedDataForMasterSig: (d) => {
+    const t = { ephemeralPublicKey: Utils.arrayBufferToBase64(d.ephemeralPublicKey), signatureOne: Utils.arrayBufferToBase64(d.signatureOne) };
+    return JSON.stringify(t, Object.keys(t).sort());
+  },
   parsePayload: async (b64) => {
     const pako = await getPako();
     const c = Utils.base64ToUint8Array(b64);
@@ -95,60 +100,134 @@ const Banknote = {
   }
 };
 
+// --- ACTION HANDLERS ---
+const handlers = {
+  /**
+   * Validates a digital banknote's signatures and checks if it's already been spent.
+   */
+  'validate_banknote': async (payload, { supabaseClient }) => {
+    if (!payload.banknotePayload) throw new Error("Missing 'banknotePayload' in request.");
+    
+    const banknoteData = await Banknote.parsePayload(payload.banknotePayload);
+    const { data: spentCheck, error: spentError } = await supabaseClient.from('spent_identifiers').select('identifier').eq('identifier', banknoteData.serial).single();
+
+    if (spentCheck) throw new Error("This banknote has already been spent.");
+    if (spentError && spentError.code !== 'PGRST116') throw spentError; // Ignore "no rows found" error
+
+    const falconApi = await getFalcon();
+    const masterPublicKey = Utils.base64ToUint8Array(Deno.env.get('MASTER_PUBLIC_KEY'));
+
+    const isSigOneValid = await Crypto.verifySignature(banknoteData.signatureOne, Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, falconApi);
+    if (!isSigOneValid) throw new Error("Signature validation failed (internal).");
+
+    const isSigTwoValid = await Crypto.verifySignature(banknoteData.signatureTwo, Banknote.getStandardizedDataForMasterSig(banknoteData), masterPublicKey, falconApi);
+    if (!isSigTwoValid) throw new Error("Signature validation failed (issuer).");
+
+    return { success: true, amount: banknoteData.amount, serial: banknoteData.serial };
+  },
+
+  /**
+   * Verifies a transaction confirmation and records it to the database.
+   */
+  'record_transaction': async (payload, { supabaseClient }) => {
+    const { confirmation } = payload;
+    if (!confirmation) throw new Error("Missing 'confirmation' object in request.");
+
+    if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
+      const ethers = await getEthers();
+      const signerAddress = ethers.utils.verifyMessage(confirmation.signedMessage, confirmation.signature);
+      if (signerAddress !== confirmation.senderAddress) {
+        throw new Error("Invalid transaction signature.");
+      }
+    }
+
+    const identifier = confirmation.linkedTxHash;
+    const { data: spentCheck } = await supabaseClient.from('spent_identifiers').select('identifier').eq('identifier', identifier).single();
+    if (spentCheck) throw new Error("This transaction/banknote has already been processed.");
+
+    const { error: rpcError } = await supabaseClient.rpc('record_new_transaction', {
+      p_identifier: identifier,
+      p_type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'banknote' : 'transaction',
+      p_tx_hash: identifier,
+      p_sender: confirmation.senderAddress,
+      p_receiver: confirmation.receiverAddress,
+      p_amount: confirmation.amount,
+      p_details: confirmation
+    });
+    if (rpcError) throw rpcError;
+
+    return { success: true };
+  },
+
+  /**
+   * Fetches incoming and outgoing transactions for a given address.
+   */
+  'get_transactions': async (payload, { supabaseClient }) => {
+    const { address } = payload;
+    if (!address) throw new Error("Missing 'address' in request.");
+
+    const [incomingRes, outgoingRes] = await Promise.all([
+      supabaseClient.from('transactions').select('details').eq('receiver_address', address),
+      supabaseClient.from('transactions').select('details').eq('sender_address', address)
+    ]);
+
+    if (incomingRes.error) throw incomingRes.error;
+    if (outgoingRes.error) throw outgoingRes.error;
+
+    const incomingTxs = incomingRes.data.map(tx => tx.details);
+    const outgoingTxs = outgoingRes.data.map(tx => tx.details);
+
+    return { incomingTxs, outgoingTxs };
+  }
+};
+
+// --- MAIN SERVER LOGIC ---
 serve(async (req) => {
-  const supabaseClient = createClient( Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
-  const { action, payload } = await req.json();
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
 
   try {
-    if (action === 'validate_banknote') {
-      const { banknotePayload } = payload;
-      const banknoteData = await Banknote.parsePayload(banknotePayload); // Now async
-      const { data: spentCheck, error: spentError } = await supabaseClient.from('spent_identifiers').select('identifier').eq('identifier', banknoteData.serial).single();
-      if (spentCheck) throw new Error("This banknote has already been spent.");
-      if (spentError && spentError.code !== 'PGRST116') throw spentError;
-
-      const falconApi = await getFalcon();
-      const masterPublicKey = Utils.base64ToUint8Array(Deno.env.get('MASTER_PUBLIC_KEY'));
-
-      const isSigOneValid = await Crypto.verifySignature(banknoteData.signatureOne, Banknote.getStandardizedDataForSigning(banknoteData), banknoteData.ephemeralPublicKey, falconApi);
-      if (!isSigOneValid) throw new Error("Signature validation failed (internal).");
-
-      const isSigTwoValid = await Crypto.verifySignature(banknoteData.signatureTwo, Banknote.getStandardizedDataForMasterSig(banknoteData), masterPublicKey, falconApi);
-      if (!isSigTwoValid) throw new Error("Signature validation failed (issuer).");
-
-      return new Response(JSON.stringify({ success: true, amount: banknoteData.amount, serial: banknoteData.serial }), { headers: { "Content-Type": "application/json" } });
+    let requestData;
+    // Handle GET requests (data in URL) and POST requests (data in body)
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      requestData = Object.fromEntries(url.searchParams);
+    } else {
+      requestData = await req.json();
     }
 
-    if (action === 'record_transaction') {
-      const { confirmation } = payload;
-      if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
-          const ethers = await getEthers(); // Dynamic import
-          const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
-          if (signerAddress !== confirmation.senderAddress) { throw new Error("Invalid transaction signature."); }
-      }
-
-      const identifier = confirmation.linkedTxHash;
-      const { data: spentCheck } = await supabaseClient.from('spent_identifiers').select('identifier').eq('identifier', identifier).single();
-      if (spentCheck) throw new Error("This transaction/banknote has already been processed.");
-
-      const { error: rpcError } = await supabaseClient.rpc('record_new_transaction', { p_identifier: identifier, p_type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'banknote' : 'transaction', p_tx_hash: identifier, p_sender: confirmation.senderAddress, p_receiver: confirmation.receiverAddress, p_amount: confirmation.amount, p_details: confirmation });
-      if (rpcError) throw rpcError;
-
-      return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } });
+    const { action, ...payload } = requestData;
+    if (!action) {
+      throw new Error("Request must include an 'action' field.");
+    }
+    
+    const handler = handlers[action];
+    if (!handler) {
+      throw new Error(`Invalid action: '${action}'.`);
     }
 
-    if (action === 'get_transactions') {
-        const { address } = payload;
-        const [incomingRes, outgoingRes] = await Promise.all([ supabaseClient.from('transactions').select('details').eq('receiver_address', address), supabaseClient.from('transactions').select('details').eq('sender_address', address) ]);
-        if (incomingRes.error) throw incomingRes.error;
-        if (outgoingRes.error) throw outgoingRes.error;
-        const incomingTxs = incomingRes.data.map(tx => tx.details);
-        const outgoingTxs = outgoingRes.data.map(tx => tx.details);
-        return new Response(JSON.stringify({ incomingTxs, outgoingTxs }), { headers: { "Content-Type": "application/json" } });
-    }
+    // Initialize the Supabase client for this specific request
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    );
+    
+    const context = { supabaseClient };
+    const result = await handler(payload, context);
 
-    throw new Error("Invalid action.");
+    return new Response(JSON.stringify(result), {
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      status: 200,
+    });
+
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { "Content-Type": "application/json" } });
+    console.error('API Error:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      status: 400, // Bad Request is a good default for client-side errors
+    });
   }
 });
