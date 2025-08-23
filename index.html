@@ -294,10 +294,14 @@
             getStandardizedConfirmationMessage: (confirmation) => { const amount = Number(confirmation.amount).toFixed(state.config.PRECISION); return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|'); },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + state.config.PAYMENT_REQUEST_EXPIRY }; },
             processPayment: async (request) => {
-                const isTreasurySend = state.wallet.address === state.config.TREASURY_ADDRESS;
-                const fee = isTreasurySend ? 0 : request.amount * state.config.FEE_PERCENTAGE;
+                // Validate configuration is loaded
+                if (!state.config || !state.config.TREASURY_ADDRESS || !state.config.FEE_PERCENTAGE) {
+                    throw new Error("CRITICAL: Treasury address is not configured. Fee cannot be processed.");
+                }
+                
+                const fee = request.amount * state.config.FEE_PERCENTAGE;
                 const totalDebit = request.amount + fee;
-
+                
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
                 if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
@@ -307,6 +311,7 @@
                     throw new Error("CRITICAL: Payment cannot be completed - failed to update public ledger.");
                 }
                 
+                // Main payment confirmation
                 const confirmation = {
                     type: 'AURA_PAYMENT_CONFIRMATION',
                     senderAddress: state.wallet.address,
@@ -319,7 +324,8 @@
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
                 
-                WalletLogic.addToChain({
+                // Create local transaction record
+                const sendTx = WalletLogic.addToChain({
                     type: 'send',
                     amount: request.amount,
                     fee: fee,
@@ -329,67 +335,89 @@
                     linkedTxHash: request.linkedTxHash
                 });
                 
-                if (!isTreasurySend) {
-                    // FIX: Verify that the treasury address is configured before sending a fee
-                    if (!state.config.TREASURY_ADDRESS) {
-                        throw new Error("CRITICAL: Treasury address is not configured. Fee cannot be processed.");
-                    }
-                    const feeTx = WalletLogic.addToChain({
-                        type: 'send', amount: fee, fee: 0, from: state.wallet.address,
-                        to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee'
-                    });
-                    const feeConfirmation = {
-                        type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address,
-                        receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash
-                    };
-                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                    feeConfirmation.signedMessage = feeMessageToSign;
-                    await SupabaseLedger.pinConfirmation(feeConfirmation);
-                }
+                // Create separate fee transaction with its own hash
+                const feeTx = WalletLogic.addToChain({
+                    type: 'send',
+                    amount: fee,
+                    fee: 0,
+                    from: state.wallet.address,
+                    to: state.config.TREASURY_ADDRESS,
+                    status: 'completed',
+                    purpose: 'fee'
+                });
+                
+                // Fee confirmation using the actual fee transaction hash
+                const feeConfirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: state.config.TREASURY_ADDRESS,
+                    amount: fee,
+                    linkedTxHash: feeTx.hash  // Use the actual fee transaction hash
+                };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
+                await SupabaseLedger.pinConfirmation(feeConfirmation);
                 
                 CacheManager.invalidate(state.wallet.address);
                 return true;
             },
             directSend: async (recipientAddress, amount) => {
-                const isTreasurySend = state.wallet.address === state.config.TREASURY_ADDRESS;
-                const fee = isTreasurySend ? 0 : amount * state.config.FEE_PERCENTAGE;
+                // Validate configuration is loaded
+                if (!state.config || !state.config.TREASURY_ADDRESS || !state.config.FEE_PERCENTAGE) {
+                    throw new Error("CRITICAL: Treasury address is not configured. Fee cannot be processed.");
+                }
+                
+                const fee = amount * state.config.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
                 
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
                 
+                // Main payment transaction
                 const sendTx = WalletLogic.addToChain({
-                    type: 'send', amount: amount, fee: fee, from: state.wallet.address,
-                    to: recipientAddress, status: 'completed'
+                    type: 'send',
+                    amount: amount,
+                    fee: fee,
+                    from: state.wallet.address,
+                    to: recipientAddress,
+                    status: 'completed'
                 });
                 
                 const confirmation = {
-                    type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address,
-                    receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: recipientAddress,
+                    amount: amount,
+                    linkedTxHash: sendTx.hash
                 };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
                 
-                if (!isTreasurySend) {
-                    // FIX: Verify that the treasury address is configured before sending a fee
-                    if (!state.config.TREASURY_ADDRESS) {
-                        throw new Error("CRITICAL: Treasury address is not configured. Fee cannot be processed.");
-                    }
-                    const feeTx = WalletLogic.addToChain({
-                        type: 'send', amount: fee, fee: 0, from: state.wallet.address,
-                        to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee'
-                    });
-                    const feeConfirmation = {
-                        type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address,
-                        receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash
-                    };
-                    const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                    feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                    feeConfirmation.signedMessage = feeMessageToSign;
-                    await SupabaseLedger.pinConfirmation(feeConfirmation);
-                }
+                // Create separate fee transaction
+                const feeTx = WalletLogic.addToChain({
+                    type: 'send',
+                    amount: fee,
+                    fee: 0,
+                    from: state.wallet.address,
+                    to: state.config.TREASURY_ADDRESS,
+                    status: 'completed',
+                    purpose: 'fee'
+                });
+                
+                // Fee confirmation
+                const feeConfirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: state.config.TREASURY_ADDRESS,
+                    amount: fee,
+                    linkedTxHash: feeTx.hash  // Use the actual fee transaction hash
+                };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
+                await SupabaseLedger.pinConfirmation(feeConfirmation);
                 
                 CacheManager.invalidate(state.wallet.address);
                 return true;
