@@ -268,77 +268,6 @@
                 }
             };
         })();
-        
-        // ===================================================================================
-        // QUANTUM-RESISTANT ENCRYPTION MODULE (PBKDF2 REMOVED)
-        // ===================================================================================
-        const QuantumCrypto = (() => {
-            return {
-                encrypt: async (privateKey, password) => {
-                    const iv = CryptoJS.lib.WordArray.random(12);   // 96-bit IV for GCM
-
-                    // 1. Derive encryption key directly from a hash of the password (NO PBKDF2)
-                    // WARNING: This is less secure against brute-force attacks.
-                    const key = CryptoJS.SHA256(password);
-
-                    // 2. Encrypt the private key using AES-256-GCM
-                    const encrypted = CryptoJS.AES.encrypt(privateKey, key, {
-                        iv: iv,
-                        mode: CryptoJS.mode.GCM,
-                        padding: CryptoJS.pad.NoPadding
-                    });
-
-                    // 3. Construct the encrypted JSON object
-                    const encryptedJson = {
-                        ciphertext: CryptoJS.enc.Base64.stringify(encrypted.ciphertext),
-                        iv: CryptoJS.enc.Base64.stringify(iv),
-                        tag: CryptoJS.enc.Base64.stringify(encrypted.mac), // GCM Authentication Tag
-                        kdf: 'none' // Indicate no KDF was used
-                    };
-
-                    return JSON.stringify(encryptedJson);
-                },
-
-                decrypt: async (encryptedJsonString, password) => {
-                    try {
-                        const encryptedData = JSON.parse(encryptedJsonString);
-                        
-                        const iv = CryptoJS.enc.Base64.parse(encryptedData.iv);
-                        const ciphertext = CryptoJS.enc.Base64.parse(encryptedData.ciphertext);
-                        const tag = CryptoJS.enc.Base64.parse(encryptedData.tag);
-
-                        // 1. Re-derive the same key directly from the password's hash (NO PBKDF2)
-                        const key = CryptoJS.SHA256(password);
-                        
-                        // 2. Prepare the ciphertext object for decryption
-                        const cipherParams = CryptoJS.lib.CipherParams.create({
-                            ciphertext: ciphertext,
-                            mac: tag // Pass the authentication tag
-                        });
-
-                        // 3. Decrypt using AES-GCM
-                        const decrypted = CryptoJS.AES.decrypt(cipherParams, key, {
-                            iv: iv,
-                            mode: CryptoJS.mode.GCM,
-                            padding: CryptoJS.pad.NoPadding
-                        });
-
-                        const privateKey = decrypted.toString(CryptoJS.enc.Utf8);
-
-                        if (!privateKey) {
-                            throw new Error("Decryption failed: empty result.");
-                        }
-
-                        // Ethers expects the private key to start with '0x'
-                        return privateKey.startsWith('0x') ? privateKey : '0x' + privateKey;
-
-                    } catch (e) {
-                        console.error("Decryption failed:", e);
-                        return null; // Return null on any error (wrong password, tampered data)
-                    }
-                }
-            };
-        })();
 
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
@@ -347,54 +276,9 @@
         let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, currentBalance: 0, transactionIndex: new Map(), config: null };
         
         const WalletLogic = {
-            createWallet: async (password) => {
-                const wallet = ethers.Wallet.createRandom();
-                const mnemonic = wallet.mnemonic.phrase;
-                const encryptedJson = await QuantumCrypto.encrypt(wallet.privateKey, password);
-                const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
-                localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                state.userStore = userStore;
-                state.wallet = wallet;
-                return { mnemonic };
-            },
-            restoreWallet: async (mnemonic, password) => {
-                try {
-                    const wallet = ethers.Wallet.fromPhrase(mnemonic);
-                    const encryptedJson = await QuantumCrypto.encrypt(wallet.privateKey, password);
-                    const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
-                    localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                    state.userStore = userStore;
-                    state.wallet = wallet;
-                    return true;
-                } catch (e) {
-                    console.error("Restore failed:", e);
-                    return false;
-                }
-            },
-            login: async (password) => {
-                const userStoreJson = localStorage.getItem('aura_user_store');
-                if (!userStoreJson) return null;
-                try {
-                    const reloadedUserStore = JSON.parse(userStoreJson);
-                    const privateKey = await QuantumCrypto.decrypt(reloadedUserStore.encryptedJson, password);
-                    if (!privateKey) {
-                        throw new Error("Invalid password or corrupted data.");
-                    }
-                    const wallet = new ethers.Wallet(privateKey);
-                    if (wallet.address !== reloadedUserStore.address) {
-                         throw new Error("Address mismatch after decryption!");
-                    }
-                    state.userStore = reloadedUserStore;
-                    state.wallet = wallet;
-                    state.failedLoginAttempts = 0;
-                    WalletLogic.buildTransactionIndex();
-                    return true;
-                } catch (e) {
-                    console.error("Login failed:", e);
-                    state.failedLoginAttempts++;
-                    return false;
-                }
-            },
+            createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
+            restoreWallet: async (mnemonic, password) => { try { const wallet = ethers.Wallet.fromPhrase(mnemonic); const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false; } },
+            login: async (password) => { const userStoreJson = localStorage.getItem('aura_user_store'); if (!userStoreJson) return null; try { const reloadedUserStore = JSON.parse(userStoreJson); const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password); state.userStore = reloadedUserStore; state.wallet = wallet; state.failedLoginAttempts = 0; WalletLogic.buildTransactionIndex(); return true; } catch (e) { console.error("Login failed (likely incorrect password):", e); state.failedLoginAttempts++; return false; } },
             logout: () => { BackgroundSync.stop(); state.wallet = null; state.userStore = null; state.transactionIndex.clear(); },
             buildTransactionIndex: () => { state.transactionIndex.clear(); if (!state.userStore || !state.userStore.chain) return; state.userStore.chain.forEach(tx => { const txKey = tx.linkedTxHash || tx.hash; state.transactionIndex.set(txKey, tx); }); },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
@@ -441,7 +325,7 @@
                 await SupabaseLedger.pinConfirmation(confirmation);
                 
                 // Create local transaction record
-                WalletLogic.addToChain({
+                const sendTx = WalletLogic.addToChain({
                     type: 'send',
                     amount: request.amount,
                     fee: fee,
@@ -627,7 +511,7 @@
             document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
             document.getElementById('back-from-qr-display').addEventListener('click', () => { showView('wallet-view'); });
-            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; setLoader('create-loader', true); statusEl.innerHTML = '<span class="info">Encrypting new wallet...</span>'; await new Promise(r => setTimeout(r, 50)); const { mnemonic } = await WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); });
+            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; setLoader('create-loader', true); setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); }, 50); });
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { await showView('wallet-view'); document.getElementById('seed-phrase-display').textContent = ''; resetViewInputs('create-wallet-view'); });
             document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; } if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { await showView('wallet-view'); } else { statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>'; } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
             document.getElementById('login-button').addEventListener('click', async () => { if (state.isLockedOut) return; const button = document.getElementById('login-button'), statusEl = document.getElementById('login-status'); const pass = document.getElementById('login-password-input').value.trim(); button.disabled = true; setLoader('login-loader', true); statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>'; const success = await WalletLogic.login(pass); if (success) { await showView('wallet-view'); resetViewInputs('login-view'); } else { if (state.failedLoginAttempts >= state.config.MAX_LOGIN_ATTEMPTS) { state.isLockedOut = true; statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`; setTimeout(() => { state.isLockedOut = false; state.failedLoginAttempts = 0; statusEl.textContent = ''; button.disabled = false; }, state.config.LOGIN_LOCKOUT_PERIOD); } else { statusEl.innerHTML = `<span class="error">Invalid password. (${state.config.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`; } } if (!state.isLockedOut) button.disabled = false; setLoader('login-loader', false); });
