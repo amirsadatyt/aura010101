@@ -283,39 +283,76 @@
             buildTransactionIndex: () => { state.transactionIndex.clear(); if (!state.userStore || !state.userStore.chain) return; state.userStore.chain.forEach(tx => { const txKey = tx.linkedTxHash || tx.hash; state.transactionIndex.set(txKey, tx); }); },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp || Date.now() }; const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(state.config.PRECISION), state.config.PRECISION); const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(state.config.PRECISION), state.config.PRECISION); newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] ); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); const txKey = newTx.linkedTxHash || newTx.hash; state.transactionIndex.set(txKey, newTx); return newTx; },
-            calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => { const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const finalBalance = incomingTotal - outgoingTotal; state.currentBalance = finalBalance; return finalBalance; },
+            calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => {
+                const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+                const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+                
+                // The balance is simply incoming minus outgoing
+                // Fees are already accounted for as separate outgoing transactions
+                const finalBalance = incomingTotal - outgoingTotal;
+                state.currentBalance = finalBalance;
+                return finalBalance;
+            },
             getServerAuthoritativeBalance: async () => { if (!state.userStore) return 0.0; const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.wallet.address), SupabaseLedger.findOutgoingTxs(state.wallet.address) ]); return WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); },
             getStandardizedConfirmationMessage: (confirmation) => { const amount = Number(confirmation.amount).toFixed(state.config.PRECISION); return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|'); },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + state.config.PAYMENT_REQUEST_EXPIRY }; },
             processPayment: async (request) => {
                 const fee = request.amount * state.config.FEE_PERCENTAGE;
                 const totalDebit = request.amount + fee;
+                
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
                 if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
                 
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
-                
+                // Record the original payment request as spent
                 const success = await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
-                if (!success) { state.userStore.chain.pop(); WalletLogic.buildTransactionIndex(); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); throw new Error("CRITICAL: Payment sent but failed to update public ledger."); }
+                if (!success) {
+                    throw new Error("CRITICAL: Payment cannot be completed - failed to update public ledger.");
+                }
                 
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
+                // Create and record the main payment
+                const confirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: request.receiverAddress,
+                    amount: request.amount,
+                    linkedTxHash: request.linkedTxHash
+                };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
                 
-                // FIX: Create a proper fee transaction entry
-                const feeTx = WalletLogic.addToChain({ 
-                    type: 'fee', 
-                    amount: fee, 
-                    from: state.wallet.address, 
-                    to: state.config.TREASURY_ADDRESS, 
-                    status: 'completed' 
+                // Create local transaction record for the payment
+                const sendTx = WalletLogic.addToChain({
+                    type: 'send',
+                    amount: request.amount,
+                    fee: fee,
+                    from: state.wallet.address,
+                    to: request.receiverAddress,
+                    status: 'completed',
+                    linkedTxHash: request.linkedTxHash
                 });
                 
-                // Use the fee transaction's hash for the confirmation
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
+                // Create and record the fee payment as a separate transaction
+                const feeTx = WalletLogic.addToChain({
+                    type: 'send',  // Keep it as 'send' type for consistency
+                    amount: fee,
+                    fee: 0,  // No fee on the fee transaction itself
+                    from: state.wallet.address,
+                    to: state.config.TREASURY_ADDRESS,
+                    status: 'completed',
+                    purpose: 'fee'  // Add purpose to identify it as a fee
+                });
+                
+                // Record the fee payment on the ledger
+                const feeConfirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: state.config.TREASURY_ADDRESS,
+                    amount: fee,
+                    linkedTxHash: feeTx.hash
+                };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
@@ -327,26 +364,49 @@
             directSend: async (recipientAddress, amount) => {
                 const fee = amount * state.config.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
+                
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
                 
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
+                // Create and record the main payment
+                const sendTx = WalletLogic.addToChain({
+                    type: 'send',
+                    amount: amount,
+                    fee: fee,
+                    from: state.wallet.address,
+                    to: recipientAddress,
+                    status: 'completed'
+                });
+                
+                const confirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: recipientAddress,
+                    amount: amount,
+                    linkedTxHash: sendTx.hash
+                };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
                 
-                // FIX: Create a proper fee transaction entry
-                const feeTx = WalletLogic.addToChain({ 
-                    type: 'fee', 
-                    amount: fee, 
-                    from: state.wallet.address, 
-                    to: state.config.TREASURY_ADDRESS, 
-                    status: 'completed' 
+                // Create and record the fee payment as a separate transaction
+                const feeTx = WalletLogic.addToChain({
+                    type: 'send',
+                    amount: fee,
+                    fee: 0,
+                    from: state.wallet.address,
+                    to: state.config.TREASURY_ADDRESS,
+                    status: 'completed',
+                    purpose: 'fee'
                 });
                 
-                // Use the fee transaction's hash for the confirmation
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
+                const feeConfirmation = {
+                    type: 'AURA_PAYMENT_CONFIRMATION',
+                    senderAddress: state.wallet.address,
+                    receiverAddress: state.config.TREASURY_ADDRESS,
+                    amount: fee,
+                    linkedTxHash: feeTx.hash
+                };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
