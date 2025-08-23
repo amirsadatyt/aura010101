@@ -1,191 +1,304 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { ethers } from 'https://esm.sh/ethers@6.13.1';
-import pako from 'https://esm.sh/pako@2.1.0';
-import { shake256 } from 'https://esm.sh/js-sha3@0.9.3';
-import pqcSignFalcon1024 from 'https://cdn.jsdelivr.net/npm/@dashlane/pqc-sign-falcon-1024-browser@1.0.0/dist/pqc-sign-falcon-1024.min.js';
+import { ethers } from 'https://esm.sh/ethers@6';
 
-// CORS headers
+// CORS headers to allow requests from any origin
 const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
-// --- SERVER-SIDE CONSTANTS AND LOGIC ---
-const AppConstants = {
-    TREASURY_ADDRESS: '0xF848aC6b7E16CF32A972ECE1529c73313375c6d5',
-    FEE_PERCENTAGE: 0.009,
-    PRECISION: 8,
+// Verifies that the sender's address matches the address recovered from the signature
+const verifySignature = (signedMessage, signature, expectedAddress) => {
+  try {
+    const signerAddress = ethers.verifyMessage(signedMessage, signature);
+    if (signerAddress !== expectedAddress) {
+      throw new Error(`Signature verification failed: Expected sender ${expectedAddress} but got signer ${signerAddress}.`);
+    }
+    return true;
+  } catch (e) {
+    throw new Error(`Invalid signature format or data. ${e.message}`);
+  }
 };
-
-const ServerUtils = {
-    base64ToUint8Array: s => { const bs = atob(s); const b = new Uint8Array(bs.length); for (let i = 0; i < bs.length; i++) b[i] = bs.charCodeAt(i); return b; },
-    arrayBufferToBase64: b => btoa(String.fromCharCode(...new Uint8Array(b))),
-    hexToUint8Array: h => new Uint8Array(h.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
-    hashMessageForSigning: message => ServerUtils.hexToUint8Array(shake256(message, 1536)),
-};
-
-const ServerBanknote = {
-    parsePayload: b64 => {
-        const jsonString = pako.inflate(ServerUtils.base64ToUint8Array(b64), { to: 'string' });
-        const p = JSON.parse(jsonString);
-        return { amount: p.a, serial: p.s, timestamp: p.t, ephemeralPublicKey: ServerUtils.base64ToUint8Array(p.epk), signatureOne: ServerUtils.base64ToUint8Array(p.s1), signatureTwo: ServerUtils.base64ToUint8Array(p.s2) };
-    },
-    getStandardizedDataForSigning: d => JSON.stringify({ timestamp: d.timestamp, serial: d.serial }, ['timestamp', 'serial']),
-    getStandardizedDataForMasterSig: d => {
-        const temp = { ephemeralPublicKey: ServerUtils.arrayBufferToBase64(d.ephemeralPublicKey), signatureOne: ServerUtils.arrayBufferToBase64(d.signatureOne) };
-        return JSON.stringify(temp, Object.keys(temp).sort());
-    },
-};
-// --- END SERVER-SIDE LOGIC ---
 
 Deno.serve(async (req) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
-    }
+  // Handle preflight CORS requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
-    try {
-        const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
-        const { action, payload } = await req.json();
-        let data: any = null;
+  try {
+    // Initialize Supabase client with the user's authorization header
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! }
+        }
+      }
+    );
 
-        switch (action) {
-            // WALLET ACTIONS
-            case 'create_wallet': {
-                const { password } = payload;
-                const wallet = ethers.Wallet.createRandom();
-                const encryptedJson = await wallet.encrypt(password);
-                const { error } = await supabase.from('wallets').insert({ address: wallet.address, encrypted_json: encryptedJson });
-                if (error) throw new Error(`Could not save wallet: ${error.message}`);
-                data = { address: wallet.address, mnemonic: wallet.mnemonic.phrase };
-                break;
-            }
+    const { action, payload } = await req.json();
+    let data = null;
 
-            case 'login': {
-                const { address, password } = payload;
-                const { data: walletData, error } = await supabase.from('wallets').select('encrypted_json').eq('address', address).single();
-                if (error || !walletData) throw new Error("Wallet not found.");
-                try {
-                    await ethers.Wallet.fromEncryptedJson(JSON.stringify(walletData.encrypted_json), password);
-                    data = { success: true, address };
-                } catch (e) {
-                    throw new Error("Invalid password.");
-                }
-                break;
-            }
+    switch (action) {
+      case 'getAppConfig': {
+        // FIX: Configuration is now embedded in the code.
+        // The database is no longer queried for these values.
+        const embeddedConfig = {
+          TREASURY_ADDRESS: "0xF848aC6b7E16CF32A972ECE1529c73313375c6d5", // <-- REPLACE THIS
+          FEE_PERCENTAGE: 0.009,                         // <-- REPLACE THIS if needed
+          PRECISION: 8
+        };
+        
+        data = embeddedConfig;
+        break;
+      }
 
-            // TRANSACTION ACTIONS
-            case 'get_balance_and_txs': {
-                const { address } = payload;
-                const [incomingRes, outgoingRes] = await Promise.all([
-                    supabase.from('confirmations').select('confirmation_data').eq('receiver_address', address),
-                    supabase.from('confirmations').select('confirmation_data').eq('sender_address', address)
-                ]);
-                if (incomingRes.error) throw incomingRes.error;
-                if (outgoingRes.error) throw outgoingRes.error;
+      case 'getMasterKey': {
+        const { data: keyData, error } = await supabaseClient
+          .from('master_keys')
+          .select('public_key')
+          .eq('key_id', 'master_public_key')
+          .single();
+        
+        if (error) throw error;
+        data = keyData;
+        break;
+      }
 
-                const incomingTxs = incomingRes.data.map(tx => tx.confirmation_data);
-                const outgoingTxs = outgoingRes.data.map(tx => tx.confirmation_data);
-
-                const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-                const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0) + (Number(tx.fee) || 0), 0);
-                
-                const balance = incomingTotal - outgoingTotal;
-                const allTxs = [...incomingTxs.map(tx => ({...tx, type: 'receive'})), ...outgoingTxs.map(tx => ({...tx, type: 'send'}))].sort((a,b) => b.timestamp - a.timestamp);
-
-                data = { balance: balance.toFixed(2), transactions: allTxs };
-                break;
-            }
-
-            case 'send_funds': {
-                const { senderAddress, password, recipientAddress, amount } = payload;
-                const { data: walletData, error: walletError } = await supabase.from('wallets').select('encrypted_json').eq('address', senderAddress).single();
-                if (walletError || !walletData) throw new Error("Sender wallet not found.");
-
-                let senderWallet;
-                try {
-                    senderWallet = await ethers.Wallet.fromEncryptedJson(JSON.stringify(walletData.encrypted_json), password);
-                } catch(e) { throw new Error("Invalid password for sender wallet."); }
-
-                const fee = amount * AppConstants.FEE_PERCENTAGE;
-                const timestamp = Date.now();
-
-                const createConfirmation = async (receiver, txAmount, isFee = false) => {
-                    const linkedTxHash = ethers.id(`${senderAddress}${recipientAddress}${amount}${timestamp}`);
-                    const conf = {
-                        senderAddress,
-                        receiverAddress: receiver,
-                        amount: txAmount,
-                        fee: isFee ? 0 : fee,
-                        linkedTxHash: isFee ? `${linkedTxHash}-fee` : linkedTxHash,
-                        timestamp,
-                    };
-                    const message = [conf.senderAddress, conf.receiverAddress, conf.amount.toFixed(AppConstants.PRECISION), conf.linkedTxHash].join('|');
-                    return { ...conf, signature: await senderWallet.signMessage(message) };
-                };
-                
-                const mainConfirmation = await createConfirmation(recipientAddress, amount);
-                const feeConfirmation = await createConfirmation(AppConstants.TREASURY_ADDRESS, fee, true);
-
-                const { error: dbError } = await supabase.from('confirmations').insert([
-                    { linked_tx_hash: mainConfirmation.linkedTxHash, sender_address: senderAddress, receiver_address: recipientAddress, confirmation_data: mainConfirmation },
-                    { linked_tx_hash: feeConfirmation.linkedTxHash, sender_address: senderAddress, receiver_address: AppConstants.TREASURY_ADDRESS, confirmation_data: feeConfirmation }
-                ]);
-                if (dbError) throw dbError;
-
-                data = { success: true, message: `Payment of $${amount.toFixed(2)} sent.` };
-                break;
-            }
-
-            // BANKNOTE ACTIONS
-            case 'validate_banknote': {
-                const { banknotePayload } = payload;
-                const falconApi = await pqcSignFalcon1024();
-                
-                const banknoteData = ServerBanknote.parsePayload(banknotePayload);
-                if (!banknoteData || !banknoteData.serial) throw new Error("Invalid banknote data.");
-
-                const { data: spentData, error: spentError } = await supabase.from('spent_identifiers').select('identifier').eq('identifier', banknoteData.serial).maybeSingle();
-                if (spentError) throw spentError;
-                if (spentData) throw new Error("This banknote has already been spent.");
-
-                const { data: keyData, error: keyError } = await supabase.from('master_keys').select('public_key').eq('key_id', 'master_public_key').single();
-                if (keyError || !keyData) throw new Error("Master public key not found.");
-                
-                const masterPublicKey = ServerUtils.base64ToUint8Array(keyData.public_key);
-                
-                const dataForSigOne = ServerBanknote.getStandardizedDataForSigning(banknoteData);
-                if (!await falconApi.verify(banknoteData.signatureOne, ServerUtils.hashMessageForSigning(dataForSigOne), banknoteData.ephemeralPublicKey)) throw new Error("Signature validation failed (internal).");
-                
-                const dataForSigTwo = ServerBanknote.getStandardizedDataForMasterSig(banknoteData);
-                if (!await falconApi.verify(banknoteData.signatureTwo, ServerUtils.hashMessageForSigning(dataForSigTwo), masterPublicKey)) throw new Error("Signature validation failed (issuer).");
-                
-                data = { success: true, amount: banknoteData.amount, serial: banknoteData.serial };
-                break;
-            }
-
-            case 'charge_wallet': {
-                const { receiverAddress, amount, serial } = payload;
-                const { data: spentData, error: spentError } = await supabase.from('spent_identifiers').select('identifier').eq('identifier', serial).maybeSingle();
-                if (spentError) throw spentError;
-                if (spentData) throw new Error("Banknote has already been claimed.");
-
-                const { error: insertError } = await supabase.from('spent_identifiers').insert({ identifier: serial });
-                if (insertError) throw new Error("Could not record spent banknote.");
-
-                const chargeConfirmation = { senderAddress: 'BANKNOTE_ISSUER', receiverAddress, amount, fee: 0, linkedTxHash: `charge-${serial}`, timestamp: Date.now() };
-                const { error: txError } = await supabase.from('confirmations').insert({ linked_tx_hash: chargeConfirmation.linkedTxHash, sender_address: 'BANKNOTE_ISSUER', receiver_address: receiverAddress, confirmation_data: chargeConfirmation });
-                if (txError) throw txError;
-                
-                data = { success: true, message: `$${amount.toFixed(2)} added successfully.` };
-                break;
-            }
-
-            default:
-                throw new Error('Invalid action specified.');
+      case 'recordSpentIdentifier': {
+        const { identifier, type } = payload;
+        
+        const { data: existingData } = await supabaseClient
+          .from('spent_identifiers')
+          .select('identifier')
+          .eq('identifier', identifier)
+          .maybeSingle();
+        
+        if (existingData) {
+          throw new Error(`${type} with identifier ${identifier} has already been spent.`);
         }
 
-        return new Response(JSON.stringify({ data }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
-    } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
+        const { error } = await supabaseClient
+          .from('spent_identifiers')
+          .insert({ identifier, type });
+        
+        if (error) throw error;
+        data = { success: true };
+        break;
+      }
+
+      case 'hasBeenSpent': {
+        const { identifier } = payload;
+        
+        const { data: spentData, error } = await supabaseClient
+          .from('spent_identifiers')
+          .select('identifier')
+          .eq('identifier', identifier)
+          .maybeSingle();
+        
+        if (error) throw error;
+        data = { spent: !!spentData };
+        break;
+      }
+
+      case 'pinConfirmation': {
+        const { confirmation } = payload;
+
+        if (!confirmation.linkedTxHash || !confirmation.senderAddress || !confirmation.receiverAddress || confirmation.amount === undefined) {
+          throw new Error('Missing required confirmation fields');
+        }
+
+        if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
+          if (!confirmation.signedMessage || !confirmation.signature) {
+            throw new Error('Missing signature data for user transaction');
+          }
+          
+          verifySignature(confirmation.signedMessage, confirmation.signature, confirmation.senderAddress);
+        }
+
+        const { data: existingConfirmation } = await supabaseClient
+          .from('confirmations')
+          .select('id')
+          .eq('linked_tx_hash', confirmation.linkedTxHash)
+          .eq('sender_address', confirmation.senderAddress)
+          .eq('receiver_address', confirmation.receiverAddress)
+          .maybeSingle();
+
+        if (existingConfirmation) {
+          throw new Error('Confirmation already exists for this transaction');
+        }
+
+        const { error } = await supabaseClient
+          .from('confirmations')
+          .insert({
+            linked_tx_hash: confirmation.linkedTxHash,
+            sender_address: confirmation.senderAddress,
+            receiver_address: confirmation.receiverAddress,
+            amount: confirmation.amount,
+            confirmation_data: confirmation
+          });
+        
+        if (error) throw error;
+        data = { success: true };
+        break;
+      }
+
+      case 'findConfirmation': {
+        const { txHash } = payload;
+        
+        if (!txHash) {
+          throw new Error('Transaction hash is required');
+        }
+
+        const { data: findData, error } = await supabaseClient
+          .from('confirmations')
+          .select('confirmation_data, created_at')
+          .eq('linked_tx_hash', txHash)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (error && error.code !== 'PGRST116') throw error;
+        
+        data = findData ? {
+          ...findData.confirmation_data,
+          timestamp: new Date(findData.created_at).getTime()
+        } : null;
+        break;
+      }
+
+      case 'findIncomingTxs': {
+        const { receiverAddress } = payload;
+        
+        if (!receiverAddress || !ethers.isAddress(receiverAddress)) {
+          throw new Error('Valid receiver address is required');
+        }
+
+        const { data: incomingData, error } = await supabaseClient
+          .from('confirmations')
+          .select('confirmation_data, created_at, amount')
+          .eq('receiver_address', receiverAddress)
+          .order('created_at', { ascending: false })
+          .limit(1000);
+        
+        if (error) throw error;
+        
+        data = incomingData.map(tx => ({
+          ...tx.confirmation_data,
+          amount: parseFloat(tx.amount),
+          timestamp: new Date(tx.created_at).getTime()
+        }));
+        break;
+      }
+
+      case 'findOutgoingTxs': {
+        const { senderAddress } = payload;
+        
+        if (!senderAddress || !ethers.isAddress(senderAddress)) {
+          throw new Error('Valid sender address is required');
+        }
+
+        const { data: outgoingData, error } = await supabaseClient
+          .from('confirmations')
+          .select('confirmation_data, created_at, amount')
+          .eq('sender_address', senderAddress)
+          .order('created_at', { ascending: false })
+          .limit(1000);
+        
+        if (error) throw error;
+        
+        data = outgoingData.map(tx => ({
+          ...tx.confirmation_data,
+          amount: parseFloat(tx.amount),
+          timestamp: new Date(tx.created_at).getTime()
+        }));
+        break;
+      }
+
+      case 'getTreasuryBalance': {
+        // This endpoint will now fail unless you also hardcode the address here.
+        // It's better to fetch it from the embedded config for consistency.
+        const { data: configData } = await this.apiCall('getAppConfig');
+        const treasuryAddress = configData.TREASURY_ADDRESS;
+
+        if (!treasuryAddress) {
+          throw new Error('Treasury address not configured');
+        }
+
+        const { data: incomingData, error: incomingError } = await supabaseClient
+          .from('confirmations')
+          .select('amount')
+          .eq('receiver_address', treasuryAddress);
+
+        if (incomingError) throw incomingError;
+
+        const { data: outgoingData, error: outgoingError } = await supabaseClient
+          .from('confirmations')
+          .select('amount')
+          .eq('sender_address', treasuryAddress);
+
+        if (outgoingError) throw outgoingError;
+
+        const totalIncoming = incomingData.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+        const totalOutgoing = outgoingData.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+        
+        data = {
+          treasuryAddress,
+          totalIncoming,
+          totalOutgoing,
+          balance: totalIncoming - totalOutgoing,
+          transactionCount: incomingData.length + outgoingData.length
+        };
+        break;
+      }
+
+      case 'getTransactionStats': {
+        const { data: totalTxs, error: txError } = await supabaseClient
+          .from('confirmations')
+          .select('amount, sender_address', { count: 'exact' });
+
+        if (txError) throw txError;
+
+        const totalVolume = totalTxs.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
+        const feeTransactions = totalTxs.filter(tx => tx.sender_address !== 'BANKNOTE_ISSUER');
+        
+        const { data: configData } = await this.apiCall('getAppConfig');
+        const treasuryAddress = configData.TREASURY_ADDRESS || 'Unknown';
+
+        data = {
+          totalTransactions: totalTxs.length,
+          totalVolume,
+          feeTransactions: feeTransactions.length,
+          treasuryAddress,
+          averageTransactionAmount: totalTxs.length > 0 ? totalVolume / totalTxs.length : 0
+        };
+        break;
+      }
+
+      default:
+        throw new Error(`Invalid action specified: ${action}`);
     }
+
+    // Return successful response
+    return new Response(JSON.stringify({ data }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200
+    });
+
+  } catch (error) {
+    console.error('Edge function error:', error);
+    
+    const statusCode = error.message.includes('already been spent') || 
+                      error.message.includes('already exists') ? 409 : 400;
+
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: statusCode
+    });
+  }
 });
