@@ -157,11 +157,11 @@
         </div>
       
  
-               <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
+       <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
     </div></div>
     
     <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><div><h3>Step 1: Bank Public Key</h3><p>The bank's public key is pre-loaded for verification.</p><div id="key-status" class="status-box"></div></div><div><h3>Step 2: Scan Digital Banknote</h3><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*" disabled><div id="validation-status" class="status-box"></div></div><div id="charge-confirmation" style="display:none;
-        margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
+    margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     
     <div id="receive-view" class="view"><div class="card">
         <h2>Receive Funds</h2>
@@ -209,7 +209,7 @@
         <h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2>
         <p>To:</p>
   
-               <p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px;
+       <p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px;
         border-radius: 4px;"></p>
         <button id="confirm-payment-button">Confirm and Pay</button>
         <div id="send-confirm-status" class="status-box"></div>
@@ -223,7 +223,7 @@
         <div id="waiting-on-payment" style="display: none;">
             <div id="payment-timer"></div>
   
-                   <div class="loader"></div>
+           <div class="loader"></div>
             <p id="final-status-message" class="status-box" style="font-size:18px;"></p>
         </div>
         <button class="back-button" id="back-from-qr-display">Back to Wallet</button>
@@ -234,7 +234,7 @@
             <h2>Transaction Details</h2>
             <div id="modal-details-content">
        
-                         <p><strong>Status:</strong> <span id="detail-status"></span></p>
+                 <p><strong>Status:</strong> <span id="detail-status"></span></p>
                 <p><strong>Type:</strong> <span id="detail-type"></span></p>
                 <p><strong>Date & Time:</strong> <span id="detail-datetime"></span></p>
                 <p><strong>Amount:</strong> <span id="detail-amount"></span></p>
@@ -266,7 +266,6 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhaGNmb2hnY2FhcHZnZHppcnN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjI5MjEsImV4cCI6MjA3MTM5ODkyMX0.6-Ug9nivwEd-e92o9o1_tKXUn_iRaTOzOMgW-x3qDL8';
         // <-- REPLACE WITH YOUR SUPABASE ANON KEY
         const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/api`;
-        
         // CORE BANKNOTE & LEDGER LOGIC
         const CoreLogic = (() => { const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 }; const Utils = { arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))), base64ToUint8Array: (s) => { const bs=atob(s); const b=new Uint8Array(bs.length); for(let i=0;i<bs.length;i++)b[i]=bs.charCodeAt(i); return b; }, hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))), preprocessImage: (d) => new Promise((res, rej) => { const i=new Image(); i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.filter='grayscale(1) contrast(2.5) brightness(1.1)'; x.drawImage(i,0,0); res(c.toDataURL('image/jpeg')); }; i.onerror=rej; i.src=d; }), resizeImage: (f, m) => new Promise((res, rej) => { const r=new FileReader();r.onload=e=>{const 
         i=new Image();i.onload=()=>{const c=document.createElement('canvas');let{width:w,height:h}=i;if(w>h){if(w>m){h*=m/w;w=m;}}else{if(h>m){w*=m/h;h=m;}}c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);res(c.toDataURL('image/jpeg'));};i.onerror=rej;i.src=e.target.result;};r.onerror=rej;r.readAsDataURL(f);}), }; const Crypto = { hashMessageForSigning: (m) => Utils.hexToUint8Array(shake256(m, 1536)), async verifySignature(sig, data, pk, api) { const h=this.hashMessageForSigning(data);
@@ -276,17 +275,14 @@
         const parts={}; let count=0; const c=document.createElement('canvas'); const x=c.getContext('2d'); c.width=imgData.width;c.height=imgData.height;x.putImageData(imgData,0,0); for(let i=0;i<Constants.NUM_QR_CODES;i++){ statusEl.innerHTML=`<span class="info">Scanning section ${i+1}/${Constants.NUM_QR_CODES}...</span>`; await new Promise(r=>setTimeout(r,5)); const row=Math.floor(i/3),col=i%3,rX=col*(l.qrSize+l.xSpacing),rY=row*(l.qrSize+l.ySpacing),d=x.getImageData(rX,rY,l.qrSize,l.qrSize);
         const code=jsQR(d.data,d.width,d.height); if(code&&code.data.startsWith(Constants.VALIDATION_PREFIX)){const m=code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s); if(m){const pN=parseInt(m[1],10);if(!parts[pN]){parts[pN]=m[3];count++;}}} } if(count<Constants.NUM_QR_CODES){throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} sections.`);} let payload=''; for(let i=1;i<=Constants.NUM_QR_CODES;i++){payload+=parts[i];} return payload;
         } }; return { Constants, Utils, Crypto, Banknote }; })();
-        
         // --- PERFORMANCE OPTIMIZATION MODULES ---
         const CacheManager = { cache: new Map(), DEFAULT_CACHE_DURATION: 30000, set(key, data, duration = this.DEFAULT_CACHE_DURATION) { this.cache.set(key, { data, expiresAt: Date.now() + duration });
         }, get(key) { const cached = this.cache.get(key); if (!cached) return null; if (Date.now() > cached.expiresAt) { this.cache.delete(key); return null;
         } return cached.data; }, invalidate(pattern) { for (const key of this.cache.keys()) { if (key.includes(pattern)) { this.cache.delete(key); } } } };
-        
         const NetworkOptimizer = { getSyncStrategy() { const speed = navigator.connection?.effectiveType || '4g';
         switch (speed) { case 'slow-2g': case '2g': return { interval: 45000, useCache: true, cacheDuration: 120000 };
         case '3g': return { interval: 20000, useCache: true, cacheDuration: 60000 };
         case '4g': default: return { interval: 10000, useCache: true, cacheDuration: 20000 }; } } };
-        
         const BackgroundSync = { isRunning: false, syncIntervalId: null, start() { if (this.isRunning) return; console.log("Starting background sync..."); this.isRunning = true;
         const strategy = NetworkOptimizer.getSyncStrategy(); const performSyncCycle = () => { if (!this.isRunning) return; this.performSync().catch(err => console.error("Background sync error:", err)); };
         performSyncCycle(); this.syncIntervalId = setInterval(performSyncCycle, strategy.interval); }, async performSync() { if (!state.wallet) { this.stop(); return; } const syncStatusEl = document.getElementById('sync-status');
@@ -303,7 +299,7 @@
                 const response = await fetch(EDGE_FUNCTION_URL, {
                     method: 'POST',
              
-                       headers: {
+                    headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
                     },
@@ -314,7 +310,7 @@
                 if (!response.ok || result.error) {
                     throw new Error(result.error || `Supabase API error! Status: ${response.status}`);
              
-                   }
+                }
                 return result.data;
             };
 
@@ -322,7 +318,7 @@
                 getMasterPublicKey: async () => {
                     const result = await apiCall('getMasterKey');
            
-                         return result.public_key;
+                    return result.public_key;
                 },
                 recordSpentIdentifier: async (identifier, type) => {
                     try {
@@ -376,11 +372,8 @@
         // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
         // ===================================================================================
-        // --- MODIFICATION: Removed TREASURY_ADDRESS from client-side constants.
         const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, FEE_PERCENTAGE: 0.009, PRECISION: 8 };
-        
         let state = { wallet: null, masterPublicKey: null, userStore: null, falconApi: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, currentBalance: 0, transactionIndex: new Map() };
-        
         const WalletLogic = {
             createWallet: (password) => { const wallet = ethers.Wallet.createRandom();
             const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
@@ -424,17 +417,15 @@
             const success = await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); if (!success) { state.userStore.chain.pop(); WalletLogic.buildTransactionIndex(); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
             throw new Error("CRITICAL: Payment sent but failed to update public ledger.");
             } const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash }; const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-            confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); 
-            // --- MODIFICATION: Removed client-side fee confirmation logic. This is now handled by the server.
-            CacheManager.invalidate(state.wallet.address); return true;
+            confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: 'TREASURY_FEE', amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+            const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation); feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign); feeConfirmation.signedMessage = feeMessageToSign; await SupabaseLedger.pinConfirmation(feeConfirmation); CacheManager.invalidate(state.wallet.address); return true;
             },
             directSend: async (recipientAddress, amount) => { const fee = amount * AppConstants.FEE_PERCENTAGE;
             const totalDebit = amount + fee; if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
             const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
             const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash }; const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-            confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); 
-            // --- MODIFICATION: Removed client-side fee confirmation logic. This is now handled by the server.
-            CacheManager.invalidate(state.wallet.address); return true;
+            confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: 'TREASURY_FEE', amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+            const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation); feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign); feeConfirmation.signedMessage = feeMessageToSign; await SupabaseLedger.pinConfirmation(feeConfirmation); CacheManager.invalidate(state.wallet.address); return true;
             },
             finalizePayment: async (confirmation) => { const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
             if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false;
@@ -545,7 +536,7 @@
                     state.masterPublicKey = CoreLogic.Utils.base64ToUint8Array(masterPublicKeyBase64);
                     document.getElementById('key-status').innerHTML = '<span class="success">Bank public key loaded.</span>';
   
-                                     document.getElementById('banknote-image-input').disabled = false;
+                    document.getElementById('banknote-image-input').disabled = false;
                 } catch (error) {
                     console.error("Failed to load master public key:", error);
                     document.getElementById('key-status').innerHTML = `<span class="error">Could not load bank key: ${error.message}</span>`;
