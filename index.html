@@ -485,6 +485,7 @@
         if (code) { stopScanner(); sendStatusEl.innerHTML = '<span class="info">QR Code Detected! Processing...</span>'; let isPaymentRequest = false;
         try { const request = JSON.parse(code.data); if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) { isPaymentRequest = true;
         Promise.resolve().then(async () => { if (Date.now() > request.expiresAt) throw new Error("This payment request has expired."); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid."); state.activePaymentRequest = request; state.activeManualSend = null; 
+        // **MODIFICATION**: Use `state.feePercentage` for fee calculation and display.
         const fee = request.amount * state.feePercentage; 
         const total = request.amount + fee; 
         document.getElementById('confirm-amount-display').innerHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.feePercentage*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress; await showView('send-confirm-view'); }).catch(err => { sendStatusEl.innerHTML = `<span class="error">${err.message}</span>`; setTimeout(() => startScanner(), 2000); });
