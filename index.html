@@ -304,13 +304,12 @@
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
                 if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
                 
-                // Record the original payment request as spent
                 const success = await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
                 if (!success) {
                     throw new Error("CRITICAL: Payment cannot be completed - failed to update public ledger.");
                 }
                 
-                // Create and record the main payment
+                // Main payment confirmation
                 const confirmation = {
                     type: 'AURA_PAYMENT_CONFIRMATION',
                     senderAddress: state.wallet.address,
@@ -323,7 +322,7 @@
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
                 
-                // Create local transaction record for the payment
+                // Create local transaction record
                 const sendTx = WalletLogic.addToChain({
                     type: 'send',
                     amount: request.amount,
@@ -334,18 +333,18 @@
                     linkedTxHash: request.linkedTxHash
                 });
                 
-                // Create and record the fee payment as a separate transaction
+                // Fee transaction as separate transaction
                 const feeTx = WalletLogic.addToChain({
-                    type: 'send',  // Keep it as 'send' type for consistency
+                    type: 'send',
                     amount: fee,
-                    fee: 0,  // No fee on the fee transaction itself
+                    fee: 0,
                     from: state.wallet.address,
                     to: state.config.TREASURY_ADDRESS,
                     status: 'completed',
-                    purpose: 'fee'  // Add purpose to identify it as a fee
+                    purpose: 'fee'
                 });
                 
-                // Record the fee payment on the ledger
+                // Record fee confirmation
                 const feeConfirmation = {
                     type: 'AURA_PAYMENT_CONFIRMATION',
                     senderAddress: state.wallet.address,
@@ -434,7 +433,14 @@
             try {
                 // First, fetch the remote configuration from the server
                 const fetchedConfig = await SupabaseLedger.getAppConfig();
-                state.config = { ...AppConstants, ...fetchedConfig }; // Merge static and remote configs
+                
+                // Merge static constants with remote config
+                state.config = { 
+                    ...AppConstants, // Your hardcoded fallbacks
+                    ...fetchedConfig // Server overrides
+                };
+                
+                console.log('App config loaded:', state.config); // Debug output
                 
                 // Then, initialize the cryptography module
                 state.falconApi = await pqcSignFalcon1024();
