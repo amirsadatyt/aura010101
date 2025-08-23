@@ -186,8 +186,8 @@
         import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
 
         // --- SUPABASE CONFIGURATION ---
-        const SUPABASE_URL = 'https://hdvqbcjtublfuykigsui.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkdnFiY2p0dWJsZnV5a2lnc3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NTk4OTAsImV4cCI6MjA3MTUzNTg5MH0.Gog9zohe1bz6gihtssCBPUYkfNMbAjuQKR4Qvb3HNOg'; // <-- REPLACE WITH YOUR SUPABASE ANON KEY
+        const SUPABASE_URL = 'https://lahcfohgcaapvgdzirsu.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhaGNmb2hnY2FhcHZnZHppcnN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjI5MjEsImV4cCI6MjA3MTM5ODkyMX0.6-Ug9nivwEd-e92o9o1_tKXUn_iRaTOzOMgW-x3qDL8'; // <-- REPLACE WITH YOUR SUPABASE ANON KEY
         const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/api`;
 
         // CORE BANKNOTE & LEDGER LOGIC
@@ -270,27 +270,16 @@
         })();
         
         // ===================================================================================
-        // QUANTUM-RESISTANT ENCRYPTION MODULE
+        // QUANTUM-RESISTANT ENCRYPTION MODULE (PBKDF2 REMOVED)
         // ===================================================================================
         const QuantumCrypto = (() => {
-            // KDF parameters - higher iterations mean more security but slower performance
-            const KDF_PARAMS = {
-                iterations: 25000,
-                keySize: 32, // 32 bytes = 256 bits for AES-256
-                hasher: CryptoJS.algo.SHA256
-            };
-
             return {
                 encrypt: async (privateKey, password) => {
-                    const salt = CryptoJS.lib.WordArray.random(16); // 128-bit salt
                     const iv = CryptoJS.lib.WordArray.random(12);   // 96-bit IV for GCM
 
-                    // 1. Derive encryption key from password
-                    const key = CryptoJS.PBKDF2(password, salt, {
-                        keySize: KDF_PARAMS.keySize / 4, // keySize is in 32-bit words
-                        iterations: KDF_PARAMS.iterations,
-                        hasher: KDF_PARAMS.hasher
-                    });
+                    // 1. Derive encryption key directly from a hash of the password (NO PBKDF2)
+                    // WARNING: This is less secure against brute-force attacks.
+                    const key = CryptoJS.SHA256(password);
 
                     // 2. Encrypt the private key using AES-256-GCM
                     const encrypted = CryptoJS.AES.encrypt(privateKey, key, {
@@ -302,14 +291,9 @@
                     // 3. Construct the encrypted JSON object
                     const encryptedJson = {
                         ciphertext: CryptoJS.enc.Base64.stringify(encrypted.ciphertext),
-                        salt: CryptoJS.enc.Base64.stringify(salt),
                         iv: CryptoJS.enc.Base64.stringify(iv),
                         tag: CryptoJS.enc.Base64.stringify(encrypted.mac), // GCM Authentication Tag
-                        kdf: 'pbkdf2',
-                        kdf_params: {
-                            iterations: KDF_PARAMS.iterations,
-                            hasher: 'sha256'
-                        }
+                        kdf: 'none' // Indicate no KDF was used
                     };
 
                     return JSON.stringify(encryptedJson);
@@ -319,17 +303,12 @@
                     try {
                         const encryptedData = JSON.parse(encryptedJsonString);
                         
-                        const salt = CryptoJS.enc.Base64.parse(encryptedData.salt);
                         const iv = CryptoJS.enc.Base64.parse(encryptedData.iv);
                         const ciphertext = CryptoJS.enc.Base64.parse(encryptedData.ciphertext);
                         const tag = CryptoJS.enc.Base64.parse(encryptedData.tag);
 
-                        // 1. Re-derive the same key from the password and salt
-                        const key = CryptoJS.PBKDF2(password, salt, {
-                            keySize: KDF_PARAMS.keySize / 4,
-                            iterations: encryptedData.kdf_params.iterations,
-                            hasher: KDF_PARAMS.hasher
-                        });
+                        // 1. Re-derive the same key directly from the password's hash (NO PBKDF2)
+                        const key = CryptoJS.SHA256(password);
                         
                         // 2. Prepare the ciphertext object for decryption
                         const cipherParams = CryptoJS.lib.CipherParams.create({
