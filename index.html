@@ -293,19 +293,34 @@
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
                 if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
+                
                 const sendTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
+                
                 const success = await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
                 if (!success) { state.userStore.chain.pop(); WalletLogic.buildTransactionIndex(); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); throw new Error("CRITICAL: Payment sent but failed to update public ledger."); }
+                
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+                
+                // FIX: Create a proper fee transaction entry
+                const feeTx = WalletLogic.addToChain({ 
+                    type: 'fee', 
+                    amount: fee, 
+                    from: state.wallet.address, 
+                    to: state.config.TREASURY_ADDRESS, 
+                    status: 'completed' 
+                });
+                
+                // Use the fee transaction's hash for the confirmation
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
                 await SupabaseLedger.pinConfirmation(feeConfirmation);
+                
                 CacheManager.invalidate(state.wallet.address);
                 return true;
             },
@@ -313,17 +328,30 @@
                 const fee = amount * state.config.FEE_PERCENTAGE;
                 const totalDebit = amount + fee;
                 if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
+                
                 const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
                 const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
                 confirmation.signature = await state.wallet.signMessage(messageToSign);
                 confirmation.signedMessage = messageToSign;
                 await SupabaseLedger.pinConfirmation(confirmation);
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: sendTx.hash + "-fee" };
+                
+                // FIX: Create a proper fee transaction entry
+                const feeTx = WalletLogic.addToChain({ 
+                    type: 'fee', 
+                    amount: fee, 
+                    from: state.wallet.address, 
+                    to: state.config.TREASURY_ADDRESS, 
+                    status: 'completed' 
+                });
+                
+                // Use the fee transaction's hash for the confirmation
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
                 const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
                 feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
                 feeConfirmation.signedMessage = feeMessageToSign;
                 await SupabaseLedger.pinConfirmation(feeConfirmation);
+                
                 CacheManager.invalidate(state.wallet.address);
                 return true;
             },
