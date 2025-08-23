@@ -339,36 +339,51 @@
             },
             finalizePayment: async (confirmation) => { const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; } if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; } const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation); if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Tamper Detection: Confirmation data mismatch."); return false; } const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; } state.userStore.chain[receiveTxIndex].status = 'completed'; state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); CacheManager.invalidate(state.wallet.address); return true; },
             processDiscoveredTransaction: async (confirmation) => {
+                console.log('=== Processing confirmation ===');
+                console.log('Confirmation:', confirmation);
+                console.log('My address:', state.wallet.address);
+                console.log('Receiver address:', confirmation.receiverAddress);
+
                 if (confirmation.receiverAddress !== state.wallet.address) {
+                    console.log('REJECTED: Wrong receiver address');
                     return false;
                 }
+
                 const txKey = confirmation.linkedTxHash || confirmation.hash;
+                console.log('Transaction key:', txKey);
+                console.log('Already have this tx?', state.transactionIndex.has(txKey));
 
-                // Only skip if we already processed this exact confirmation
-                const existingTx = state.userStore.chain.find(tx => 
-                    tx.linkedTxHash === txKey && 
-                    tx.from === confirmation.senderAddress &&
-                    tx.amount === confirmation.amount
-                );
-                if (existingTx) return false;
-
-                // Rest of validation...
-                if (!confirmation.signedMessage && confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
-                    console.error("Discovered TX invalid: Missing 'signedMessage'");
+                if (state.transactionIndex.has(txKey)) {
+                    console.log('REJECTED: Already processed this transaction');
                     return false;
                 }
+
+                if (!confirmation.signedMessage && confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
+                    console.log('REJECTED: Missing signedMessage');
+                    return false;
+                }
+
                 if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
                     const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
+                    console.log('Local message:', locallyRecreatedMessage);
+                    console.log('Stored message:', confirmation.signedMessage);
+
                     if (locallyRecreatedMessage !== confirmation.signedMessage) {
-                        console.error("Discovered TX failed tamper check");
+                        console.log('REJECTED: Message mismatch');
                         return false;
                     }
+
                     const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
+                    console.log('Signer address:', signerAddress);
+                    console.log('Expected sender:', confirmation.senderAddress);
+
                     if (signerAddress !== confirmation.senderAddress) {
-                        console.error("Discovered TX failed signature validation");
+                        console.log('REJECTED: Signature verification failed');
                         return false;
                     }
                 }
+
+                console.log('SUCCESS: Adding to chain');
                 WalletLogic.addToChain({
                     type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive',
                     amount: confirmation.amount,
