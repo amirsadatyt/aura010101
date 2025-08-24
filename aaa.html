@@ -1,5 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { ethers } from 'https://esm.sh/ethers@6';
+// Import new dependencies for server-side validation
+import pqcSignFalcon1024 from 'https://hdvqbcjtublfuykigsui.supabase.co/storage/v1/object/public/A1/sign.asm.min.js';
+import { shake256 } from 'https://cdn.skypack.dev/js-sha3';
+import pako from 'https://cdn.skypack.dev/pako';
 
 // CORS headers to allow requests from any origin
 const corsHeaders = {
@@ -19,6 +23,54 @@ const verifySignature = (signedMessage, signature, expectedAddress) => {
     throw new Error(`Invalid signature format or data. ${e.message}`);
   }
 };
+
+// --- START: Server-Side Validation Helpers (Ported from client's CoreLogic) ---
+
+const validationUtils = {
+    base64ToUint8Array: (s) => {
+        const bs = atob(s);
+        const b = new Uint8Array(bs.length);
+        for (let i = 0; i < bs.length; i++) b[i] = bs.charCodeAt(i);
+        return b;
+    },
+    hexToUint8Array: (h) => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16))),
+    arrayBufferToBase64: (b) => btoa(String.fromCharCode(...new Uint8Array(b))),
+};
+
+const validationCrypto = {
+    hashMessageForSigning: (m) => validationUtils.hexToUint8Array(shake256(m, 1536)),
+    verifySignature: async (sig, data, pk, api) => {
+        const hash = validationCrypto.hashMessageForSigning(data);
+        return api.verify(sig, hash, pk);
+    }
+};
+
+const banknoteLogic = {
+    parsePayload: (b64) => {
+        const compressed = validationUtils.base64ToUint8Array(b64);
+        const json = pako.inflate(compressed, { to: 'string' });
+        const p = JSON.parse(json);
+        return {
+            amount: p.a,
+            serial: p.s,
+            timestamp: p.t,
+            ephemeralPublicKey: validationUtils.base64ToUint8Array(p.epk),
+            signatureOne: validationUtils.base64ToUint8Array(p.s1),
+            signatureTwo: validationUtils.base64ToUint8Array(p.s2)
+        };
+    },
+    getStandardizedDataForSigning: (d) => JSON.stringify({ timestamp: d.timestamp, serial: d.serial }, ['timestamp', 'serial']),
+    getStandardizedDataForMasterSig: (d) => {
+        const transformed = {
+            ephemeralPublicKey: validationUtils.arrayBufferToBase64(d.ephemeralPublicKey),
+            signatureOne: validationUtils.arrayBufferToBase64(d.signatureOne)
+        };
+        return JSON.stringify(transformed, Object.keys(transformed).sort());
+    },
+};
+
+// --- END: Server-Side Validation Helpers ---
+
 
 Deno.serve(async (req) => {
   // Handle preflight CORS requests
@@ -54,6 +106,70 @@ Deno.serve(async (req) => {
         data = embeddedConfig;
         break;
       }
+      
+      // --- START: New Server-Side Banknote Validation Action ---
+      case 'validateBanknote': {
+        const { payload: banknotePayload } = payload;
+        if (!banknotePayload) {
+          throw new Error('Banknote payload is required.');
+        }
+
+        // 1. Initialize Crypto Library
+        const falconApi = await pqcSignFalcon1024();
+
+        // 2. Parse the banknote data
+        const banknoteData = banknoteLogic.parsePayload(banknotePayload);
+
+        // 3. Check if the banknote's serial number has already been spent
+        const { data: existingIdentifier } = await supabaseClient
+            .from('spent_identifiers')
+            .select('identifier')
+            .eq('identifier', banknoteData.serial)
+            .maybeSingle();
+            
+        if (existingIdentifier) {
+            throw new Error('This banknote has already been spent.');
+        }
+
+        // 4. Fetch the master public key for verification
+        const { data: keyData, error: keyError } = await supabaseClient
+            .from('master_keys')
+            .select('public_key')
+            .eq('key_id', 'master_public_key')
+            .single();
+
+        if (keyError) throw new Error('Could not retrieve the master key for verification.');
+        const masterPublicKey = validationUtils.base64ToUint8Array(keyData.public_key);
+        
+        // 5. Verify the internal signature (signed by the ephemeral key)
+        const standardizedDataForSigOne = banknoteLogic.getStandardizedDataForSigning(banknoteData);
+        const isSigOneValid = await validationCrypto.verifySignature(
+            banknoteData.signatureOne,
+            standardizedDataForSigOne,
+            banknoteData.ephemeralPublicKey,
+            falconApi
+        );
+        if (!isSigOneValid) throw new Error("Signature validation failed (internal).");
+
+        // 6. Verify the master signature (signed by the master key)
+        const standardizedDataForSigTwo = banknoteLogic.getStandardizedDataForMasterSig(banknoteData);
+        const isSigTwoValid = await validationCrypto.verifySignature(
+            banknoteData.signatureTwo,
+            standardizedDataForSigTwo,
+            masterPublicKey,
+            falconApi
+        );
+        if (!isSigTwoValid) throw new Error("Signature validation failed (issuer).");
+
+        // 7. If all checks pass, return the valid amount and serial
+        data = {
+            success: true,
+            amount: banknoteData.amount,
+            serial: banknoteData.serial
+        };
+        break;
+      }
+      // --- END: New Server-Side Banknote Validation Action ---
 
       case 'getMasterKey': {
         const { data: keyData, error } = await supabaseClient
