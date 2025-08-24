@@ -82,6 +82,33 @@
     <script src="html2canvas.min.js"></script>
     
     <script type="module">
+
+// Polyfill Buffer if not available (for Edge/Supabase/browser environments)
+if (typeof globalThis.Buffer === 'undefined') {
+  globalThis.Buffer = {
+    from: (input, encoding) => {
+      if (encoding === 'base64') {
+        const binary = atob(input);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      }
+      return new TextEncoder().encode(input);
+    }
+  };
+}
+
+
+
+
+
+
+
+
+
+
+        
         import { ethers } from "./ethers.min.js";
         // --- SUPABASE CONFIGURATION ---
         const SUPABASE_URL = 'https://hdvqbcjtublfuykigsui.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
