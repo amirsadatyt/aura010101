@@ -74,164 +74,48 @@
     <div id="send-confirm-view" class="view"><div class="card"><h2>Confirm Payment</h2><p>You are about to send:</p><h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2><p>To:</p><p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;"></p><button id="confirm-payment-button">Confirm and Pay</button><div id="send-confirm-status" class="status-box"></div><button class="back-button" id="back-from-send-confirm">Cancel</button></div></div>
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><div id="waiting-on-payment" style="display: none;"><div id="payment-timer"></div><div class="loader"></div><p id="final-status-message" class="status-box" style="font-size:18px;"></p></div><button class="back-button" id="back-from-qr-display">Back to Wallet</button></div></div>
     <div id="transaction-detail-modal" class="modal-overlay" style="display:none;"><div class="modal-content card"><h2>Transaction Details</h2><div id="modal-details-content"><p><strong>Status:</strong> <span id="detail-status"></span></p><p><strong>Type:</strong> <span id="detail-type"></span></p><p><strong>Date & Time:</strong> <span id="detail-datetime"></span></p><p><strong>Amount:</strong> <span id="detail-amount"></span></p><p><strong>Fee:</strong> <span id="detail-fee"></span></p><p style="word-wrap: break-word;"><strong>From:</strong> <span id="detail-from"></span></p><p style="word-wrap: break-word;"><strong>To:</strong> <span id="detail-to"></span></p><p style="word-wrap: break-word;"><strong>Transaction Hash:</strong> <span id="detail-hash"></span></p></div><button id="download-tx-button">Download as JPG</button><button id="close-modal-button" class="back-button">Close</button></div></div>
-
+    
     <script src="pako.min.js"></script>
     <script src="qrcode.js"></script>
     <script src="jsQR.js"></script>
     <script src="crypto-js.min.js"></script>
     <script src="html2canvas.min.js"></script>
     
-    <script id="service-worker-script" type="javascript/worker">
-        // This script will be registered as a service worker
-        self.importScripts('https://unpkg.com/ethers@6.7.0/dist/ethers.umd.min.js');
-
-        let wallet = null; // This will hold the decrypted ethers.js wallet object
-
-        self.addEventListener('message', async (event) => {
-            const { action, payload, id } = event.data;
-            const sourceClient = event.source;
-
-            // A helper to ensure we can reply to the message
-            const postReply = (client, message) => {
-                if (client) {
-                    client.postMessage(message);
-                } else {
-                    console.error("Cannot post reply: client source is not available.");
-                }
-            };
-            
-            try {
-                let result;
-                switch (action) {
-                    case 'createWallet':
-                        const newWallet = ethers.Wallet.createRandom();
-                        const encryptedJson = await newWallet.encrypt(payload.password);
-                        result = { mnemonic: newWallet.mnemonic.phrase, encryptedJson, address: newWallet.address, publicKey: newWallet.publicKey };
-                        break;
-
-                    case 'restoreWallet':
-                        const restoredWallet = ethers.Wallet.fromPhrase(payload.mnemonic);
-                        const restoredEncryptedJson = await restoredWallet.encrypt(payload.password);
-                        result = { encryptedJson: restoredEncryptedJson, address: restoredWallet.address, publicKey: restoredWallet.publicKey };
-                        break;
-
-                    case 'login':
-                        wallet = await ethers.Wallet.fromEncryptedJson(payload.encryptedJson, payload.password);
-                        result = { address: wallet.address, publicKey: wallet.publicKey, success: true };
-                        break;
-                    
-                    case 'logout':
-                        wallet = null;
-                        result = { success: true };
-                        break;
-
-                    case 'signMessage':
-                        if (!wallet) throw new Error("Wallet is locked.");
-                        result = await wallet.signMessage(payload.message);
-                        break;
-
-                    default:
-                        throw new Error(`Unknown action: ${action}`);
-                }
-                postReply(sourceClient, { status: 'success', action, payload: result, id });
-
-            } catch (error) {
-                postReply(sourceClient, { status: 'error', action, message: error.message, id });
-            }
-        });
-    </script>
-
     <script type="module">
-        import { ethers } from "./ethers.min.js";
 
-        // --- SERVICE WORKER COMMUNICATION LAYER (MODIFIED FOR ROBUSTNESS) ---
-        const ServiceWorkerOracle = (() => {
-            let swRegistration = null;
-            let initializationPromise = null;
-            let messageId = 0;
-            const pendingPromises = new Map();
-
-            async function register() {
-                if (!('serviceWorker' in navigator)) {
-                    throw new Error("Service Workers are not supported in this browser. This application cannot run securely.");
-                }
-                
-                const blob = new Blob([document.getElementById('service-worker-script').textContent], { type: 'application/javascript' });
-                swRegistration = await navigator.serviceWorker.register(URL.createObjectURL(blob));
-
-                // Wait until a service worker is in control of the page
-                await navigator.serviceWorker.ready;
-                console.log('Service Worker is active and ready.');
-
-                navigator.serviceWorker.addEventListener('message', (event) => {
-                    const { id, status, payload, message, action } = event.data;
-                    if (pendingPromises.has(id)) {
-                        const { resolve, reject } = pendingPromises.get(id);
-                        if (status === 'success') {
-                            resolve(payload);
-                        } else {
-                            console.error(`Error in SW action '${action}':`, message);
-                            reject(new Error(message));
-                        }
-                        pendingPromises.delete(id);
-                    }
-                });
-            }
-
-            function initialize() {
-                if (!initializationPromise) {
-                    initializationPromise = register();
-                }
-                return initializationPromise;
-            }
-
-            async function sendMessage(action, payload) {
-                await initialize(); // Ensure registration is complete before sending
-                
-                if (!navigator.serviceWorker.controller) {
-                    return Promise.reject(new Error("Service Worker is not in control. Please reload the page."));
-                }
-                
-                const id = messageId++;
-                return new Promise((resolve, reject) => {
-                    pendingPromises.set(id, { resolve, reject });
-                    navigator.serviceWorker.controller.postMessage({ action, payload, id });
-                });
-            }
-
-            return {
-                initialize,
-                createWallet: (password) => sendMessage('createWallet', { password }),
-                restoreWallet: (mnemonic, password) => sendMessage('restoreWallet', { mnemonic, password }),
-                login: (encryptedJson, password) => sendMessage('login', { encryptedJson, password }),
-                logout: () => sendMessage('logout'),
-                signMessage: (message) => sendMessage('signMessage', { message }),
-            };
-        })();
+// Polyfill Buffer if not available (for Edge/Supabase/browser environments)
+if (typeof globalThis.Buffer === 'undefined') {
+  globalThis.Buffer = {
+    from: (input, encoding) => {
+      if (encoding === 'base64') {
+        const binary = atob(input);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+      }
+      return new TextEncoder().encode(input);
+    }
+  };
+}
 
 
-        // Polyfill Buffer if not available (for Edge/Supabase/browser environments)
-        if (typeof globalThis.Buffer === 'undefined') {
-          globalThis.Buffer = {
-            from: (input, encoding) => {
-              if (encoding === 'base64') {
-                const binary = atob(input);
-                const len = binary.length;
-                const bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-                return bytes;
-              }
-              return new TextEncoder().encode(input);
-            }
-          };
-        }
+
+
+
+
+
+
+
+
         
+        import { ethers } from "./ethers.min.js";
         // --- SUPABASE CONFIGURATION ---
-        const SUPABASE_URL = 'https://hdvqbcjtublfuykigsui.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkdnFiY2p0dWJsZnV5a2lnc3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NTk4OTAsImV4cCI6MjA3MTUzNTg5MH0.Gog9zohe1bz6gihtssCBPUYkfNMbAjuQKR4Qvb3HNOg';
+        const SUPABASE_URL = 'https://hdvqbcjtublfuykigsui.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkdnFiY2p0dWJsZnV5a2lnc3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NTk4OTAsImV4cCI6MjA3MTUzNTg5MH0.Gog9zohe1bz6gihtssCBPUYkfNMbAjuQKR4Qvb3HNOg'; // <-- REPLACE WITH YOUR SUPABASE ANON KEY
         const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/api`;
 
-        // CORE BANKNOTE CLIENT-SIDE LOGIC (UNCHANGED)
+        // CORE BANKNOTE CLIENT-SIDE LOGIC
         const CoreLogic = (() => {
             const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
             const Utils = {
@@ -275,7 +159,7 @@
             };
             const Banknote = {
                 getLayout: (imageWidth) => {
-                    const standardWidth = 790;
+                    const standardWidth = 790; // The reference width of the banknote layout
                     const scale = imageWidth / standardWidth;
                     return {
                         qrSize: Math.round(250 * scale),
@@ -328,10 +212,12 @@
             return { Constants, Utils, Banknote };
         })();
         
+        // --- PERFORMANCE OPTIMIZATION MODULES ---
         const CacheManager = { cache: new Map(), DEFAULT_CACHE_DURATION: 30000, set(key, data, duration = this.DEFAULT_CACHE_DURATION) { this.cache.set(key, { data, expiresAt: Date.now() + duration }); }, get(key) { const cached = this.cache.get(key); if (!cached) return null; if (Date.now() > cached.expiresAt) { this.cache.delete(key); return null; } return cached.data; }, invalidate(pattern) { for (const key of this.cache.keys()) { if (key.includes(pattern)) { this.cache.delete(key); } } } };
         const NetworkOptimizer = { getSyncStrategy() { const speed = navigator.connection?.effectiveType || '4g'; switch (speed) { case 'slow-2g': case '2g': return { interval: 45000, useCache: true, cacheDuration: 120000 }; case '3g': return { interval: 20000, useCache: true, cacheDuration: 60000 }; case '4g': default: return { interval: 10000, useCache: true, cacheDuration: 20000 }; } } };
-        const BackgroundSync = { isRunning: false, syncIntervalId: null, start() { if (this.isRunning) return; console.log("Starting background sync..."); this.isRunning = true; const strategy = NetworkOptimizer.getSyncStrategy(); const performSyncCycle = () => { if (!this.isRunning) return; this.performSync().catch(err => console.error("Background sync error:", err)); }; performSyncCycle(); this.syncIntervalId = setInterval(performSyncCycle, strategy.interval); }, async performSync() { if (!state.walletState) { this.stop(); return; } const syncStatusEl = document.getElementById('sync-status'); try { const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.walletState.address), SupabaseLedger.findOutgoingTxs(state.walletState.address) ]); let newTxCount = 0; for (const confirmation of incomingTxs) { if (await WalletLogic.processDiscoveredTransaction(confirmation)) { newTxCount++; } } const balance = WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; if (newTxCount > 0) { renderTransactionHistory(); if (syncStatusEl) { syncStatusEl.innerHTML = `<span class="success">⚡ New transaction(s) detected!</span>`; setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000); } } } catch (error) { console.error("Background sync failed:", error); if (syncStatusEl) syncStatusEl.innerHTML = '<span class="error">Sync failed. Retrying...</span>'; } }, stop() { if (!this.isRunning) return; console.log("Stopping background sync..."); clearInterval(this.syncIntervalId); this.syncIntervalId = null; this.isRunning = false; } };
+        const BackgroundSync = { isRunning: false, syncIntervalId: null, start() { if (this.isRunning) return; console.log("Starting background sync..."); this.isRunning = true; const strategy = NetworkOptimizer.getSyncStrategy(); const performSyncCycle = () => { if (!this.isRunning) return; this.performSync().catch(err => console.error("Background sync error:", err)); }; performSyncCycle(); this.syncIntervalId = setInterval(performSyncCycle, strategy.interval); }, async performSync() { if (!state.wallet) { this.stop(); return; } const syncStatusEl = document.getElementById('sync-status'); try { const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.wallet.address), SupabaseLedger.findOutgoingTxs(state.wallet.address) ]); let newTxCount = 0; for (const confirmation of incomingTxs) { if (await WalletLogic.processDiscoveredTransaction(confirmation)) { newTxCount++; } } const balance = WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; if (newTxCount > 0) { renderTransactionHistory(); if (syncStatusEl) { syncStatusEl.innerHTML = `<span class="success">⚡ New transaction(s) detected!</span>`; setTimeout(() => { if (syncStatusEl) syncStatusEl.innerHTML = ''; }, 4000); } } } catch (error) { console.error("Background sync failed:", error); if (syncStatusEl) syncStatusEl.innerHTML = '<span class="error">Sync failed. Retrying...</span>'; } }, stop() { if (!this.isRunning) return; console.log("Stopping background sync..."); clearInterval(this.syncIntervalId); this.syncIntervalId = null; this.isRunning = false; } };
         
+        // --- SUPABASE LEDGER MODULE ---
         const SupabaseLedger = (() => {
             const apiCall = async (action, payload) => {
                 const response = await fetch(EDGE_FUNCTION_URL, {
@@ -360,161 +246,26 @@
 
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
         const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, PRECISION: 8 };
-        let state = { walletState: null, userStore: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, currentBalance: 0, transactionIndex: new Map(), config: null };
+        let state = { wallet: null, userStore: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, currentBalance: 0, transactionIndex: new Map(), config: null };
         
-        // **MODIFIED** WalletLogic now interfaces with the Service Worker Oracle
         const WalletLogic = {
-            createWallet: async (password) => {
-                const { mnemonic, encryptedJson, address, publicKey } = await ServiceWorkerOracle.createWallet(password);
-                const userStore = { publicKey, address, encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
-                localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                state.userStore = userStore;
-                state.walletState = { address, publicKey }; // Store only public info
-                return { mnemonic };
-            },
-            restoreWallet: async (mnemonic, password) => {
-                try {
-                    const { encryptedJson, address, publicKey } = await ServiceWorkerOracle.restoreWallet(mnemonic, password);
-                    const userStore = { publicKey, address, encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] };
-                    localStorage.setItem('aura_user_store', JSON.stringify(userStore));
-                    state.userStore = userStore;
-                    state.walletState = { address, publicKey };
-                    return true;
-                } catch (e) {
-                    console.error("Restore failed:", e);
-                    return false;
-                }
-            },
-            login: async (password) => {
-                const userStoreJson = localStorage.getItem('aura_user_store');
-                if (!userStoreJson) return null;
-                try {
-                    const reloadedUserStore = JSON.parse(userStoreJson);
-                    const { address, publicKey } = await ServiceWorkerOracle.login(reloadedUserStore.encryptedJson, password);
-                    state.userStore = reloadedUserStore;
-                    state.walletState = { address, publicKey };
-                    state.failedLoginAttempts = 0;
-                    WalletLogic.buildTransactionIndex();
-                    return true;
-                } catch (e) {
-                    console.error("Login failed (likely incorrect password):", e);
-                    state.failedLoginAttempts++;
-                    return false;
-                }
-            },
-            logout: async () => {
-                await ServiceWorkerOracle.logout();
-                BackgroundSync.stop();
-                state.walletState = null;
-                state.userStore = null;
-                state.transactionIndex.clear();
-            },
+            createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
+            restoreWallet: async (mnemonic, password) => { try { const wallet = ethers.Wallet.fromPhrase(mnemonic); const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false; } },
+            login: async (password) => { const userStoreJson = localStorage.getItem('aura_user_store'); if (!userStoreJson) return null; try { const reloadedUserStore = JSON.parse(userStoreJson); const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password); state.userStore = reloadedUserStore; state.wallet = wallet; state.failedLoginAttempts = 0; WalletLogic.buildTransactionIndex(); return true; } catch (e) { console.error("Login failed (likely incorrect password):", e); state.failedLoginAttempts++; return false; } },
+            logout: () => { BackgroundSync.stop(); state.wallet = null; state.userStore = null; state.transactionIndex.clear(); },
             buildTransactionIndex: () => { state.transactionIndex.clear(); if (!state.userStore || !state.userStore.chain) return; state.userStore.chain.forEach(tx => { const txKey = tx.linkedTxHash || tx.hash; state.transactionIndex.set(txKey, tx); }); },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp || Date.now() }; const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(state.config.PRECISION), state.config.PRECISION); const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(state.config.PRECISION), state.config.PRECISION); newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] ); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); const txKey = newTx.linkedTxHash || newTx.hash; state.transactionIndex.set(txKey, newTx); return newTx; },
             calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => { const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const finalBalance = incomingTotal - outgoingTotal; state.currentBalance = finalBalance; return finalBalance; },
-            getServerAuthoritativeBalance: async () => { if (!state.userStore) return 0.0; const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.walletState.address), SupabaseLedger.findOutgoingTxs(state.walletState.address) ]); return WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); },
+            getServerAuthoritativeBalance: async () => { if (!state.userStore) return 0.0; const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.wallet.address), SupabaseLedger.findOutgoingTxs(state.wallet.address) ]); return WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); },
             getStandardizedConfirmationMessage: (confirmation) => { const amount = Number(confirmation.amount).toFixed(state.config.PRECISION); return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|'); },
-            createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.walletState.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.walletState.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + state.config.PAYMENT_REQUEST_EXPIRY }; },
-            processPayment: async (request) => {
-                if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured.");
-                const fee = request.amount * state.config.FEE_PERCENTAGE;
-                const totalDebit = request.amount + fee;
-                if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
-                if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
-                if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
-                await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
-                
-                // Sign main transaction
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.walletState.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
-                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                confirmation.signature = await ServiceWorkerOracle.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign;
-                await SupabaseLedger.pinConfirmation(confirmation);
-                WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.walletState.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
-
-                // Sign fee transaction
-                const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.walletState.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' });
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.walletState.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
-                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                feeConfirmation.signature = await ServiceWorkerOracle.signMessage(feeMessageToSign);
-                feeConfirmation.signedMessage = feeMessageToSign;
-                await SupabaseLedger.pinConfirmation(feeConfirmation);
-
-                CacheManager.invalidate(state.walletState.address);
-                return true;
-            },
-            directSend: async (recipientAddress, amount) => {
-                if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured.");
-                const fee = amount * state.config.FEE_PERCENTAGE;
-                const totalDebit = amount + fee;
-                if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
-                
-                // Sign main transaction
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.walletState.address, to: recipientAddress, status: 'completed' });
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.walletState.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
-                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                confirmation.signature = await ServiceWorkerOracle.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign;
-                await SupabaseLedger.pinConfirmation(confirmation);
-
-                // Sign fee transaction
-                const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.walletState.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' });
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.walletState.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
-                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                feeConfirmation.signature = await ServiceWorkerOracle.signMessage(feeMessageToSign);
-                feeConfirmation.signedMessage = feeMessageToSign;
-                await SupabaseLedger.pinConfirmation(feeConfirmation);
-                
-                CacheManager.invalidate(state.walletState.address);
-                return true;
-            },
-            finalizePayment: async (confirmation) => {
-                const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
-                if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; }
-                if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; }
-                const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Tamper Detection: Confirmation data mismatch."); return false; }
-                
-                // No need to verify signature here as the server already did, but we can for extra client-side safety.
-                const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
-                if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; }
-                
-                state.userStore.chain[receiveTxIndex].status = 'completed';
-                state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress;
-                localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                CacheManager.invalidate(state.walletState.address);
-                return true;
-            },
-            processDiscoveredTransaction: async (confirmation) => {
-                if (confirmation.receiverAddress !== state.walletState.address) return false;
-                const txKey = confirmation.linkedTxHash || confirmation.hash;
-                const existingTx = state.userStore.chain.find(tx => tx.linkedTxHash === txKey && tx.from === confirmation.senderAddress && tx.amount === confirmation.amount);
-                if (existingTx) return false;
-
-                if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
-                    if (!confirmation.signedMessage) { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; }
-                    const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                    if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; }
-                    const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
-                    if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; }
-                }
-                
-                WalletLogic.addToChain({
-                    type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive',
-                    amount: confirmation.amount,
-                    from: confirmation.senderAddress,
-                    to: state.walletState.address,
-                    status: 'completed',
-                    linkedTxHash: confirmation.linkedTxHash,
-                    timestamp: confirmation.timestamp
-                });
-                return true;
-            }
+            createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + state.config.PAYMENT_REQUEST_EXPIRY }; },
+            processPayment: async (request) => { if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured."); const fee = request.amount * state.config.FEE_PERCENTAGE; const totalDebit = request.amount + fee; if (Date.now() > request.expiresAt) throw new Error("Payment request has expired."); if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash }; const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation); confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' }); const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash }; const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation); feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign); feeConfirmation.signedMessage = feeMessageToSign; await SupabaseLedger.pinConfirmation(feeConfirmation); CacheManager.invalidate(state.wallet.address); return true; },
+            directSend: async (recipientAddress, amount) => { if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured."); const fee = amount * state.config.FEE_PERCENTAGE; const totalDebit = amount + fee; if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`); const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' }); const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash }; const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation); confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' }); const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash }; const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation); feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign); feeConfirmation.signedMessage = feeMessageToSign; await SupabaseLedger.pinConfirmation(feeConfirmation); CacheManager.invalidate(state.wallet.address); return true; },
+            finalizePayment: async (confirmation) => { const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; } if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; } const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation); if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Tamper Detection: Confirmation data mismatch."); return false; } const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; } state.userStore.chain[receiveTxIndex].status = 'completed'; state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); CacheManager.invalidate(state.wallet.address); return true; },
+            processDiscoveredTransaction: async (confirmation) => { if (confirmation.receiverAddress !== state.wallet.address) return false; const txKey = confirmation.linkedTxHash || confirmation.hash; const existingTx = state.userStore.chain.find(tx => tx.linkedTxHash === txKey && tx.from === confirmation.senderAddress && tx.amount === confirmation.amount); if (existingTx) return false; if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') { if (!confirmation.signedMessage) { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; } const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation); if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; } const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; } } WalletLogic.addToChain({ type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive', amount: confirmation.amount, from: confirmation.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: confirmation.linkedTxHash, timestamp: confirmation.timestamp }); return true; }
         };
         
-        // --- UI AND EVENT LISTENER FUNCTIONS (largely unchanged, but now call the new WalletLogic) ---
-
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
         async function updateBalanceAndRender() { try { const balance = await WalletLogic.getServerAuthoritativeBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; renderTransactionHistory(); } catch (error) { console.error("Could not update balance:", error); document.getElementById('balance-display').textContent = 'Error'; } }
@@ -522,33 +273,11 @@
         function abbreviateAddress(address) { if (!address) return ''; return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`; }
         function stopScanner() { if (state.cameraStream) { state.cameraStream.getTracks().forEach(track => track.stop()); state.cameraStream = null; state.isScannerActive = false; } }
         async function startScanner() { if (state.isScannerActive || !document.getElementById('send-view').classList.contains('active')) return; state.isScannerActive = true; const video = document.getElementById('qr-video'), loadingMessage = document.getElementById('loading-message'), canvasElement = document.getElementById('qr-canvas'), canvas = canvasElement.getContext('2d'), sendStatusEl = document.getElementById('send-status'); sendStatusEl.innerHTML = ''; loadingMessage.style.display = 'flex'; loadingMessage.textContent = 'Requesting camera access...'; try { state.cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); video.srcObject = state.cameraStream; video.setAttribute("playsinline", true); await video.play(); loadingMessage.style.display = 'none'; requestAnimationFrame(tick); } catch (err) { console.error("Camera Error:", err); loadingMessage.textContent = "Could not access camera."; sendStatusEl.innerHTML = `<span class="error">Camera access is required.</span>`; state.isScannerActive = false; } function tick() { if (!state.isScannerActive) return; if (video.readyState === video.HAVE_ENOUGH_DATA) { canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth; canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height); const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height); const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" }); if (code) { stopScanner(); sendStatusEl.innerHTML = '<span class="info">QR Code Detected! Processing...</span>'; let isPaymentRequest = false; try { const request = JSON.parse(code.data); if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) { isPaymentRequest = true; Promise.resolve().then(async () => { if (Date.now() > request.expiresAt) throw new Error("This payment request has expired."); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid."); state.activePaymentRequest = request; state.activeManualSend = null; const fee = request.amount * state.config.FEE_PERCENTAGE; const total = request.amount + fee; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress; await showView('send-confirm-view'); }).catch(err => { sendStatusEl.innerHTML = `<span class="error">${err.message}</span>`; setTimeout(() => startScanner(), 2000); }); } } catch (e) {} if (!isPaymentRequest) { if (ethers.isAddress(code.data)) { document.getElementById('send-address-input').value = code.data; sendStatusEl.innerHTML = '<span class="success">Recipient address scanned! Please enter the amount to send.</span>'; document.getElementById('send-amount-input').focus(); } else { sendStatusEl.innerHTML = `<span class="error">Invalid QR Code. Not a valid address or payment request.</span>`; setTimeout(() => startScanner(), 2000); } } return; } } requestAnimationFrame(tick); } }
-        async function showView(id) { if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner(); if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); const viewElement = document.getElementById(id); if(viewElement) viewElement.classList.add('active'); if (id === 'wallet-view') { document.getElementById('balance-display').textContent = 'Loading...'; if(state.walletState) document.getElementById('address-display').textContent = abbreviateAddress(state.walletState.address); await updateBalanceAndRender(); BackgroundSync.start(); } if (id === 'send-view') { startScanner(); } if (id === 'receive-view') { document.getElementById('full-receive-address').textContent = state.walletState.address; generateQrCode(state.walletState.address, 'static-qr-code'); } }
+        async function showView(id) { if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner(); if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); const viewElement = document.getElementById(id); if(viewElement) viewElement.classList.add('active'); if (id === 'wallet-view') { document.getElementById('balance-display').textContent = 'Loading...'; if(state.wallet) document.getElementById('address-display').textContent = abbreviateAddress(state.wallet.address); await updateBalanceAndRender(); BackgroundSync.start(); } if (id === 'send-view') { startScanner(); } if (id === 'receive-view') { document.getElementById('full-receive-address').textContent = state.wallet.address; generateQrCode(state.wallet.address, 'static-qr-code'); } }
         function renderTransactionHistory() { const listUl = document.getElementById('transaction-list-ul'); listUl.innerHTML = ''; if (!state.userStore || !state.userStore.chain) return; const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse(); if (transactions.length === 0) { listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>'; return; } transactions.forEach(tx => { const item = document.createElement('li'); item.className = 'transaction-item'; item.style.cursor = 'pointer'; const isSent = tx.type === 'send'; const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received'); const typeClass = isSent ? 'sent' : 'received'; const totalAmount = tx.amount || 0; const date = new Date(tx.timestamp).toLocaleString('en-US'); item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`; item.addEventListener('click', () => showTransactionDetails(tx)); listUl.appendChild(item); }); }
         function showTransactionDetails(tx) { const modal = document.getElementById('transaction-detail-modal'); document.getElementById('detail-status').textContent = tx.status || 'N/A'; document.getElementById('detail-type').textContent = tx.type || 'N/A'; document.getElementById('detail-datetime').textContent = new Date(tx.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }); document.getElementById('detail-amount').textContent = `$${(tx.amount || 0).toFixed(2)}`; document.getElementById('detail-fee').textContent = `$${(tx.fee || 0).toFixed(2)}`; document.getElementById('detail-from').textContent = tx.from || 'N/A'; document.getElementById('detail-to').textContent = tx.to || 'N/A'; document.getElementById('detail-hash').textContent = tx.hash || 'N/A'; modal.style.display = 'flex'; document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; }; document.getElementById('download-tx-button').onclick = () => { const contentToCapture = document.getElementById('modal-details-content'); html2canvas(contentToCapture, { scale: 2 }).then(canvas => { const link = document.createElement('a'); link.download = `transaction_${tx.hash.substring(0, 10)}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.9); link.click(); }); }; }
         
-        // **MODIFIED** initializeApp to handle the async Service Worker registration
         async function initializeApp() {
-            // Disable buttons that require the service worker until it's ready
-            const criticalButtons = ['go-to-create-wallet', 'go-to-restore-wallet', 'login-button'];
-            criticalButtons.forEach(id => {
-                const button = document.getElementById(id);
-                if (button) button.disabled = true;
-            });
-
-            try {
-                // Wait for the Service Worker to be ready
-                await ServiceWorkerOracle.initialize();
-                console.log("Secure Oracle is ready. Enabling UI.");
-                // If successful, enable the buttons
-                criticalButtons.forEach(id => {
-                    const button = document.getElementById(id);
-                    if (button) button.disabled = false;
-                });
-            } catch (error) {
-                alert(`Critical Error: Could not initialize the secure environment. ${error.message}. Please try refreshing or using a different browser.`);
-                return; // Stop app initialization
-            }
-
             try {
                 const fetchedConfig = await SupabaseLedger.getAppConfig();
                 state.config = { ...AppConstants, ...fetchedConfig };
@@ -574,20 +303,20 @@
             document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
             document.getElementById('back-from-qr-display').addEventListener('click', () => { showView('wallet-view'); });
-            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; setLoader('create-loader', true); try { const { mnemonic } = await WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); } catch(e) { statusEl.innerHTML = `<span class="error">${e.message}</span>`; } finally { button.disabled = false; setLoader('create-loader', false); } });
+            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } if (pass !== confirmPass) { statusEl.innerHTML = '<span class="error">Passwords do not match.</span>'; return; } button.disabled = true; setLoader('create-loader', true); setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); document.getElementById('seed-phrase-display').textContent = mnemonic; showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); }, 50); });
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { await showView('wallet-view'); document.getElementById('seed-phrase-display').textContent = ''; resetViewInputs('create-wallet-view'); });
             document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { statusEl.innerHTML = '<span class="error">Recovery phrase must be 12 words.</span>'; return; } if (pass.length < 8) { statusEl.innerHTML = '<span class="error">Password must be at least 8 characters.</span>'; return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { await showView('wallet-view'); } else { statusEl.innerHTML = '<span class="error">Restore failed. Invalid phrase.</span>'; } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
             document.getElementById('login-button').addEventListener('click', async () => { if (state.isLockedOut) return; const button = document.getElementById('login-button'), statusEl = document.getElementById('login-status'); const pass = document.getElementById('login-password-input').value.trim(); button.disabled = true; setLoader('login-loader', true); statusEl.innerHTML = '<span class="info">Decrypting wallet...</span>'; const success = await WalletLogic.login(pass); if (success) { await showView('wallet-view'); resetViewInputs('login-view'); } else { if (state.failedLoginAttempts >= state.config.MAX_LOGIN_ATTEMPTS) { state.isLockedOut = true; statusEl.innerHTML = `<span class="error">Too many failed attempts. Please wait 30 seconds.</span>`; setTimeout(() => { state.isLockedOut = false; state.failedLoginAttempts = 0; statusEl.textContent = ''; button.disabled = false; }, state.config.LOGIN_LOCKOUT_PERIOD); } else { statusEl.innerHTML = `<span class="error">Invalid password. (${state.config.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)</span>`; } } if (!state.isLockedOut) button.disabled = false; setLoader('login-loader', false); });
-            document.getElementById('logout-button').addEventListener('click', async () => { await WalletLogic.logout(); showView('login-view'); });
+            document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
             document.getElementById('reset-app-button').addEventListener('click', () => { if (confirm('Are you sure? All wallet data will be erased from this browser.')) { localStorage.removeItem('aura_user_store'); location.reload(); } });
-            document.getElementById('copy-address-button').addEventListener('click', () => { const button = document.getElementById('copy-address-button'); navigator.clipboard.writeText(state.walletState.address).then(() => { button.textContent = 'Copied!'; setTimeout(() => { button.textContent = 'Copy'; }, 1500); }); });
+            document.getElementById('copy-address-button').addEventListener('click', () => { const button = document.getElementById('copy-address-button'); navigator.clipboard.writeText(state.wallet.address).then(() => { button.textContent = 'Copied!'; setTimeout(() => { button.textContent = 'Copy'; }, 1500); }); });
             document.getElementById('show-receive-view-button').addEventListener('click', () => { resetViewInputs('receive-view'); showView('receive-view'); });
             document.getElementById('show-send-view-button').addEventListener('click', () => { resetViewInputs('send-view'); showView('send-view'); });
             document.getElementById('send-manual-button').addEventListener('click', async () => { const statusEl = document.getElementById('send-status'), recipientAddress = document.getElementById('send-address-input').value.trim(), amount = parseFloat(document.getElementById('send-amount-input').value); statusEl.innerHTML = ''; if (!ethers.isAddress(recipientAddress)) { statusEl.innerHTML = '<span class="error">Invalid recipient address.</span>'; return; } if (isNaN(amount) || amount <= 0) { statusEl.innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const fee = amount * state.config.FEE_PERCENTAGE, total = amount + fee; if (state.currentBalance < total) { statusEl.innerHTML = `<span class="error">Insufficient funds.</span>`; return; } state.activeManualSend = { address: recipientAddress, amount: amount }; state.activePaymentRequest = null; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = recipientAddress; await showView('send-confirm-view'); });
             document.getElementById('create-request-qr-button').addEventListener('click', () => { const amount = parseFloat(document.getElementById('request-amount-input').value); if (isNaN(amount) || amount <= 0) { document.getElementById('receive-status').innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const request = WalletLogic.createPaymentRequest(amount); document.getElementById('qr-display-title').textContent = 'Payment Request'; document.getElementById('qr-display-instruction').textContent = `Show this QR to the sender to pay $${amount.toFixed(2)}.`; document.getElementById('qr-display-box').style.display = 'block'; generateQrCode(JSON.stringify(request), 'qr-display-box'); document.getElementById('waiting-on-payment').style.display = 'block'; const statusMsg = document.getElementById('final-status-message'), timerEl = document.getElementById('payment-timer'); statusMsg.innerHTML = '<span class="info">Waiting for sender to pay...</span>'; document.querySelector('#waiting-on-payment .loader').style.display = 'block'; showView('qr-display-view'); let timeLeft = state.config.PAYMENT_REQUEST_EXPIRY; const updateTimer = () => { timeLeft -= 1000; const minutes = Math.floor(timeLeft / 60000), seconds = Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0'); timerEl.textContent = `Expires in: ${minutes}:${seconds}`; if (timeLeft <= 0) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; statusMsg.innerHTML = '<span class="error">Payment request expired.</span>'; document.querySelector('#waiting-on-payment .loader').style.display = 'none'; } }; updateTimer(); state.activePollingTimer = setInterval(async () => { updateTimer(); if (timeLeft <= 0) return; try { const confirmation = await SupabaseLedger.findConfirmation(request.linkedTxHash); if (confirmation) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; timerEl.style.display = 'none'; statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>'; if (await WalletLogic.finalizePayment(confirmation)) { statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`; document.querySelector('#waiting-on-payment .loader').style.display = 'none'; setTimeout(async () => { await showView('wallet-view'); }, 2000); } } } catch (err) { console.error("Polling error:", err); statusMsg.innerHTML = `<span class="error">Network error while checking for payment.</span>`; clearInterval(state.activePollingTimer); state.activePollingTimer = null; } }, state.config.POLLING_INTERVAL); });
             document.getElementById('confirm-payment-button').addEventListener('click', async (event) => { const button = event.target, statusEl = document.getElementById('send-confirm-status'); button.disabled = true; statusEl.innerHTML = '<span class="info">Processing payment...</span>'; try { await WalletLogic.getServerAuthoritativeBalance(); let success = false, message = ''; if (state.activePaymentRequest) { await WalletLogic.processPayment(state.activePaymentRequest); message = `Payment of $${state.activePaymentRequest.amount.toFixed(2)} sent!`; success = true; } else if (state.activeManualSend) { await WalletLogic.directSend(state.activeManualSend.address, state.activeManualSend.amount); message = `Payment of $${state.activeManualSend.amount.toFixed(2)} sent!`; success = true; } else { throw new Error("No active payment request."); } if (success) { statusEl.innerHTML = `<span class="success">${message}</span>`; await BackgroundSync.performSync(); await new Promise(resolve => setTimeout(resolve, 1500)); state.activePaymentRequest = null; state.activeManualSend = null; await showView('wallet-view'); } } catch (err) { statusEl.innerHTML = `<span class="error">Payment Failed: ${err.message}</span>`; } finally { button.disabled = false; } });
             document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); document.getElementById('charge-confirmation').style.display = 'none'; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.disabled = true; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); showView('charge-view'); });
-            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const statusEl = document.getElementById('validation-status'); statusEl.innerHTML = ''; const amount = parseFloat(button.dataset.amount); const serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An internal error occurred. Please try again."); await showView('wallet-view'); return; } try { statusEl.innerHTML = '<span class="info">Recording banknote on public ledger...</span>'; await SupabaseLedger.recordSpentIdentifier(serial, 'banknote'); statusEl.innerHTML = '<span class="info">Creating public transaction record...</span>'; const chargeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: 'BANKNOTE_ISSUER', receiverAddress: state.walletState.address, amount: amount, linkedTxHash: 'charge-' + serial }; await SupabaseLedger.pinConfirmation(chargeConfirmation); WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.walletState.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial }); CacheManager.invalidate(state.walletState.address); await BackgroundSync.performSync(); alert(`$${amount.toFixed(2)} added to your balance successfully.`); await showView('wallet-view'); } catch (err) { console.error("Charge confirmation failed:", err); statusEl.innerHTML = `<span class="error">Charge Failed: ${err.message}</span>`; button.disabled = false; } });
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const statusEl = document.getElementById('validation-status'); statusEl.innerHTML = ''; const amount = parseFloat(button.dataset.amount); const serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An internal error occurred. Please try again."); await showView('wallet-view'); return; } try { statusEl.innerHTML = '<span class="info">Recording banknote on public ledger...</span>'; await SupabaseLedger.recordSpentIdentifier(serial, 'banknote'); statusEl.innerHTML = '<span class="info">Creating public transaction record...</span>'; const chargeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: 'BANKNOTE_ISSUER', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: 'charge-' + serial }; await SupabaseLedger.pinConfirmation(chargeConfirmation); WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.wallet.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial }); CacheManager.invalidate(state.wallet.address); await BackgroundSync.performSync(); alert(`$${amount.toFixed(2)} added to your balance successfully.`); await showView('wallet-view'); } catch (err) { console.error("Charge confirmation failed:", err); statusEl.innerHTML = `<span class="error">Charge Failed: ${err.message}</span>`; button.disabled = false; } });
             document.getElementById('banknote-image-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const statusEl = document.getElementById('validation-status'); const confirmSection = document.getElementById('charge-confirmation'); const confirmBtn = document.getElementById('confirm-charge-button'); confirmSection.style.display = 'none'; confirmBtn.disabled = true; statusEl.innerHTML = '<span class="info">Preparing image...</span>'; try { const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION); const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl); const imageData = await new Promise((resolve, reject) => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0); resolve(ctx.getImageData(0, 0, img.width, img.height)); }; img.onerror = reject; img.src = processedDataUrl; }); const banknotePayload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl); statusEl.innerHTML = '<span class="info">Scan complete. Contacting server for validation...</span>'; const validationResult = await SupabaseLedger.validateBanknote(banknotePayload); if (validationResult.success) { statusEl.innerHTML = '<span class="success">Banknote is valid!</span>'; document.getElementById('validated-amount').textContent = `$${validationResult.amount.toFixed(2)}`; confirmBtn.dataset.amount = validationResult.amount; confirmBtn.dataset.serial = validationResult.serial; confirmBtn.disabled = false; confirmSection.style.display = 'block'; } else { throw new Error("Server rejected the banknote."); } } catch (err) { statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; } finally { event.target.value = ''; } });
         }
         document.addEventListener('DOMContentLoaded', initializeApp);
