@@ -89,7 +89,17 @@
 
         self.addEventListener('message', async (event) => {
             const { action, payload, id } = event.data;
+            const sourceClient = event.source;
 
+            // A helper to ensure we can reply to the message
+            const postReply = (client, message) => {
+                if (client) {
+                    client.postMessage(message);
+                } else {
+                    console.error("Cannot post reply: client source is not available.");
+                }
+            };
+            
             try {
                 let result;
                 switch (action) {
@@ -123,16 +133,10 @@
                     default:
                         throw new Error(`Unknown action: ${action}`);
                 }
-                // Send success response back to the main thread
-                self.clients.get(event.source.id).then(client => {
-                    client.postMessage({ status: 'success', action, payload: result, id });
-                });
+                postReply(sourceClient, { status: 'success', action, payload: result, id });
 
             } catch (error) {
-                // Send error response back to the main thread
-                self.clients.get(event.source.id).then(client => {
-                    client.postMessage({ status: 'error', action, message: error.message, id });
-                });
+                postReply(sourceClient, { status: 'error', action, message: error.message, id });
             }
         });
     </script>
@@ -140,61 +144,63 @@
     <script type="module">
         import { ethers } from "./ethers.min.js";
 
-        // --- SERVICE WORKER COMMUNICATION LAYER ---
+        // --- SERVICE WORKER COMMUNICATION LAYER (MODIFIED FOR ROBUSTNESS) ---
         const ServiceWorkerOracle = (() => {
-            let sw = null;
-            let isReady = false;
+            let swRegistration = null;
+            let initializationPromise = null;
             let messageId = 0;
             const pendingPromises = new Map();
 
             async function register() {
-                if ('serviceWorker' in navigator) {
-                    try {
-                        const blob = new Blob([document.getElementById('service-worker-script').textContent], { type: 'application/javascript' });
-                        const registration = await navigator.serviceWorker.register(URL.createObjectURL(blob));
-                        sw = registration.active || registration.installing || registration.waiting;
-                        isReady = true;
-                        console.log('Service Worker registered successfully.');
-                        
-                        navigator.serviceWorker.addEventListener('message', (event) => {
-                            const { id, status, payload, message, action } = event.data;
-                            if (pendingPromises.has(id)) {
-                                const { resolve, reject } = pendingPromises.get(id);
-                                if (status === 'success') {
-                                    resolve(payload);
-                                } else {
-                                    console.error(`Error in SW action '${action}':`, message);
-                                    reject(new Error(message));
-                                }
-                                pendingPromises.delete(id);
-                            }
-                        });
-                        
-                    } catch (error) {
-                        console.error('Service Worker registration failed:', error);
-                        isReady = false;
-                    }
-                } else {
-                    alert("Service Workers are not supported in this browser. This application cannot run securely.");
+                if (!('serviceWorker' in navigator)) {
+                    throw new Error("Service Workers are not supported in this browser. This application cannot run securely.");
                 }
-            }
+                
+                const blob = new Blob([document.getElementById('service-worker-script').textContent], { type: 'application/javascript' });
+                swRegistration = await navigator.serviceWorker.register(URL.createObjectURL(blob));
 
-            function sendMessage(action, payload) {
-                if (!isReady || !sw) {
-                    return Promise.reject(new Error("Service Worker is not ready."));
-                }
-                const id = messageId++;
-                return new Promise((resolve, reject) => {
-                    pendingPromises.set(id, { resolve, reject });
-                    // Use a MessageChannel for direct communication
-                    const channel = new MessageChannel();
-                    sw.postMessage({ action, payload, id }, [channel.port2]);
+                // Wait until a service worker is in control of the page
+                await navigator.serviceWorker.ready;
+                console.log('Service Worker is active and ready.');
+
+                navigator.serviceWorker.addEventListener('message', (event) => {
+                    const { id, status, payload, message, action } = event.data;
+                    if (pendingPromises.has(id)) {
+                        const { resolve, reject } = pendingPromises.get(id);
+                        if (status === 'success') {
+                            resolve(payload);
+                        } else {
+                            console.error(`Error in SW action '${action}':`, message);
+                            reject(new Error(message));
+                        }
+                        pendingPromises.delete(id);
+                    }
                 });
             }
 
-            register(); // Auto-register on load
+            function initialize() {
+                if (!initializationPromise) {
+                    initializationPromise = register();
+                }
+                return initializationPromise;
+            }
+
+            async function sendMessage(action, payload) {
+                await initialize(); // Ensure registration is complete before sending
+                
+                if (!navigator.serviceWorker.controller) {
+                    return Promise.reject(new Error("Service Worker is not in control. Please reload the page."));
+                }
+                
+                const id = messageId++;
+                return new Promise((resolve, reject) => {
+                    pendingPromises.set(id, { resolve, reject });
+                    navigator.serviceWorker.controller.postMessage({ action, payload, id });
+                });
+            }
 
             return {
+                initialize,
                 createWallet: (password) => sendMessage('createWallet', { password }),
                 restoreWallet: (mnemonic, password) => sendMessage('restoreWallet', { mnemonic, password }),
                 login: (encryptedJson, password) => sendMessage('login', { encryptedJson, password }),
@@ -202,6 +208,7 @@
                 signMessage: (message) => sendMessage('signMessage', { message }),
             };
         })();
+
 
         // Polyfill Buffer if not available (for Edge/Supabase/browser environments)
         if (typeof globalThis.Buffer === 'undefined') {
@@ -519,7 +526,29 @@
         function renderTransactionHistory() { const listUl = document.getElementById('transaction-list-ul'); listUl.innerHTML = ''; if (!state.userStore || !state.userStore.chain) return; const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse(); if (transactions.length === 0) { listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>'; return; } transactions.forEach(tx => { const item = document.createElement('li'); item.className = 'transaction-item'; item.style.cursor = 'pointer'; const isSent = tx.type === 'send'; const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received'); const typeClass = isSent ? 'sent' : 'received'; const totalAmount = tx.amount || 0; const date = new Date(tx.timestamp).toLocaleString('en-US'); item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`; item.addEventListener('click', () => showTransactionDetails(tx)); listUl.appendChild(item); }); }
         function showTransactionDetails(tx) { const modal = document.getElementById('transaction-detail-modal'); document.getElementById('detail-status').textContent = tx.status || 'N/A'; document.getElementById('detail-type').textContent = tx.type || 'N/A'; document.getElementById('detail-datetime').textContent = new Date(tx.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }); document.getElementById('detail-amount').textContent = `$${(tx.amount || 0).toFixed(2)}`; document.getElementById('detail-fee').textContent = `$${(tx.fee || 0).toFixed(2)}`; document.getElementById('detail-from').textContent = tx.from || 'N/A'; document.getElementById('detail-to').textContent = tx.to || 'N/A'; document.getElementById('detail-hash').textContent = tx.hash || 'N/A'; modal.style.display = 'flex'; document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; }; document.getElementById('download-tx-button').onclick = () => { const contentToCapture = document.getElementById('modal-details-content'); html2canvas(contentToCapture, { scale: 2 }).then(canvas => { const link = document.createElement('a'); link.download = `transaction_${tx.hash.substring(0, 10)}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.9); link.click(); }); }; }
         
+        // **MODIFIED** initializeApp to handle the async Service Worker registration
         async function initializeApp() {
+            // Disable buttons that require the service worker until it's ready
+            const criticalButtons = ['go-to-create-wallet', 'go-to-restore-wallet', 'login-button'];
+            criticalButtons.forEach(id => {
+                const button = document.getElementById(id);
+                if (button) button.disabled = true;
+            });
+
+            try {
+                // Wait for the Service Worker to be ready
+                await ServiceWorkerOracle.initialize();
+                console.log("Secure Oracle is ready. Enabling UI.");
+                // If successful, enable the buttons
+                criticalButtons.forEach(id => {
+                    const button = document.getElementById(id);
+                    if (button) button.disabled = false;
+                });
+            } catch (error) {
+                alert(`Critical Error: Could not initialize the secure environment. ${error.message}. Please try refreshing or using a different browser.`);
+                return; // Stop app initialization
+            }
+
             try {
                 const fetchedConfig = await SupabaseLedger.getAppConfig();
                 state.config = { ...AppConstants, ...fetchedConfig };
