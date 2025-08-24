@@ -386,6 +386,21 @@
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
             document.getElementById('reset-app-button').addEventListener('click', () => { if (confirm('Are you sure? All wallet data will be erased from this browser.')) { localStorage.removeItem('aura_user_store'); location.reload(); } });
             document.getElementById('copy-address-button').addEventListener('click', () => { const button = document.getElementById('copy-address-button'); navigator.clipboard.writeText(state.wallet.address).then(() => { button.textContent = 'Copied!'; setTimeout(() => { button.textContent = 'Copy'; }, 1500); }); });
+            
+            // --- FIX STARTS HERE ---
+            document.getElementById('show-charge-view-button').addEventListener('click', () => {
+                // Reset the view to its initial state
+                resetViewInputs('charge-view');
+                document.getElementById('charge-confirmation').style.display = 'none';
+                
+                // Since validation is now server-side, the input can be enabled immediately
+                document.getElementById('banknote-image-input').disabled = false; 
+
+                // Show the charge view
+                showView('charge-view');
+            });
+            // --- FIX ENDS HERE ---
+
             document.getElementById('show-receive-view-button').addEventListener('click', () => { resetViewInputs('receive-view'); showView('receive-view'); });
             document.getElementById('show-send-view-button').addEventListener('click', () => { resetViewInputs('send-view'); showView('send-view'); });
             document.getElementById('send-manual-button').addEventListener('click', async () => { const statusEl = document.getElementById('send-status'), recipientAddress = document.getElementById('send-address-input').value.trim(), amount = parseFloat(document.getElementById('send-amount-input').value); statusEl.innerHTML = ''; if (!ethers.isAddress(recipientAddress)) { statusEl.innerHTML = '<span class="error">Invalid recipient address.</span>'; return; } if (isNaN(amount) || amount <= 0) { statusEl.innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const fee = amount * state.config.FEE_PERCENTAGE, total = amount + fee; if (state.currentBalance < total) { statusEl.innerHTML = `<span class="error">Insufficient funds.</span>`; return; } state.activeManualSend = { address: recipientAddress, amount: amount }; state.activePaymentRequest = null; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = recipientAddress; await showView('send-confirm-view'); });
