@@ -6,24 +6,21 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
         :root {
-            --primary-color: #333333;
-            --secondary-color: #000000;
-            --danger-color: #d9534f;
-            --light-gray: #f5f5f5;
-            --dark-gray: #555555;
-            --success-color: #1e8e3e;
-            --text-light: #ffffff;
-            --text-dark: #212529;
-            --card-bg: #ffffff;
-            --border-color: #dee2e6;
+            --primary-color: #333333; --secondary-color: #000000; --danger-color: #d9534f;
+            --light-gray: #f5f5f5; --dark-gray: #555555; --success-color: #1e8e3e;
+            --text-light: #ffffff; --text-dark: #212529; --card-bg: #ffffff; --border-color: #dee2e6;
         }
-        body { font-family: 'Roboto', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: var(--text-dark); }
+        body { font-family: 'Roboto', sans-serif; background-color: var(--light-gray); display: flex; justify-content: center;
+        align-items: center; height: 100vh; margin: 0; color: var(--text-dark); }
         .view { display: none; }
         .view.active { display: block; }
-        .card { background-color: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 380px; text-align: center; border-top: 5px solid var(--secondary-color); }
-        input, textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; text-align: center; font-family: 'Roboto', sans-serif; background-color: #fff; color: #000; }
+        .card { background-color: var(--card-bg); padding: 30px; border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 380px; text-align: center; border-top: 5px solid var(--secondary-color); }
+        input, textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px;
+        border: 1px solid var(--border-color); border-radius: 6px; font-size: 16px; text-align: center; font-family: 'Roboto', sans-serif; background-color: #fff; color: #000; }
         textarea { resize: vertical; height: 80px; }
-        button { width: 100%; padding: 12px; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); color: var(--text-light); border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: all 0.2s; }
+        button { width: 100%; padding: 12px; background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); color: var(--text-light);
+        border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: all 0.2s; }
         button:hover { opacity: 0.9; transform: translateY(-2px); }
         button:disabled { background: #999; cursor: not-allowed; transform: translateY(0); }
         .back-button { background: var(--dark-gray); margin-top: 10px; }
@@ -55,125 +52,30 @@
         .transaction-amount.sent { color: var(--danger-color); }
         .transaction-amount.received { color: var(--success-color); }
         .no-transactions { text-align: center; color: #999; padding: 20px; }
-        #payment-timer { font-size: 18px; font-weight: bold; color: var(--danger-color); margin-top: 15px; }
         .address-display-box { background: #f0f2f5; padding: 10px; border-radius: 6px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; }
         .address-text { font-family: monospace; font-size: 14px; margin-right: 10px; }
         .copy-button { padding: 5px 10px; font-size: 12px; width: auto; background: var(--dark-gray); min-width: 60px; }
-        #confirm-amount-display { line-height: 1.5; }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { width: 400px; max-width: 90%; text-align: left; padding: 25px; }
         .modal-content h2 { text-align: center; margin-bottom: 20px; }
-        .modal-content p { margin-bottom: 12px; font-size: 14px; }
-        .modal-content p strong { color: var(--primary-color); }
     </style>
 </head>
 <body>
 
     <div id="onboarding-view" class="view active"><div class="card"><h1>Aura Wallet</h1><p>A new generation of asset security and control</p><button id="go-to-create-wallet">Create a New Wallet</button><button id="go-to-restore-wallet" class="back-button">Restore Wallet</button></div></div>
-    
     <div id="create-wallet-view" class="view"><div class="card"><h2>Create Password</h2><p>Choose a strong password to encrypt your wallet. This password cannot be recovered.</p><input type="password" id="create-password-input" placeholder="Password"><input type="password" id="confirm-password-input" placeholder="Confirm Password"><div class="loader hidden" id="create-loader"></div><button id="create-wallet-button">Create Wallet</button><div id="create-status" class="status-box"></div><button class="back-button" id="back-from-create">Back</button></div></div>
-
     <div id="seed-phrase-view" class="view"><div class="card"><h2>Your Recovery Phrase</h2><p class="error">Write down these 12 words in a safe, offline place. This is the only way to recover your wallet.</p><div id="seed-phrase-display" class="seed-phrase-box"></div><button id="seed-phrase-confirm-button">I Understand, Take Me to My Wallet</button></div></div>
-
     <div id="restore-wallet-view" class="view"><div class="card"><h2>Restore Wallet</h2><p>Enter your 12-word recovery phrase.</p><textarea id="restore-seed-input" placeholder="Enter words separated by spaces..."></textarea><p>Choose a new password for this device.</p><input type="password" id="restore-password-input" placeholder="New Password"><div class="loader hidden" id="restore-loader"></div><button id="restore-wallet-button">Restore</button><div id="restore-status" class="status-box"></div><button class="back-button" id="back-from-restore">Back</button></div></div>
-    
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><div class="loader hidden" id="login-loader"></div><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet? <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
+    <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><div class="address-display-box"><span id="address-display" class="address-text"></span><button id="copy-address-button" class="copy-button">Copy</button></div><p>Balance:</p><h1 id="balance-display">$0.00</h1><div id="sync-status" class="status-box" style="font-size: 14px;"></div><p id="network-status" style="font-size: 12px; color: var(--success-color);">Ledger: Supabase</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><div class="transaction-history"><h3>Recent Transactions</h3><ul id="transaction-list-ul" class="transaction-list"></ul></div><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
+    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><p>Upload a digital banknote image to validate it and add the funds to your balance.</p><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*"><div id="validation-status" class="status-box"></div><div id="charge-confirmation" style="display:none; margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
+    <div id="receive-view" class="view"><div class="card"><h2>Receive Funds</h2><p>Share your address to receive funds.</p><div id="static-qr-code"></div><p style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;" id="full-receive-address"></p><hr style="margin: 20px 0;"><p>Or request a specific amount:</p><input type="number" id="request-amount-input" placeholder="Amount to receive"><button id="create-request-qr-button">Generate Payment Request QR</button><div id="receive-status" class="status-box"></div><button class="back-button" id="back-from-receive">Back</button></div></div>
+    <div id="send-view" class="view"><div class="card"><h2>Send Funds</h2><p>Enter recipient address and amount.</p><div><input type="text" id="send-address-input" placeholder="Recipient's Aura Address" style="margin-bottom: 10px;"><input type="number" id="send-amount-input" placeholder="Amount to send" style="margin-bottom: 10px;"><button id="send-manual-button">Continue</button></div><p style="text-align:center; margin: 20px 0; font-weight: bold;">- OR -</p><p>Scan a recipient's payment request QR code.</p><div id="video-container" style="position: relative; width: 100%; max-width: 300px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 2px solid #333; background: #000;"><video id="qr-video" playsinline style="width: 100%; height: auto; display: block;"></video><div id="loading-message" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center;">Requesting camera access...</div></div><canvas id="qr-canvas" style="display: none;"></canvas><div id="send-status" class="status-box"></div><button class="back-button" id="back-from-send">Back</button></div></div>
+    <div id="send-confirm-view" class="view"><div class="card"><h2>Confirm Payment</h2><p>You are about to send:</p><h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2><p>To:</p><p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;"></p><button id="confirm-payment-button">Confirm and Pay</button><div id="send-confirm-status" class="status-box"></div><button class="back-button" id="back-from-send-confirm">Cancel</button></div></div>
+    <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><div id="waiting-on-payment" style="display: none;"><div id="payment-timer"></div><div class="loader"></div><p id="final-status-message" class="status-box" style="font-size:18px;"></p></div><button class="back-button" id="back-from-qr-display">Back to Wallet</button></div></div>
+    <div id="transaction-detail-modal" class="modal-overlay" style="display:none;"><div class="modal-content card"><h2>Transaction Details</h2><div id="modal-details-content"><p><strong>Status:</strong> <span id="detail-status"></span></p><p><strong>Type:</strong> <span id="detail-type"></span></p><p><strong>Date & Time:</strong> <span id="detail-datetime"></span></p><p><strong>Amount:</strong> <span id="detail-amount"></span></p><p><strong>Fee:</strong> <span id="detail-fee"></span></p><p style="word-wrap: break-word;"><strong>From:</strong> <span id="detail-from"></span></p><p style="word-wrap: break-word;"><strong>To:</strong> <span id="detail-to"></span></p><p style="word-wrap: break-word;"><strong>Transaction Hash:</strong> <span id="detail-hash"></span></p></div><button id="download-tx-button">Download as JPG</button><button id="close-modal-button" class="back-button">Close</button></div></div>
     
-    <div id="wallet-view" class="view"><div class="card">
-        <h2>Your Wallet</h2>
-        <div class="address-display-box">
-             <span id="address-display" class="address-text"></span>
-             <button id="copy-address-button" class="copy-button">Copy</button>
-        </div>
-        <p>Balance:</p>
-        <h1 id="balance-display">$0.00</h1>
-        <div id="sync-status" class="status-box" style="font-size: 14px;"></div>
-        <p id="network-status" style="font-size: 12px; color: var(--success-color);">Ledger: Supabase</p>
-        <button id="show-charge-view-button">Charge with Banknote</button>
-        <button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button>
-        <button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button>
-        <div class="transaction-history">
-            <h3>Recent Transactions</h3>
-            <ul id="transaction-list-ul" class="transaction-list"></ul>
-        </div>
-        <button id="logout-button" class="logout-button">Logout (Lock Wallet)</button>
-    </div></div>
-    
-    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><p>Upload a digital banknote image to add funds to your wallet.</p><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*"><div class="loader hidden" id="charge-loader"></div><div id="charge-status" class="status-box"></div><button class="back-button" id="back-from-charge">Back</button></div></div>
-    
-    <div id="receive-view" class="view"><div class="card">
-        <h2>Receive Funds</h2>
-        <p>Share your address to receive funds.</p>
-        <div id="static-qr-code"></div>
-        <p style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;" id="full-receive-address"></p>
-        <hr style="margin: 20px 0;">
-        <p>Or request a specific amount:</p>
-        <input type="number" id="request-amount-input" placeholder="Amount to receive">
-        <button id="create-request-qr-button">Generate Payment Request QR</button>
-        <div id="receive-status" class="status-box"></div>
-        <button class="back-button" id="back-from-receive">Back</button>
-    </div></div>
-    
-    <div id="send-view" class="view"><div class="card">
-        <h2>Send Funds</h2>
-        <p>Enter recipient address and amount.</p>
-        <div>
-            <input type="text" id="send-address-input" placeholder="Recipient's Aura Address" style="margin-bottom: 10px;">
-            <input type="number" id="send-amount-input" placeholder="Amount to send" style="margin-bottom: 10px;">
-            <button id="send-manual-button">Continue</button>
-        </div>
-        <p style="text-align:center; margin: 20px 0; font-weight: bold;">- OR -</p>
-        <p>Scan a recipient's payment request QR code.</p>
-        <div id="video-container" style="position: relative; width: 100%; max-width: 300px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 2px solid #333; background: #000;">
-            <video id="qr-video" playsinline style="width: 100%; height: auto; display: block;"></video>
-            <div id="loading-message" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center;">Requesting camera access...</div>
-        </div>
-        <canvas id="qr-canvas" style="display: none;"></canvas> 
-        <div id="send-status" class="status-box"></div>
-        <button class="back-button" id="back-from-send">Back</button>
-    </div></div>
-    
-    <div id="send-confirm-view" class="view"><div class="card">
-        <h2>Confirm Payment</h2>
-        <p>You are about to send:</p>
-        <h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2>
-        <p>To:</p>
-        <p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;"></p>
-        <button id="confirm-payment-button">Confirm and Pay</button>
-        <div id="send-confirm-status" class="status-box"></div>
-        <button class="back-button" id="back-from-send-confirm">Cancel</button>
-    </div></div>
-    
-    <div id="qr-display-view" class="view"><div class="card">
-        <h2 id="qr-display-title"></h2>
-        <p id="qr-display-instruction"></p>
-        <div id="qr-display-box"></div>
-        <div id="waiting-on-payment" style="display: none;">
-            <div id="payment-timer"></div>
-            <div class="loader"></div>
-            <p id="final-status-message" class="status-box" style="font-size:18px;"></p>
-        </div>
-        <button class="back-button" id="back-from-qr-display">Back to Wallet</button>
-    </div></div>
-
-    <div id="transaction-detail-modal" class="modal-overlay" style="display:none;">
-        <div class="modal-content card">
-            <h2>Transaction Details</h2>
-            <div id="modal-details-content">
-                <p><strong>Status:</strong> <span id="detail-status"></span></p>
-                <p><strong>Type:</strong> <span id="detail-type"></span></p>
-                <p><strong>Date & Time:</strong> <span id="detail-datetime"></span></p>
-                <p><strong>Amount:</strong> <span id="detail-amount"></span></p>
-                <p><strong>Fee:</strong> <span id="detail-fee"></span></p>
-                <p style="word-wrap: break-word;"><strong>From:</strong> <span id="detail-from"></span></p>
-                <p style="word-wrap: break-word;"><strong>To:</strong> <span id="detail-to"></span></p>
-                <p style="word-wrap: break-word;"><strong>Transaction Hash:</strong> <span id="detail-hash"></span></p>
-            </div>
-            <button id="download-tx-button">Download as JPG</button>
-            <button id="close-modal-button" class="back-button">Close</button>
-        </div>
-    </div>
-    
+    <script src="pako.min.js"></script>
     <script src="qrcode.js"></script>
     <script src="jsQR.js"></script>
     <script src="crypto-js.min.js"></script>
@@ -181,12 +83,108 @@
     
     <script type="module">
         import { ethers } from "./ethers.min.js";
-        
         // --- SUPABASE CONFIGURATION ---
-        const SUPABASE_URL = 'https://hdvqbcjtublfuykigsui.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkdnFiY2p0dWJsZnV5a2lnc3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NTk4OTAsImV4cCI6MjA3MTUzNTg5MH0.Gog9zohe1bz6gihtssCBPUYkfNMbAjuQKR4Qvb3HNOg'; // <-- REPLACE WITH YOUR SUPABASE ANON KEY
+        const SUPABASE_URL = 'https://lahcfohgcaapvgdzirsu.supabase.co'; // <-- REPLACE WITH YOUR SUPABASE URL
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxhaGNmb2hnY2FhcHZnZHppcnN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MjI5MjEsImV4cCI6MjA3MTM5ODkyMX0.6-Ug9nivwEd-e92o9o1_tKXUn_iRaTOzOMgW-x3qDL8'; // <-- REPLACE WITH YOUR SUPABASE ANON KEY
         const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/api`;
 
+        // CORE BANKNOTE CLIENT-SIDE LOGIC
+        const CoreLogic = (() => {
+            const Constants = { VALIDATION_PREFIX: "SADAT_V2_PART", MAX_IMAGE_DIMENSION: 2000, NUM_QR_CODES: 9 };
+            const Utils = {
+                preprocessImage: (dataUrl) => new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.filter = 'grayscale(1) contrast(2.5) brightness(1.1)';
+                        ctx.drawImage(img, 0, 0);
+                        resolve(canvas.toDataURL('image/jpeg'));
+                    };
+                    img.onerror = reject;
+                    img.src = dataUrl;
+                }),
+                resizeImage: (file, maxDimension) => new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let { width, height } = img;
+                            if (width > height) {
+                                if (width > maxDimension) { height *= maxDimension / width; width = maxDimension; }
+                            } else {
+                                if (height > maxDimension) { width *= maxDimension / height; height = maxDimension; }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg'));
+                        };
+                        img.onerror = reject;
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                }),
+            };
+            const Banknote = {
+                getLayout: (imageWidth) => {
+                    const standardWidth = 790; // The reference width of the banknote layout
+                    const scale = imageWidth / standardWidth;
+                    return {
+                        qrSize: Math.round(250 * scale),
+                        xSpacing: Math.round(20 * scale),
+                        ySpacing: Math.round(20 * scale),
+                    };
+                },
+                decodeQrGrid: async (imageData, statusEl) => {
+                    const layout = Banknote.getLayout(imageData.width);
+                    const parts = {};
+                    let count = 0;
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = imageData.width;
+                    canvas.height = imageData.height;
+                    ctx.putImageData(imageData, 0, 0);
+
+                    for (let i = 0; i < Constants.NUM_QR_CODES; i++) {
+                        statusEl.innerHTML = `<span class="info">Scanning section ${i + 1}/${Constants.NUM_QR_CODES}...</span>`;
+                        await new Promise(r => setTimeout(r, 5));
+                        
+                        const row = Math.floor(i / 3), col = i % 3;
+                        const regionX = col * (layout.qrSize + layout.xSpacing);
+                        const regionY = row * (layout.qrSize + layout.ySpacing);
+                        const data = ctx.getImageData(regionX, regionY, layout.qrSize, layout.qrSize);
+                        
+                        const code = jsQR(data.data, data.width, data.height);
+                        if (code && code.data.startsWith(Constants.VALIDATION_PREFIX)) {
+                            const match = code.data.substring(Constants.VALIDATION_PREFIX.length).match(/^(\d+)\/(\d+):(.*)$/s);
+                            if (match) {
+                                const partNum = parseInt(match[1], 10);
+                                if (!parts[partNum]) {
+                                    parts[partNum] = match[3];
+                                    count++;
+                                }
+                            }
+                        }
+                    }
+
+                    if (count < Constants.NUM_QR_CODES) {
+                        throw new Error(`Scan failed. Found ${count}/${Constants.NUM_QR_CODES} valid sections.`);
+                    }
+                    let payload = '';
+                    for (let i = 1; i <= Constants.NUM_QR_CODES; i++) {
+                        payload += parts[i];
+                    }
+                    return payload;
+                }
+            };
+            return { Constants, Utils, Banknote };
+        })();
+        
         // --- PERFORMANCE OPTIMIZATION MODULES ---
         const CacheManager = { cache: new Map(), DEFAULT_CACHE_DURATION: 30000, set(key, data, duration = this.DEFAULT_CACHE_DURATION) { this.cache.set(key, { data, expiresAt: Date.now() + duration }); }, get(key) { const cached = this.cache.get(key); if (!cached) return null; if (Date.now() > cached.expiresAt) { this.cache.delete(key); return null; } return cached.data; }, invalidate(pattern) { for (const key of this.cache.keys()) { if (key.includes(pattern)) { this.cache.delete(key); } } } };
         const NetworkOptimizer = { getSyncStrategy() { const speed = navigator.connection?.effectiveType || '4g'; switch (speed) { case 'slow-2g': case '2g': return { interval: 45000, useCache: true, cacheDuration: 120000 }; case '3g': return { interval: 20000, useCache: true, cacheDuration: 60000 }; case '4g': default: return { interval: 10000, useCache: true, cacheDuration: 20000 }; } } };
@@ -197,10 +195,7 @@
             const apiCall = async (action, payload) => {
                 const response = await fetch(EDGE_FUNCTION_URL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
                     body: JSON.stringify({ action, payload })
                 });
                 const result = await response.json();
@@ -212,39 +207,20 @@
 
             return {
                 getAppConfig: () => apiCall('getAppConfig'),
-                chargeWithBanknote: (imageDataUrl, receiverAddress) => apiCall('chargeWithBanknote', { imageDataUrl, receiverAddress }),
+                validateBanknote: (banknotePayload) => apiCall('validateBanknote', { banknotePayload }),
+                recordSpentIdentifier: (identifier, type) => apiCall('recordSpentIdentifier', { identifier, type }),
+                hasBeenSpent: async (identifier) => { try { const result = await apiCall('hasBeenSpent', { identifier }); return result.spent; } catch (error) { console.error('Failed to check identifier status on Supabase:', error); alert(`Critical Error: Could not read from the public ledger. Cannot verify transaction safety. Reason: ${error.message}`); return true; } },
                 pinConfirmation: (confirmation) => apiCall('pinConfirmation', { confirmation }),
                 findConfirmation: (txHash) => apiCall('findConfirmation', { txHash }),
-                findIncomingTxs: async (receiverAddress) => {
-                    const cacheKey = `incoming_${receiverAddress}`;
-                    const strategy = NetworkOptimizer.getSyncStrategy();
-                    if (strategy.useCache) {
-                        const cached = CacheManager.get(cacheKey);
-                        if (cached) return cached;
-                    }
-                    const txs = await apiCall('findIncomingTxs', { receiverAddress });
-                    if (strategy.useCache) CacheManager.set(cacheKey, txs, strategy.cacheDuration);
-                    return txs;
-                },
-                findOutgoingTxs: async (senderAddress) => {
-                    const cacheKey = `outgoing_${senderAddress}`;
-                    const strategy = NetworkOptimizer.getSyncStrategy();
-                    if (strategy.useCache) {
-                        const cached = CacheManager.get(cacheKey);
-                        if (cached) return cached;
-                    }
-                    const txs = await apiCall('findOutgoingTxs', { senderAddress });
-                    if (strategy.useCache) CacheManager.set(cacheKey, txs, strategy.cacheDuration);
-                    return txs;
-                }
+                findIncomingTxs: async (receiverAddress) => { const cacheKey = `incoming_${receiverAddress}`; const strategy = NetworkOptimizer.getSyncStrategy(); if (strategy.useCache) { const cached = CacheManager.get(cacheKey); if (cached) return cached; } const txs = await apiCall('findIncomingTxs', { receiverAddress }); if (strategy.useCache) CacheManager.set(cacheKey, txs, strategy.cacheDuration); return txs; },
+                findOutgoingTxs: async (senderAddress) => { const cacheKey = `outgoing_${senderAddress}`; const strategy = NetworkOptimizer.getSyncStrategy(); if (strategy.useCache) { const cached = CacheManager.get(cacheKey); if (cached) return cached; } const txs = await apiCall('findOutgoingTxs', { senderAddress }); if (strategy.useCache) CacheManager.set(cacheKey, txs, strategy.cacheDuration); return txs; }
             };
         })();
 
-        // ===================================================================================
         // AURA PROTOCOL - DECENTRALIZED WALLET APPLICATION
-        // ===================================================================================
         const AppConstants = { MAX_LOGIN_ATTEMPTS: 5, LOGIN_LOCKOUT_PERIOD: 30000, POLLING_INTERVAL: 5000, PAYMENT_REQUEST_EXPIRY: 9 * 60 * 1000, PRECISION: 8 };
         let state = { wallet: null, userStore: null, failedLoginAttempts: 0, isLockedOut: false, activePaymentRequest: null, activeManualSend: null, activePollingTimer: null, cameraStream: null, isScannerActive: false, currentBalance: 0, transactionIndex: new Map(), config: null };
+        
         const WalletLogic = {
             createWallet: (password) => { const wallet = ethers.Wallet.createRandom(); const mnemonic = wallet.mnemonic.phrase; const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return { mnemonic }; },
             restoreWallet: async (mnemonic, password) => { try { const wallet = ethers.Wallet.fromPhrase(mnemonic); const encryptedJson = wallet.encryptSync(password); const userStore = { publicKey: wallet.publicKey, address: wallet.address, encryptedJson: encryptedJson, chain: [{ hash: ethers.id("GENESIS_BLOCK"), type: 'creation', timestamp: Date.now() }] }; localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false; } },
@@ -253,103 +229,35 @@
             buildTransactionIndex: () => { state.transactionIndex.clear(); if (!state.userStore || !state.userStore.chain) return; state.userStore.chain.forEach(tx => { const txKey = tx.linkedTxHash || tx.hash; state.transactionIndex.set(txKey, tx); }); },
             getLastTransaction: () => state.userStore.chain[state.userStore.chain.length - 1],
             addToChain: (txData) => { const prevTx = WalletLogic.getLastTransaction(); const newTx = { ...txData, prevHash: prevTx.hash, timestamp: txData.timestamp || Date.now() }; const amountInt = ethers.parseUnits((newTx.amount || 0).toFixed(state.config.PRECISION), state.config.PRECISION); const feeInt = ethers.parseUnits((newTx.fee || 0).toFixed(state.config.PRECISION), state.config.PRECISION); newTx.hash = ethers.solidityPackedKeccak256( ['string', 'uint256', 'uint256', 'string', 'string', 'string'], [newTx.type, amountInt, feeInt, newTx.from || '', newTx.to || '', newTx.prevHash] ); state.userStore.chain.push(newTx); localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); const txKey = newTx.linkedTxHash || newTx.hash; state.transactionIndex.set(txKey, newTx); return newTx; },
-            calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => {
-                const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-                const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-                const finalBalance = incomingTotal - outgoingTotal;
-                state.currentBalance = finalBalance;
-                return finalBalance;
-            },
+            calculateBalanceFromTxs: (incomingTxs, outgoingTxs) => { const incomingTotal = incomingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const outgoingTotal = outgoingTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0); const finalBalance = incomingTotal - outgoingTotal; state.currentBalance = finalBalance; return finalBalance; },
             getServerAuthoritativeBalance: async () => { if (!state.userStore) return 0.0; const [incomingTxs, outgoingTxs] = await Promise.all([ SupabaseLedger.findIncomingTxs(state.wallet.address), SupabaseLedger.findOutgoingTxs(state.wallet.address) ]); return WalletLogic.calculateBalanceFromTxs(incomingTxs, outgoingTxs); },
             getStandardizedConfirmationMessage: (confirmation) => { const amount = Number(confirmation.amount).toFixed(state.config.PRECISION); return [confirmation.type, confirmation.senderAddress, confirmation.receiverAddress, amount, confirmation.linkedTxHash].join('|'); },
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' }); return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + state.config.PAYMENT_REQUEST_EXPIRY }; },
-            processPayment: async (request) => {
-                if (!state.config || !state.config.TREASURY_ADDRESS || !state.config.FEE_PERCENTAGE) { throw new Error("CRITICAL: Treasury address is not configured. Fee cannot be processed."); }
-                const fee = request.amount * state.config.FEE_PERCENTAGE;
-                const totalDebit = request.amount + fee;
-                if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
-                if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`);
-                
-                // Server will handle the hasBeenSpent check
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash };
-                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                confirmation.signature = await state.wallet.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign;
-                await SupabaseLedger.pinConfirmation(confirmation);
-                
-                WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
-                
-                const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' });
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
-                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                feeConfirmation.signedMessage = feeMessageToSign;
-                await SupabaseLedger.pinConfirmation(feeConfirmation);
-                
-                CacheManager.invalidate(state.wallet.address);
-                return true;
-            },
-            directSend: async (recipientAddress, amount) => {
-                if (!state.config || !state.config.TREASURY_ADDRESS || !state.config.FEE_PERCENTAGE) { throw new Error("CRITICAL: Treasury address is not configured. Fee cannot be processed."); }
-                const fee = amount * state.config.FEE_PERCENTAGE;
-                const totalDebit = amount + fee;
-                if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`);
-                
-                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' });
-                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash };
-                const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                confirmation.signature = await state.wallet.signMessage(messageToSign);
-                confirmation.signedMessage = messageToSign;
-                await SupabaseLedger.pinConfirmation(confirmation);
-                
-                const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' });
-                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash };
-                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
-                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
-                feeConfirmation.signedMessage = feeMessageToSign;
-                await SupabaseLedger.pinConfirmation(feeConfirmation);
-                
-                CacheManager.invalidate(state.wallet.address);
-                return true;
-            },
+            processPayment: async (request) => { if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured."); const fee = request.amount * state.config.FEE_PERCENTAGE; const totalDebit = request.amount + fee; if (Date.now() > request.expiresAt) throw new Error("Payment request has expired."); if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds. You need $${totalDebit.toFixed(2)}.`); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed."); await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction'); const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash }; const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation); confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash }); const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' }); const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash }; const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation); feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign); feeConfirmation.signedMessage = feeMessageToSign; await SupabaseLedger.pinConfirmation(feeConfirmation); CacheManager.invalidate(state.wallet.address); return true; },
+            directSend: async (recipientAddress, amount) => { if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured."); const fee = amount * state.config.FEE_PERCENTAGE; const totalDebit = amount + fee; if (state.currentBalance < totalDebit) throw new Error(`Insufficient funds to cover amount + fee.`); const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed' }); const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: recipientAddress, amount: amount, linkedTxHash: sendTx.hash }; const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation); confirmation.signature = await state.wallet.signMessage(messageToSign); confirmation.signedMessage = messageToSign; await SupabaseLedger.pinConfirmation(confirmation); const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' }); const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash }; const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation); feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign); feeConfirmation.signedMessage = feeMessageToSign; await SupabaseLedger.pinConfirmation(feeConfirmation); CacheManager.invalidate(state.wallet.address); return true; },
             finalizePayment: async (confirmation) => { const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request'); if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false; } if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; } const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation); if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Tamper Detection: Confirmation data mismatch."); return false; } const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Signature verification failed!"); return false; } state.userStore.chain[receiveTxIndex].status = 'completed'; state.userStore.chain[receiveTxIndex].from = confirmation.senderAddress; localStorage.setItem('aura_user_store', JSON.stringify(state.userStore)); CacheManager.invalidate(state.wallet.address); return true; },
-            processDiscoveredTransaction: async (confirmation) => {
-                if (confirmation.receiverAddress !== state.wallet.address) { return false; }
-                const txKey = confirmation.linkedTxHash || confirmation.hash;
-                const existingTx = state.userStore.chain.find(tx => tx.linkedTxHash === txKey && tx.from === confirmation.senderAddress && tx.amount === confirmation.amount);
-                if (existingTx) return false;
-                if (!confirmation.signedMessage && confirmation.senderAddress !== 'BANKNOTE_ISSUER') { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; }
-                if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') {
-                    const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                    if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; }
-                    const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature);
-                    if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; }
-                }
-                WalletLogic.addToChain({ type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive', amount: confirmation.amount, from: confirmation.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: confirmation.linkedTxHash, timestamp: confirmation.timestamp });
-                return true;
-            }
+            processDiscoveredTransaction: async (confirmation) => { if (confirmation.receiverAddress !== state.wallet.address) return false; const txKey = confirmation.linkedTxHash || confirmation.hash; const existingTx = state.userStore.chain.find(tx => tx.linkedTxHash === txKey && tx.from === confirmation.senderAddress && tx.amount === confirmation.amount); if (existingTx) return false; if (confirmation.senderAddress !== 'BANKNOTE_ISSUER') { if (!confirmation.signedMessage) { console.error("Discovered TX invalid: Missing 'signedMessage'"); return false; } const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation); if (locallyRecreatedMessage !== confirmation.signedMessage) { console.error("Discovered TX failed tamper check"); return false; } const signerAddress = ethers.verifyMessage(confirmation.signedMessage, confirmation.signature); if (signerAddress !== confirmation.senderAddress) { console.error("Discovered TX failed signature validation"); return false; } } WalletLogic.addToChain({ type: confirmation.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : 'receive', amount: confirmation.amount, from: confirmation.senderAddress, to: state.wallet.address, status: 'completed', linkedTxHash: confirmation.linkedTxHash, timestamp: confirmation.timestamp }); return true; }
         };
-
+        
         function setLoader(loaderId, isLoading) { document.getElementById(loaderId).classList.toggle('hidden', !isLoading); }
         function resetViewInputs(viewId) { const view = document.getElementById(viewId); if (!view) return; view.querySelectorAll('input, textarea').forEach(input => { if (input.type !== 'file') input.value = ''; }); const statusBox = view.querySelector('.status-box'); if (statusBox) statusBox.innerHTML = ''; }
         async function updateBalanceAndRender() { try { const balance = await WalletLogic.getServerAuthoritativeBalance(); document.getElementById('balance-display').textContent = `$${balance.toFixed(2)}`; renderTransactionHistory(); } catch (error) { console.error("Could not update balance:", error); document.getElementById('balance-display').textContent = 'Error'; } }
         function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = ''; const qr = qrcode(0, 'L'); qr.addData(data); qr.make(); container.innerHTML = qr.createImgTag(6, 10); }
         function abbreviateAddress(address) { if (!address) return ''; return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`; }
         function stopScanner() { if (state.cameraStream) { state.cameraStream.getTracks().forEach(track => track.stop()); state.cameraStream = null; state.isScannerActive = false; } }
-        async function startScanner() { if (state.isScannerActive || !document.getElementById('send-view').classList.contains('active')) return; state.isScannerActive = true; const video = document.getElementById('qr-video'), loadingMessage = document.getElementById('loading-message'), canvasElement = document.getElementById('qr-canvas'), canvas = canvasElement.getContext('2d'), sendStatusEl = document.getElementById('send-status'); sendStatusEl.innerHTML = ''; loadingMessage.style.display = 'flex'; loadingMessage.textContent = 'Requesting camera access...'; try { state.cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); video.srcObject = state.cameraStream; video.setAttribute("playsinline", true); await video.play(); loadingMessage.style.display = 'none'; requestAnimationFrame(tick); } catch (err) { console.error("Camera Error:", err); loadingMessage.textContent = "Could not access camera."; sendStatusEl.innerHTML = `<span class="error">Camera access is required.</span>`; state.isScannerActive = false; } function tick() { if (!state.isScannerActive) return; if (video.readyState === video.HAVE_ENOUGH_DATA) { canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth; canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height); const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height); const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" }); if (code) { stopScanner(); sendStatusEl.innerHTML = '<span class="info">QR Code Detected! Processing...</span>'; let isPaymentRequest = false; try { const request = JSON.parse(code.data); if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) { isPaymentRequest = true; Promise.resolve().then(async () => { if (Date.now() > request.expiresAt) throw new Error("This payment request has expired."); state.activePaymentRequest = request; state.activeManualSend = null; const fee = request.amount * state.config.FEE_PERCENTAGE; const total = request.amount + fee; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress; await showView('send-confirm-view'); }).catch(err => { sendStatusEl.innerHTML = `<span class="error">${err.message}</span>`; setTimeout(() => startScanner(), 2000); }); } } catch (e) { /* Not a JSON payment request */ } if (!isPaymentRequest) { if (ethers.isAddress(code.data)) { document.getElementById('send-address-input').value = code.data; sendStatusEl.innerHTML = '<span class="success">Recipient address scanned! Please enter the amount to send.</span>'; document.getElementById('send-amount-input').focus(); } else { sendStatusEl.innerHTML = `<span class="error">Invalid QR Code. Not a valid address or payment request.</span>`; setTimeout(() => startScanner(), 2000); } } return; } } requestAnimationFrame(tick); } }
+        async function startScanner() { if (state.isScannerActive || !document.getElementById('send-view').classList.contains('active')) return; state.isScannerActive = true; const video = document.getElementById('qr-video'), loadingMessage = document.getElementById('loading-message'), canvasElement = document.getElementById('qr-canvas'), canvas = canvasElement.getContext('2d'), sendStatusEl = document.getElementById('send-status'); sendStatusEl.innerHTML = ''; loadingMessage.style.display = 'flex'; loadingMessage.textContent = 'Requesting camera access...'; try { state.cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); video.srcObject = state.cameraStream; video.setAttribute("playsinline", true); await video.play(); loadingMessage.style.display = 'none'; requestAnimationFrame(tick); } catch (err) { console.error("Camera Error:", err); loadingMessage.textContent = "Could not access camera."; sendStatusEl.innerHTML = `<span class="error">Camera access is required.</span>`; state.isScannerActive = false; } function tick() { if (!state.isScannerActive) return; if (video.readyState === video.HAVE_ENOUGH_DATA) { canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth; canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height); const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height); const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" }); if (code) { stopScanner(); sendStatusEl.innerHTML = '<span class="info">QR Code Detected! Processing...</span>'; let isPaymentRequest = false; try { const request = JSON.parse(code.data); if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) { isPaymentRequest = true; Promise.resolve().then(async () => { if (Date.now() > request.expiresAt) throw new Error("This payment request has expired."); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid."); state.activePaymentRequest = request; state.activeManualSend = null; const fee = request.amount * state.config.FEE_PERCENTAGE; const total = request.amount + fee; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = request.receiverAddress; await showView('send-confirm-view'); }).catch(err => { sendStatusEl.innerHTML = `<span class="error">${err.message}</span>`; setTimeout(() => startScanner(), 2000); }); } } catch (e) {} if (!isPaymentRequest) { if (ethers.isAddress(code.data)) { document.getElementById('send-address-input').value = code.data; sendStatusEl.innerHTML = '<span class="success">Recipient address scanned! Please enter the amount to send.</span>'; document.getElementById('send-amount-input').focus(); } else { sendStatusEl.innerHTML = `<span class="error">Invalid QR Code. Not a valid address or payment request.</span>`; setTimeout(() => startScanner(), 2000); } } return; } } requestAnimationFrame(tick); } }
         async function showView(id) { if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner(); if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); const viewElement = document.getElementById(id); if(viewElement) viewElement.classList.add('active'); if (id === 'wallet-view') { document.getElementById('balance-display').textContent = 'Loading...'; if(state.wallet) document.getElementById('address-display').textContent = abbreviateAddress(state.wallet.address); await updateBalanceAndRender(); BackgroundSync.start(); } if (id === 'send-view') { startScanner(); } if (id === 'receive-view') { document.getElementById('full-receive-address').textContent = state.wallet.address; generateQrCode(state.wallet.address, 'static-qr-code'); } }
         function renderTransactionHistory() { const listUl = document.getElementById('transaction-list-ul'); listUl.innerHTML = ''; if (!state.userStore || !state.userStore.chain) return; const transactions = state.userStore.chain.filter(tx => (tx.type === 'send' || tx.type === 'receive' || tx.type === 'charge') && tx.status === 'completed').slice(-10).reverse(); if (transactions.length === 0) { listUl.innerHTML = '<li class="no-transactions">No transactions found.</li>'; return; } transactions.forEach(tx => { const item = document.createElement('li'); item.className = 'transaction-item'; item.style.cursor = 'pointer'; const isSent = tx.type === 'send'; const typeText = isSent ? 'Sent' : (tx.type === 'charge' ? 'Charge' : 'Received'); const typeClass = isSent ? 'sent' : 'received'; const totalAmount = tx.amount || 0; const date = new Date(tx.timestamp).toLocaleString('en-US'); item.innerHTML = `<div class="transaction-details"><span class="transaction-type ${typeClass}">${typeText}</span><span class="transaction-date">${date}</span></div><span class="transaction-amount ${typeClass}">${isSent ? '-' : '+'}$${totalAmount.toFixed(2)}</span>`; item.addEventListener('click', () => showTransactionDetails(tx)); listUl.appendChild(item); }); }
         function showTransactionDetails(tx) { const modal = document.getElementById('transaction-detail-modal'); document.getElementById('detail-status').textContent = tx.status || 'N/A'; document.getElementById('detail-type').textContent = tx.type || 'N/A'; document.getElementById('detail-datetime').textContent = new Date(tx.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }); document.getElementById('detail-amount').textContent = `$${(tx.amount || 0).toFixed(2)}`; document.getElementById('detail-fee').textContent = `$${(tx.fee || 0).toFixed(2)}`; document.getElementById('detail-from').textContent = tx.from || 'N/A'; document.getElementById('detail-to').textContent = tx.to || 'N/A'; document.getElementById('detail-hash').textContent = tx.hash || 'N/A'; modal.style.display = 'flex'; document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; }; document.getElementById('download-tx-button').onclick = () => { const contentToCapture = document.getElementById('modal-details-content'); html2canvas(contentToCapture, { scale: 2 }).then(canvas => { const link = document.createElement('a'); link.download = `transaction_${tx.hash.substring(0, 10)}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.9); link.click(); }); }; }
         
         async function initializeApp() {
             try {
-                state.config = await SupabaseLedger.getAppConfig();
-                console.log('App config loaded:', state.config);
+                const fetchedConfig = await SupabaseLedger.getAppConfig();
+                state.config = { ...AppConstants, ...fetchedConfig };
             } catch (e) {
-                alert(`Critical error initializing app: ${e.message}`);
+                alert(`Critical error initializing app configuration: ${e.message}`);
                 return;
             }
-            
             if (localStorage.getItem('aura_user_store')) {
                 showView('login-view');
             } else {
@@ -380,66 +288,9 @@
             document.getElementById('send-manual-button').addEventListener('click', async () => { const statusEl = document.getElementById('send-status'), recipientAddress = document.getElementById('send-address-input').value.trim(), amount = parseFloat(document.getElementById('send-amount-input').value); statusEl.innerHTML = ''; if (!ethers.isAddress(recipientAddress)) { statusEl.innerHTML = '<span class="error">Invalid recipient address.</span>'; return; } if (isNaN(amount) || amount <= 0) { statusEl.innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const fee = amount * state.config.FEE_PERCENTAGE, total = amount + fee; if (state.currentBalance < total) { statusEl.innerHTML = `<span class="error">Insufficient funds.</span>`; return; } state.activeManualSend = { address: recipientAddress, amount: amount }; state.activePaymentRequest = null; document.getElementById('confirm-amount-display').innerHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${total.toFixed(2)}</strong>`; document.getElementById('confirm-recipient-address-display').textContent = recipientAddress; await showView('send-confirm-view'); });
             document.getElementById('create-request-qr-button').addEventListener('click', () => { const amount = parseFloat(document.getElementById('request-amount-input').value); if (isNaN(amount) || amount <= 0) { document.getElementById('receive-status').innerHTML = '<span class="error">Please enter a valid amount.</span>'; return; } const request = WalletLogic.createPaymentRequest(amount); document.getElementById('qr-display-title').textContent = 'Payment Request'; document.getElementById('qr-display-instruction').textContent = `Show this QR to the sender to pay $${amount.toFixed(2)}.`; document.getElementById('qr-display-box').style.display = 'block'; generateQrCode(JSON.stringify(request), 'qr-display-box'); document.getElementById('waiting-on-payment').style.display = 'block'; const statusMsg = document.getElementById('final-status-message'), timerEl = document.getElementById('payment-timer'); statusMsg.innerHTML = '<span class="info">Waiting for sender to pay...</span>'; document.querySelector('#waiting-on-payment .loader').style.display = 'block'; showView('qr-display-view'); let timeLeft = state.config.PAYMENT_REQUEST_EXPIRY; const updateTimer = () => { timeLeft -= 1000; const minutes = Math.floor(timeLeft / 60000), seconds = Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0'); timerEl.textContent = `Expires in: ${minutes}:${seconds}`; if (timeLeft <= 0) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; statusMsg.innerHTML = '<span class="error">Payment request expired.</span>'; document.querySelector('#waiting-on-payment .loader').style.display = 'none'; } }; updateTimer(); state.activePollingTimer = setInterval(async () => { updateTimer(); if (timeLeft <= 0) return; try { const confirmation = await SupabaseLedger.findConfirmation(request.linkedTxHash); if (confirmation) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; timerEl.style.display = 'none'; statusMsg.innerHTML = '<span class="info">Payment detected! Finalizing...</span>'; if (await WalletLogic.finalizePayment(confirmation)) { statusMsg.innerHTML = `<span class="success">Success! $${Number(confirmation.amount).toFixed(2)} received.</span>`; document.querySelector('#waiting-on-payment .loader').style.display = 'none'; setTimeout(async () => { await showView('wallet-view'); }, 2000); } } } catch (err) { console.error("Polling error:", err); statusMsg.innerHTML = `<span class="error">Network error while checking for payment.</span>`; clearInterval(state.activePollingTimer); state.activePollingTimer = null; } }, state.config.POLLING_INTERVAL); });
             document.getElementById('confirm-payment-button').addEventListener('click', async (event) => { const button = event.target, statusEl = document.getElementById('send-confirm-status'); button.disabled = true; statusEl.innerHTML = '<span class="info">Processing payment...</span>'; try { await WalletLogic.getServerAuthoritativeBalance(); let success = false, message = ''; if (state.activePaymentRequest) { await WalletLogic.processPayment(state.activePaymentRequest); message = `Payment of $${state.activePaymentRequest.amount.toFixed(2)} sent!`; success = true; } else if (state.activeManualSend) { await WalletLogic.directSend(state.activeManualSend.address, state.activeManualSend.amount); message = `Payment of $${state.activeManualSend.amount.toFixed(2)} sent!`; success = true; } else { throw new Error("No active payment request."); } if (success) { statusEl.innerHTML = `<span class="success">${message}</span>`; await BackgroundSync.performSync(); await new Promise(resolve => setTimeout(resolve, 1500)); state.activePaymentRequest = null; state.activeManualSend = null; await showView('wallet-view'); } } catch (err) { statusEl.innerHTML = `<span class="error">Payment Failed: ${err.message}</span>`; } finally { button.disabled = false; } });
-            document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); showView('charge-view'); });
-            
-            document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                const statusEl = document.getElementById('charge-status');
-                const loader = document.getElementById('charge-loader');
-                const fileInput = document.getElementById('banknote-image-input');
-
-                setLoader('charge-loader', true);
-                fileInput.disabled = true;
-                statusEl.innerHTML = '<span class="info">Uploading and verifying banknote...</span>';
-
-                try {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(file);
-                    reader.onload = async () => {
-                        try {
-                            const imageDataUrl = reader.result;
-                            const result = await SupabaseLedger.chargeWithBanknote(imageDataUrl, state.wallet.address);
-                            
-                            WalletLogic.addToChain({
-                                type: 'charge',
-                                amount: result.amount,
-                                from: 'BANKNOTE_ISSUER',
-                                to: state.wallet.address,
-                                serial: result.serial,
-                                status: 'completed',
-                                linkedTxHash: 'charge-' + result.serial,
-                                timestamp: result.timestamp
-                            });
-                            
-                            CacheManager.invalidate(state.wallet.address);
-                            await BackgroundSync.performSync();
-                            
-                            statusEl.innerHTML = `<span class="success">Success! $${result.amount.toFixed(2)} added to your wallet.</span>`;
-                            setTimeout(() => showView('wallet-view'), 2000);
-
-                        } catch (err) {
-                            statusEl.innerHTML = `<span class="error">Charge Failed: ${err.message}</span>`;
-                        } finally {
-                            setLoader('charge-loader', false);
-                            fileInput.disabled = false;
-                            event.target.value = '';
-                        }
-                    };
-                    reader.onerror = (error) => {
-                        statusEl.innerHTML = `<span class="error">Error reading file: ${error.message}</span>`;
-                        setLoader('charge-loader', false);
-                        fileInput.disabled = false;
-                        event.target.value = '';
-                    };
-                } catch (err) {
-                    statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`;
-                    setLoader('charge-loader', false);
-                    fileInput.disabled = false;
-                    event.target.value = '';
-                }
-            });
+            document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); document.getElementById('charge-confirmation').style.display = 'none'; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.disabled = true; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); showView('charge-view'); });
+            document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const statusEl = document.getElementById('validation-status'); statusEl.innerHTML = ''; const amount = parseFloat(button.dataset.amount); const serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An internal error occurred. Please try again."); await showView('wallet-view'); return; } try { statusEl.innerHTML = '<span class="info">Recording banknote on public ledger...</span>'; await SupabaseLedger.recordSpentIdentifier(serial, 'banknote'); statusEl.innerHTML = '<span class="info">Creating public transaction record...</span>'; const chargeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: 'BANKNOTE_ISSUER', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: 'charge-' + serial }; await SupabaseLedger.pinConfirmation(chargeConfirmation); WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.wallet.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial }); CacheManager.invalidate(state.wallet.address); await BackgroundSync.performSync(); alert(`$${amount.toFixed(2)} added to your balance successfully.`); await showView('wallet-view'); } catch (err) { console.error("Charge confirmation failed:", err); statusEl.innerHTML = `<span class="error">Charge Failed: ${err.message}</span>`; button.disabled = false; } });
+            document.getElementById('banknote-image-input').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const statusEl = document.getElementById('validation-status'); const confirmSection = document.getElementById('charge-confirmation'); const confirmBtn = document.getElementById('confirm-charge-button'); confirmSection.style.display = 'none'; confirmBtn.disabled = true; statusEl.innerHTML = '<span class="info">Preparing image...</span>'; try { const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION); const processedDataUrl = await CoreLogic.Utils.preprocessImage(resizedDataUrl); const imageData = await new Promise((resolve, reject) => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0); resolve(ctx.getImageData(0, 0, img.width, img.height)); }; img.onerror = reject; img.src = processedDataUrl; }); const banknotePayload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl); statusEl.innerHTML = '<span class="info">Scan complete. Contacting server for validation...</span>'; const validationResult = await SupabaseLedger.validateBanknote(banknotePayload); if (validationResult.success) { statusEl.innerHTML = '<span class="success">Banknote is valid!</span>'; document.getElementById('validated-amount').textContent = `$${validationResult.amount.toFixed(2)}`; confirmBtn.dataset.amount = validationResult.amount; confirmBtn.dataset.serial = validationResult.serial; confirmBtn.disabled = false; confirmSection.style.display = 'block'; } else { throw new Error("Server rejected the banknote."); } } catch (err) { statusEl.innerHTML = `<span class="error">Validation Failed: ${err.message}</span>`; } finally { event.target.value = ''; } });
         }
         document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
