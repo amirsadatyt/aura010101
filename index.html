@@ -171,12 +171,18 @@ if (typeof globalThis.Buffer === 'undefined') {
 }
 
         import { ethers } from "./ethers.min.js";
+        // --- FIX STEP 1: IMPORT THE OFFICIAL SUPABASE CLIENT LIBRARY ---
+        import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
         // --- SUPABASE CONFIGURATION ---
         const SUPABASE_URL = 'https://hdvqbcjtublfuykigsui.supabase.co';
         // <-- REPLACE WITH YOUR SUPABASE URL
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkdnFiY2p0dWJsZnV5a2lnc3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5NTk4OTAsImV4cCI6MjA3MTUzNTg5MH0.Gog9zohe1bz6gihtssCBPUYkfNMbAjuQKR4Qvb3HNOg';
         // <-- REPLACE WITH YOUR SUPABASE ANON KEY
         const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/api`;
+
+        // --- FIX STEP 2: INITIALIZE THE SUPABASE CLIENT FOR THE APP ---
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // --- SECURITY UTILITIES (DOMPURIFY) ---
         const SecurityUtils = {
@@ -377,15 +383,31 @@ if (typeof globalThis.Buffer === 'undefined') {
         
         // --- SUPABASE LEDGER MODULE ---
         const SupabaseLedger = (() => {
+            // --- FIX STEP 3: UPDATE THE API CALL TO USE THE REAL USER TOKEN ---
             const apiCall = async (action, payload) => {
+                const { data: { session }, error } = await supabase.auth.getSession();
+
+                if (error || !session) {
+                    // This can happen if the token has expired.
+                    // Forcing a logout is a safe way to handle this.
+                    WalletLogic.logout();
+                    showView('login-view');
+                    setStatus(document.getElementById('login-status'), 'Your session has expired. Please log in again.', 'error');
+                    throw new Error("User session not found or expired.");
+                }
+                const accessToken = session.access_token;
+
                 const response = await fetch(EDGE_FUNCTION_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'Authorization': `Bearer ${accessToken}` // Use the real access token
+                    },
                     body: JSON.stringify({ action, payload })
                 });
+
                 const result = await response.json();
                 if (!response.ok || result.error) {
-                    // Check for the specific rate limit status code for a friendlier message
                     if (response.status === 429) {
                         throw new Error("You're doing that too quickly. Please wait a moment and try again.");
                     }
@@ -430,7 +452,10 @@ if (typeof globalThis.Buffer === 'undefined') {
             localStorage.setItem('aura_user_store', JSON.stringify(userStore)); state.userStore = userStore; state.wallet = wallet; return true; } catch (e) { console.error("Restore failed:", e); return false;
             } },
             login: async (password) => { const userStoreJson = localStorage.getItem('aura_user_store');
-            if (!userStoreJson) return null; try { const reloadedUserStore = JSON.parse(userStoreJson); const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password); state.userStore = reloadedUserStore;
+            if (!userStoreJson) return null; try { const reloadedUserStore = JSON.parse(userStoreJson); const wallet = await ethers.Wallet.fromEncryptedJson(reloadedUserStore.encryptedJson, password);
+            // This doesn't log in with Supabase auth, it just decrypts the local key.
+            // The session is managed by the supabase client automatically.
+            state.userStore = reloadedUserStore;
             state.wallet = wallet; state.failedLoginAttempts = 0; WalletLogic.buildTransactionIndex(); return true; } catch (e) { console.error("Login failed (likely incorrect password):", e); state.failedLoginAttempts++;
             return false; } },
             logout: () => { BackgroundSync.stop();
@@ -715,8 +740,15 @@ if (typeof globalThis.Buffer === 'undefined') {
         
         async function initializeApp() {
             try {
-                const fetchedConfig = await SupabaseLedger.getAppConfig();
-                state.config = { ...AppConstants, ...fetchedConfig };
+                // This call uses the anon key, which is fine for public config data
+                const response = await fetch(EDGE_FUNCTION_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+                    body: JSON.stringify({ action: 'getAppConfig' })
+                });
+                const result = await response.json();
+                if (!response.ok || result.error) throw new Error(result.error);
+                state.config = { ...AppConstants, ...result.data };
             } catch (e) {
                 alert(`Critical error initializing app configuration: ${e.message}`);
                 return;
