@@ -380,16 +380,14 @@ if (typeof globalThis.Buffer === 'undefined') {
             const apiCall = async (action, payload) => {
                 const response = await fetch(EDGE_FUNCTION_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+             
+                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
                     body: JSON.stringify({ action, payload })
                 });
                 const result = await response.json();
                 if (!response.ok || result.error) {
-                    // Check for the specific rate limit status code for a friendlier message
-                    if (response.status === 429) {
-                        throw new Error("You're doing that too quickly. Please wait a moment and try again.");
-                    }
-                    throw new Error(result.error || `Supabase API error! Status: ${response.status}`);
+      
+                                 throw new Error(result.error || `Supabase API error! Status: ${response.status}`);
                 }
                 return result.data;
             };
