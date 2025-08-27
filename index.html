@@ -540,8 +540,27 @@ if (typeof globalThis.Buffer === 'undefined') {
         async function updateBalanceAndRender() { try { const balance = await WalletLogic.getServerAuthoritativeBalance();
         SecurityUtils.setTextContent(document.getElementById('balance-display'), `$${parseFloat(ethers.formatUnits(balance, state.config.PRECISION)).toFixed(2)}`); renderTransactionHistory(); } catch (error) { console.error("Could not update balance:", error); SecurityUtils.setTextContent(document.getElementById('balance-display'), 'Error');
         } }
-        function generateQrCode(data, containerId) { const container = document.getElementById(containerId); container.innerHTML = '';
-        const qr = qrcode(0, 'L'); qr.addData(data); qr.make(); container.innerHTML = qr.createImgTag(6, 10);
+        function generateQrCode(data, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = ''; // Clear previous content safely
+            const qr = qrcode(0, 'L');
+            qr.addData(data);
+            qr.make();
+            // Manually create the image element to avoid innerHTML from an external library string
+            const img = document.createElement('img');
+            const imgTagString = qr.createImgTag(6, 10);
+            
+            // Extract attributes from the generated string. This is safer than injecting the whole string.
+            const srcMatch = imgTagString.match(/src="([^"]+)"/);
+            const widthMatch = imgTagString.match(/width="([^"]+)"/);
+            const heightMatch = imgTagString.match(/height="([^"]+)"/);
+            
+            if (srcMatch) img.src = srcMatch[1]; // The src is a base64 data URI, which is safe for images
+            if (widthMatch) img.width = widthMatch[1];
+            if (heightMatch) img.height = heightMatch[1];
+            img.alt = "QR Code";
+
+            container.appendChild(img);
         }
         function abbreviateAddress(address) {
             if (!address) return '';
@@ -697,9 +716,9 @@ if (typeof globalThis.Buffer === 'undefined') {
             document.getElementById('back-from-send').addEventListener('click', () => { resetViewInputs('send-view'); showView('wallet-view'); });
             document.getElementById('back-from-send-confirm').addEventListener('click', () => showView('send-view'));
             document.getElementById('back-from-qr-display').addEventListener('click', () => { showView('wallet-view'); });
-            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); statusEl.textContent = ''; if (pass.length < 8) { setStatus(statusEl, 'Password must be at least 8 characters.', 'error'); return; } if (pass !== confirmPass) { setStatus(statusEl, 'Passwords do not match.', 'error'); return; } button.disabled = true; setLoader('create-loader', true); setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); SecurityUtils.setTextContent(document.getElementById('seed-phrase-display'), mnemonic); showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); }, 50); });
+            document.getElementById('create-wallet-button').addEventListener('click', async () => { const button = document.getElementById('create-wallet-button'), statusEl = document.getElementById('create-status'); const pass = document.getElementById('create-password-input').value.trim(), confirmPass = document.getElementById('confirm-password-input').value.trim(); setStatus(statusEl, ''); if (pass.length < 8) { setStatus(statusEl, 'Password must be at least 8 characters.', 'error'); return; } if (pass !== confirmPass) { setStatus(statusEl, 'Passwords do not match.', 'error'); return; } button.disabled = true; setLoader('create-loader', true); setTimeout(() => { const { mnemonic } = WalletLogic.createWallet(pass); SecurityUtils.setTextContent(document.getElementById('seed-phrase-display'), mnemonic); showView('seed-phrase-view'); button.disabled = false; setLoader('create-loader', false); }, 50); });
             document.getElementById('seed-phrase-confirm-button').addEventListener('click', async () => { await showView('wallet-view'); SecurityUtils.setTextContent(document.getElementById('seed-phrase-display'), ''); resetViewInputs('create-wallet-view'); });
-            document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); statusEl.textContent = ''; if (mnemonic.split(' ').length !== 12) { setStatus(statusEl, 'Recovery phrase must be 12 words.', 'error'); return; } if (pass.length < 8) { setStatus(statusEl, 'Password must be at least 8 characters.', 'error'); return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { await showView('wallet-view'); } else { setStatus(statusEl, 'Restore failed. Invalid phrase.', 'error'); } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
+            document.getElementById('restore-wallet-button').addEventListener('click', async () => { const button = document.getElementById('restore-wallet-button'), statusEl = document.getElementById('restore-status'); const mnemonic = document.getElementById('restore-seed-input').value.trim(), pass = document.getElementById('restore-password-input').value.trim(); setStatus(statusEl, ''); if (mnemonic.split(' ').length !== 12) { setStatus(statusEl, 'Recovery phrase must be 12 words.', 'error'); return; } if (pass.length < 8) { setStatus(statusEl, 'Password must be at least 8 characters.', 'error'); return; } button.disabled = true; setLoader('restore-loader', true); const success = await WalletLogic.restoreWallet(mnemonic, pass); if (success) { await showView('wallet-view'); } else { setStatus(statusEl, 'Restore failed. Invalid phrase.', 'error'); } button.disabled = false; setLoader('restore-loader', false); resetViewInputs('restore-wallet-view'); });
             document.getElementById('login-button').addEventListener('click', async () => { if (state.isLockedOut) return; const button = document.getElementById('login-button'), statusEl = document.getElementById('login-status'); const pass = document.getElementById('login-password-input').value.trim(); button.disabled = true; setLoader('login-loader', true); setStatus(statusEl, 'Decrypting wallet...', 'info'); const success = await WalletLogic.login(pass); if (success) { await showView('wallet-view'); resetViewInputs('login-view'); } else { if (state.failedLoginAttempts >= state.config.MAX_LOGIN_ATTEMPTS) { state.isLockedOut = true; setStatus(statusEl, 'Too many failed attempts. Please wait 30 seconds.', 'error'); setTimeout(() => { state.isLockedOut = false; state.failedLoginAttempts = 0; setStatus(statusEl, ''); button.disabled = false; }, state.config.LOGIN_LOCKOUT_PERIOD); } else { setStatus(statusEl, `Invalid password. (${state.config.MAX_LOGIN_ATTEMPTS - state.failedLoginAttempts} attempts remaining)`, 'error');
             } } if (!state.isLockedOut) button.disabled = false; setLoader('login-loader', false); });
             document.getElementById('logout-button').addEventListener('click', () => { WalletLogic.logout(); showView('login-view'); });
@@ -716,20 +735,25 @@ if (typeof globalThis.Buffer === 'undefined') {
                 const recipientAddress = document.getElementById('send-address-input').value.trim();
                 const amountStr = document.getElementById('send-amount-input').value;
                 const amount = parseFloat(amountStr);
-                const comment = document.getElementById('send-comment-input').value.trim();
+                const rawComment = document.getElementById('send-comment-input').value.trim();
                 
                 setStatus(statusEl, '');
-                
-                if (comment.length > 50) {
+
+                // 1. VALIDATE raw user input
+                if (rawComment.length > 50) {
                     setStatus(statusEl, 'Comment cannot exceed 50 characters.', 'error');
                     return;
                 }
                 if (!ethers.isAddress(recipientAddress)) { setStatus(statusEl, 'Invalid recipient address.', 'error'); return; }
                 if (isNaN(amount) || amount <= 0) { setStatus(statusEl, 'Please enter a valid amount.', 'error'); return; }
 
+                // 2. SANITIZE user input after validation
+                const comment = SecurityUtils.sanitizeText(rawComment);
+
                 const precision = state.config.PRECISION; const amountBI = ethers.parseUnits(amountStr, precision); const feeBI = (amountBI * BigInt(Math.round(state.config.FEE_PERCENTAGE * 1000))) / 1000n; const totalBI = amountBI + feeBI;
                 if (state.currentBalance < totalBI) { setStatus(statusEl, 'Insufficient funds.', 'error'); return; }
                 
+                // 3. USE the sanitized comment from this point forward
                 state.activeManualSend = { address: recipientAddress, amount: amount, comment: comment };
                 state.activePaymentRequest = null;
 
@@ -836,16 +860,22 @@ if (typeof globalThis.Buffer === 'undefined') {
                             const certificateHTML = `
                                 <div style="text-align: left; padding: 15px; border: 1px solid #ccc; border-radius: 8px; background-color: #f9f9f9;">
                                     <h4 style="text-align: center; margin-top: 0;">Banknote Certificate</h4>
-                                    <p><strong>Serial:</strong> <span>${SecurityUtils.sanitizeText(parsedInfo.serial)}</span></p>
+                                    <p><strong>Serial:</strong> <span></span></p>
                                     <p><strong>Amount:</strong> $${SecurityUtils.sanitizeNumeric(parsedInfo.amount).toFixed(2)}</p>
                                     <hr>
                                     <p style="color: #d9534f;"><strong>Status:</strong> Redeemed</p>
-                                    <p><strong>Redeemed By:</strong> ${SecurityUtils.sanitizeAddress(details.redeemedBy || 'N/A')}</p>
-                                    <p><strong>Redeemed On:</strong> ${SecurityUtils.sanitizeText(redeemDate)}</p>
+                                    <p><strong>Redeemed By:</strong> <span></span></p>
+                                    <p><strong>Redeemed On:</strong> <span></span></p>
                                 </div>
                             `;
                             
                             SecurityUtils.setHTMLContent(statusEl, certificateHTML, ['div', 'h4', 'p', 'strong', 'span', 'hr']);
+                            // Now, safely set the text content for the dynamic parts
+                            SecurityUtils.setTextContent(statusEl.querySelector('p:nth-of-type(1) span'), parsedInfo.serial);
+                            SecurityUtils.setTextContent(statusEl.querySelector('p:nth-of-type(4) span'), details.redeemedBy || 'N/A');
+                            SecurityUtils.setTextContent(statusEl.querySelector('p:nth-of-type(5) span'), redeemDate);
+
+
                         } catch (detailsError) {
                             setStatus(statusEl, `Validation Failed: This banknote was already spent, but its history could not be retrieved.`, 'error');
                         }
