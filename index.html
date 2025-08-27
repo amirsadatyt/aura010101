@@ -394,11 +394,7 @@ if (typeof globalThis.Buffer === 'undefined') {
 
             return {
                 getAppConfig: () => apiCall('getAppConfig'),
-                // ++ START REFACTOR: ADD NEW SERVER ENDPOINTS
-                calculateFees: (amount) => apiCall('calculateFees', { amount }),
-                processPaymentRequest: (payload) => apiCall('processPaymentRequest', payload),
-                processDirectSend: (payload) => apiCall('processDirectSend', payload),
-                // ++ END REFACTOR
+                prepareTransaction: (senderAddress, amount) => apiCall('prepareTransaction', { senderAddress, amount }),
                 validateBanknote: (banknotePayload) => apiCall('validateBanknote', { banknotePayload }),
                 recordSpentIdentifier: (identifier, type) => apiCall('recordSpentIdentifier', { identifier, type }),
                 hasBeenSpent: async (identifier) => { try { const result = await apiCall('hasBeenSpent', { identifier });
@@ -465,98 +461,59 @@ if (typeof globalThis.Buffer === 'undefined') {
             createPaymentRequest: (amount) => { const receiveTx = WalletLogic.addToChain({ type: 'receive', amount: amount, from: '', to: state.wallet.address, status: 'pending_request' });
             return { type: 'AURA_PAYMENT_REQUEST', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: receiveTx.hash, expiresAt: Date.now() + state.config.PAYMENT_REQUEST_EXPIRY };
             },
-            // ++ START REFACTOR: Replace client-side logic with server calls
-            processPayment: async (request) => {
+            processPayment: async (request, fee) => {
+                if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured.");
                 if (Date.now() > request.expiresAt) throw new Error("Payment request has expired.");
-
-                // Client creates and signs the standardized message.
-                const confirmation = {
-                    type: 'AURA_PAYMENT_CONFIRMATION',
-                    senderAddress: state.wallet.address,
-                    receiverAddress: request.receiverAddress,
-                    amount: request.amount,
-                    linkedTxHash: request.linkedTxHash,
-                    comment: ''
-                };
+                if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been processed.");
+                
+                await SupabaseLedger.recordSpentIdentifier(request.linkedTxHash, 'transaction');
+                
+                const mainTx = WalletLogic.addToChain({ type: 'send', amount: request.amount, fee: fee, from: state.wallet.address, to: request.receiverAddress, status: 'completed', linkedTxHash: request.linkedTxHash });
+                const confirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: request.receiverAddress, amount: request.amount, linkedTxHash: request.linkedTxHash, id: mainTx.id };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                const signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signedMessage = messageToSign;
+                await SupabaseLedger.pinConfirmation(confirmation);
 
-                // Call the secure server endpoint to process the payment.
-                // The server now handles balance checks, fee calculations, and ledger updates.
-                const result = await SupabaseLedger.processPaymentRequest({
-                    senderAddress: state.wallet.address,
-                    receiverAddress: request.receiverAddress,
-                    amount: request.amount,
-                    linkedTxHash: request.linkedTxHash,
-                    signature: signature,
-                    comment: ''
-                });
-
-                // On success, add a single, authoritatively-stamped transaction to the local chain for history.
-                WalletLogic.addToChain({
-                    type: 'send',
-                    amount: result.amount,
-                    fee: result.fee,
-                    from: state.wallet.address,
-                    to: request.receiverAddress,
-                    status: 'completed',
-                    linkedTxHash: request.linkedTxHash,
-                    id: result.transactionId
-                });
+                const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' });
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash, id: feeTx.id };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
+                await SupabaseLedger.pinConfirmation(feeConfirmation);
                 
                 CacheManager.invalidate(state.wallet.address);
-                return result; // Return the full server response
+                return true;
             },
-            directSend: async (recipientAddress, amount, comment) => {
-                // 1. Create a local transaction record to generate a unique, deterministic hash.
-                // This hash is crucial for creating a signable, non-replayable message.
-                const sendTx = WalletLogic.addToChain({
-                    type: 'send',
-                    amount: amount,
-                    from: state.wallet.address,
-                    to: recipientAddress,
-                    status: 'pending_send', // Mark as pending until server confirms
-                    comment: comment
-                });
+            directSend: async (recipientAddress, amount, comment, fee) => {
+                if (!state.config?.TREASURY_ADDRESS) throw new Error("CRITICAL: Treasury address is not configured.");
+                                
+                const sendTx = WalletLogic.addToChain({ type: 'send', amount: amount, fee: fee, from: state.wallet.address, to: recipientAddress, status: 'completed', comment: comment });
 
-                // 2. Create the standardized message for signing, including the unique hash.
                 const confirmation = {
                     type: 'AURA_PAYMENT_CONFIRMATION',
                     senderAddress: state.wallet.address,
                     receiverAddress: recipientAddress,
                     amount: amount,
                     linkedTxHash: sendTx.hash,
+                    id: sendTx.id,
                     comment: comment
                 };
                 const messageToSign = WalletLogic.getStandardizedConfirmationMessage(confirmation);
-                const signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signature = await state.wallet.signMessage(messageToSign);
+                confirmation.signedMessage = messageToSign;
+                await SupabaseLedger.pinConfirmation(confirmation);
 
-                // 3. Call the secure server endpoint.
-                // NOTE: This assumes the server's `processDirectSend` endpoint is updated to accept `linkedTxHash`
-                // in the payload, which is essential for signature verification to succeed.
-                const result = await SupabaseLedger.processDirectSend({
-                    senderAddress: state.wallet.address,
-                    receiverAddress: recipientAddress,
-                    amount: amount,
-                    linkedTxHash: sendTx.hash,
-                    signature: signature,
-                    comment: comment
-                });
-
-                // 4. On success, find the pending transaction and update it with authoritative data from the server.
-                const txIndex = state.userStore.chain.findIndex(tx => tx.hash === sendTx.hash);
-                if (txIndex !== -1) {
-                    state.userStore.chain[txIndex].status = 'completed';
-                    state.userStore.chain[txIndex].fee = result.fee; // Add server-calculated fee
-                    state.userStore.chain[txIndex].id = result.transactionId;
-                    localStorage.setItem('aura_user_store', JSON.stringify(state.userStore));
-                    WalletLogic.buildTransactionIndex();
-                }
+                const feeTx = WalletLogic.addToChain({ type: 'send', amount: fee, fee: 0, from: state.wallet.address, to: state.config.TREASURY_ADDRESS, status: 'completed', purpose: 'fee' });
+                const feeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: state.wallet.address, receiverAddress: state.config.TREASURY_ADDRESS, amount: fee, linkedTxHash: feeTx.hash, id: feeTx.id };
+                const feeMessageToSign = WalletLogic.getStandardizedConfirmationMessage(feeConfirmation);
+                feeConfirmation.signature = await state.wallet.signMessage(feeMessageToSign);
+                feeConfirmation.signedMessage = feeMessageToSign;
+                await SupabaseLedger.pinConfirmation(feeConfirmation);
                 
                 CacheManager.invalidate(state.wallet.address);
-                return result;
+                return true;
             },
-            // ++ END REFACTOR
             finalizePayment: async (confirmation) => { const receiveTxIndex = state.userStore.chain.findIndex(tx => tx.hash === confirmation.linkedTxHash && tx.status === 'pending_request');
             if (receiveTxIndex === -1) { console.error("Finalize Error: Could not find pending transaction."); return false;
             } if (!confirmation.signedMessage) { console.error("Finalize Error: Receipt is missing 'signedMessage'."); return false; } const locallyRecreatedMessage = WalletLogic.getStandardizedConfirmationMessage(confirmation);
@@ -624,19 +581,20 @@ if (typeof globalThis.Buffer === 'undefined') {
         if (video.readyState === video.HAVE_ENOUGH_DATA) { canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth; canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
         const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height); const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
         if (code) { stopScanner(); setStatus(sendStatusEl, 'QR Code Detected! Processing...', 'info'); let isPaymentRequest = false; try { const request = JSON.parse(code.data);
-        // ++ START REFACTOR: Use calculateFees endpoint for QR payments
         if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) { isPaymentRequest = true;
         Promise.resolve().then(async () => { if (Date.now() > request.expiresAt) throw new Error("This payment request has expired."); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid."); 
         
-        const feeData = await SupabaseLedger.calculateFees(request.amount);
+        setStatus(sendStatusEl, 'Validating transaction with server...', 'info');
+        const { fee, totalDebit } = await SupabaseLedger.prepareTransaction(state.wallet.address, request.amount);
+        
+        state.activePaymentRequest = { ...request, fee, total: totalDebit }; // Store server-validated fee and total
+        state.activeManualSend = null; 
 
-        state.activePaymentRequest = request; state.activeManualSend = null; 
         const confirmAmountEl = document.getElementById('confirm-amount-display');
-        const confirmAmountHTML = `Amount: $${feeData.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${feeData.fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${feeData.total.toFixed(2)}</strong>`;
+        const confirmAmountHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${totalDebit.toFixed(2)}</strong>`;
         SecurityUtils.setHTMLContent(confirmAmountEl, confirmAmountHTML, ['br', 'span', 'strong']);
         SecurityUtils.setTextContent(document.getElementById('confirm-recipient-address-display'), request.receiverAddress); await showView('send-confirm-view'); }).catch(err => { setStatus(sendStatusEl, err.message, 'error'); setTimeout(() => startScanner(), 2000);
         }); } } catch (e) {} if (!isPaymentRequest) { if (ethers.isAddress(code.data)) { document.getElementById('send-address-input').value = code.data;
-        // ++ END REFACTOR
         setStatus(sendStatusEl, 'Recipient address scanned! Please enter the amount to send.', 'success'); document.getElementById('send-amount-input').focus();
         } else { setStatus(sendStatusEl, 'Invalid QR Code. Not a valid address or payment request.', 'error'); setTimeout(() => startScanner(), 2000);
         } } return; } } requestAnimationFrame(tick); } }
@@ -778,15 +736,14 @@ if (typeof globalThis.Buffer === 'undefined') {
             document.getElementById('reset-app-button').addEventListener('click', () => { if (confirm('Are you sure? All wallet data will be erased from this browser.')) { localStorage.removeItem('aura_user_store'); location.reload(); } });
             document.getElementById('copy-address-button').addEventListener('click', () => { const button = document.getElementById('copy-address-button'); navigator.clipboard.writeText(state.wallet.address).then(() => { SecurityUtils.setTextContent(button, 'Copied!'); setTimeout(() => { SecurityUtils.setTextContent(button, 'Copy'); }, 1500); }); });
             document.getElementById('show-receive-view-button').addEventListener('click', () => { resetViewInputs('receive-view'); showView('receive-view'); });
-            document.getElementById('show-send-view-button').addEventListener('click', => { resetViewInputs('send-view'); showView('send-view'); });
+            document.getElementById('show-send-view-button').addEventListener('click', () => { resetViewInputs('send-view'); showView('send-view'); });
             document.getElementById('send-comment-input').addEventListener('input', (event) => {
                 const count = event.target.value.length;
                 SecurityUtils.setTextContent(document.getElementById('comment-char-count'), `${count} / 50`);
             });
-            // ++ START REFACTOR: Manual send button now calls calculateFees endpoint
-            document.getElementById('send-manual-button').addEventListener('click', async () => {
+            document.getElementById('send-manual-button').addEventListener('click', async (event) => {
+                const button = event.target;
                 const statusEl = document.getElementById('send-status');
-                const button = document.getElementById('send-manual-button');
                 const recipientAddress = document.getElementById('send-address-input').value.trim();
                 const amountStr = document.getElementById('send-amount-input').value;
                 const amount = parseFloat(amountStr);
@@ -797,36 +754,31 @@ if (typeof globalThis.Buffer === 'undefined') {
                 if (rawComment.length > 50) { setStatus(statusEl, 'Comment cannot exceed 50 characters.', 'error'); return; }
                 if (!ethers.isAddress(recipientAddress)) { setStatus(statusEl, 'Invalid recipient address.', 'error'); return; }
                 if (isNaN(amount) || amount <= 0) { setStatus(statusEl, 'Please enter a valid amount.', 'error'); return; }
-                
+
                 const comment = SecurityUtils.sanitizeText(rawComment);
+
                 button.disabled = true;
-                setStatus(statusEl, 'Calculating fees...', 'info');
+                setStatus(statusEl, 'Validating transaction with server...', 'info');
 
                 try {
-                    const feeData = await SupabaseLedger.calculateFees(amount);
-                    if (state.currentBalance < ethers.parseUnits(feeData.total.toString(), state.config.PRECISION)) {
-                        setStatus(statusEl, 'Insufficient funds to cover amount + fee.', 'error');
-                        return;
-                    }
-
-                    state.activeManualSend = { address: recipientAddress, amount: amount, comment: comment };
+                    const { fee, totalDebit } = await SupabaseLedger.prepareTransaction(state.wallet.address, amount);
+                    
+                    state.activeManualSend = { address: recipientAddress, amount: amount, comment: comment, fee: fee, total: totalDebit };
                     state.activePaymentRequest = null;
 
                     const confirmAmountEl = document.getElementById('confirm-amount-display');
-                    const confirmAmountHTML = `Amount: $${feeData.amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${feeData.fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${feeData.total.toFixed(2)}</strong>`;
+                    const confirmAmountHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; color: #555;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${totalDebit.toFixed(2)}</strong>`;
                     SecurityUtils.setHTMLContent(confirmAmountEl, confirmAmountHTML, ['br', 'span', 'strong']);
                     SecurityUtils.setTextContent(document.getElementById('confirm-recipient-address-display'), recipientAddress);
                     SecurityUtils.setTextContent(document.getElementById('confirm-comment-display'), comment ? `Comment: "${comment}"` : '');
                     await showView('send-confirm-view');
 
-                } catch(err) {
-                    setStatus(statusEl, `Error: ${err.message}`, 'error');
+                } catch (err) {
+                    setStatus(statusEl, err.message, 'error');
                 } finally {
                     button.disabled = false;
-                    setStatus(statusEl, '');
                 }
             });
-            // ++ END REFACTOR
             document.getElementById('search-tx-id-button').addEventListener('click', async () => { const searchButton = document.getElementById('search-tx-id-button'); const searchInput = document.getElementById('search-tx-id-input'); const searchId = searchInput.value.trim(); if (!searchId) { renderTransactionHistory(); return; } const localTransaction = state.userStore.chain.find(tx => tx.id && tx.id.toString() === searchId); if (localTransaction) { showTransactionDetails(localTransaction); return; } searchButton.disabled = true; SecurityUtils.setTextContent(searchButton, '...'); try { const serverTransaction = await SupabaseLedger.findTransactionById(searchId); if (serverTransaction) { const displayableTx = { id: serverTransaction.id, status: 'completed', type: serverTransaction.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : (serverTransaction.senderAddress === state.wallet.address ? 'send' : 'receive'), timestamp: serverTransaction.timestamp, amount: serverTransaction.amount, fee: 0, from: serverTransaction.senderAddress, to: serverTransaction.receiverAddress, hash: serverTransaction.hash, linkedTxHash: serverTransaction.linkedTxHash, comment: serverTransaction.comment }; showTransactionDetails(displayableTx); } else { alert('Transaction not found on the server.'); } } catch (error) { console.error("Server search failed:", error); alert(`Error searching server: ${error.message}`); } finally { searchButton.disabled = false; SecurityUtils.setTextContent(searchButton, 'Search'); } });
             document.getElementById('create-request-qr-button').addEventListener('click', () => { const amount = parseFloat(document.getElementById('request-amount-input').value); const statusEl = document.getElementById('receive-status'); if (isNaN(amount) || amount <= 0) { setStatus(statusEl, 'Please enter a valid amount.', 'error'); return; } const request = WalletLogic.createPaymentRequest(amount); 
             SecurityUtils.setTextContent(document.getElementById('qr-display-title'), 'Payment Request'); 
@@ -838,39 +790,13 @@ if (typeof globalThis.Buffer === 'undefined') {
             if (timeLeft <= 0) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; setStatus(statusMsg, 'Payment request expired.', 'error'); document.querySelector('#waiting-on-payment .loader').style.display = 'none'; } };
             updateTimer(); state.activePollingTimer = setInterval(async () => { updateTimer(); if (timeLeft <= 0) return; try { const confirmation = await SupabaseLedger.findConfirmation(request.linkedTxHash); if (confirmation) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; timerEl.style.display = 'none'; setStatus(statusMsg, 'Payment detected! Finalizing...', 'info'); if (await WalletLogic.finalizePayment(confirmation)) { setStatus(statusMsg, `Success! $${Number(confirmation.amount).toFixed(2)} received.`, 'success'); document.querySelector('#waiting-on-payment .loader').style.display = 'none'; setTimeout(async () => { await showView('wallet-view'); }, 2000); } } } catch (err) { console.error("Polling error:", err); setStatus(statusMsg, 'Network error while checking for payment.', 'error'); clearInterval(state.activePollingTimer); state.activePollingTimer = null; } }, state.config.POLLING_INTERVAL);
             });
-            // ++ START REFACTOR: Confirm button logic now uses refactored WalletLogic functions
-            document.getElementById('confirm-payment-button').addEventListener('click', async (event) => {
-                const button = event.target, statusEl = document.getElementById('send-confirm-status');
-                button.disabled = true;
-                setStatus(statusEl, 'Processing payment...', 'info');
-                try {
-                    let result;
-                    if (state.activePaymentRequest) {
-                        result = await WalletLogic.processPayment(state.activePaymentRequest);
-                    } else if (state.activeManualSend) {
-                        result = await WalletLogic.directSend(state.activeManualSend.address, state.activeManualSend.amount, state.activeManualSend.comment);
-                    } else {
-                        throw new Error("No active payment to process.");
-                    }
-                    
-                    if (result.success) {
-                        setStatus(statusEl, `Success! Payment of $${result.amount.toFixed(2)} sent.`, 'success');
-                        await BackgroundSync.performSync(); // Force a sync after sending
-                        await new Promise(resolve => setTimeout(resolve, 1500));
-                        state.activePaymentRequest = null;
-                        state.activeManualSend = null;
-                        await showView('wallet-view');
-                    } else {
-                        // This case is unlikely if the server throws an error, but it's here for safety
-                        throw new Error("The server indicated the payment was not successful.");
-                    }
-                } catch (err) {
-                    setStatus(statusEl, `Payment Failed: ${err.message}`, 'error');
-                } finally {
-                    button.disabled = false;
-                }
-            });
-            // ++ END REFACTOR
+            document.getElementById('confirm-payment-button').addEventListener('click', async (event) => { const button = event.target, statusEl = document.getElementById('send-confirm-status'); button.disabled = true; setStatus(statusEl, 'Processing payment...', 'info'); try { await WalletLogic.getServerAuthoritativeBalance(); let success = false, message = ''; if (state.activePaymentRequest) { 
+                await WalletLogic.processPayment(state.activePaymentRequest, state.activePaymentRequest.fee);
+                message = `Payment of $${state.activePaymentRequest.amount.toFixed(2)} sent!`; success = true; } else if (state.activeManualSend) {
+                await WalletLogic.directSend(state.activeManualSend.address, state.activeManualSend.amount, state.activeManualSend.comment, state.activeManualSend.fee);
+                message = `Payment of $${state.activeManualSend.amount.toFixed(2)} sent!`; success = true; } else { throw new Error("No active payment request."); } if (success) { setStatus(statusEl, message, 'success'); await BackgroundSync.performSync(); await new Promise(resolve => setTimeout(resolve, 1500)); state.activePaymentRequest = null;
+            state.activeManualSend = null; await showView('wallet-view'); } } catch (err) { setStatus(statusEl, `Payment Failed: ${err.message}`, 'error');
+            } finally { button.disabled = false; } });
             document.getElementById('show-charge-view-button').addEventListener('click', () => { resetViewInputs('charge-view'); document.getElementById('charge-confirmation').style.display = 'none'; const confirmBtn = document.getElementById('confirm-charge-button'); confirmBtn.disabled = true; confirmBtn.removeAttribute('data-amount'); confirmBtn.removeAttribute('data-serial'); showView('charge-view'); });
             document.getElementById('confirm-charge-button').addEventListener('click', async (event) => { const button = event.target; button.disabled = true; const statusEl = document.getElementById('validation-status'); setStatus(statusEl, ''); const amount = parseFloat(button.dataset.amount); const serial = button.dataset.serial; if (isNaN(amount) || !serial) { alert("An internal error occurred. Please try again."); await showView('wallet-view'); return; } try { setStatus(statusEl, 'Recording banknote on public ledger...', 'info'); await SupabaseLedger.recordSpentIdentifier(serial, 'banknote'); setStatus(statusEl, 'Creating public transaction record...', 'info'); const chargeConfirmation = { type: 'AURA_PAYMENT_CONFIRMATION', senderAddress: 'BANKNOTE_ISSUER', receiverAddress: state.wallet.address, amount: amount, linkedTxHash: 'charge-' + serial }; await SupabaseLedger.pinConfirmation(chargeConfirmation); WalletLogic.addToChain({ type: 'charge', amount: amount, from: 'BANKNOTE_ISSUER', to: state.wallet.address, serial: serial, status: 'completed', linkedTxHash: 'charge-' + serial });
             CacheManager.invalidate(state.wallet.address); await BackgroundSync.performSync(); alert(`$${amount.toFixed(2)} added to your balance successfully.`); await showView('wallet-view'); } catch (err) { console.error("Charge confirmation failed:", err);
