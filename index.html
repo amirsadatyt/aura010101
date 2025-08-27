@@ -118,7 +118,9 @@
     <div id="login-view" class="view"><div class="card"><h1>Unlock Wallet</h1><p>Enter your password to decrypt your wallet.</p><input type="password" id="login-password-input" placeholder="Password"><div class="loader hidden" id="login-loader"></div><button id="login-button">Unlock</button><div id="login-status" class="status-box"></div><p style="margin-top:20px;">Want to use a different wallet?
     <button class="link-button" id="reset-app-button">Erase everything and start over</button></p></div></div>
     <div id="wallet-view" class="view"><div class="card"><h2>Your Wallet</h2><div class="address-display-box"><span id="address-display" class="address-text"></span><button id="copy-address-button" class="copy-button">Copy</button></div><p>Balance:</p><h1 id="balance-display">$0.00</h1><div id="sync-status" class="status-box" style="font-size: 14px;"></div><p id="network-status" style="font-size: 12px; color: var(--success-color);">Ledger: Supabase</p><button id="show-charge-view-button">Charge with Banknote</button><button id="show-send-view-button" style="margin-top:10px;">Send (Aura)</button><button id="show-receive-view-button" style="margin-top:10px;">Receive (Aura)</button><div class="transaction-history"><h3>Recent Transactions</h3><div class="search-container" style="margin-bottom: 10px; display: flex;"><input type="text" id="search-tx-id-input" placeholder="Search by Transaction ID" style="margin-bottom: 0; border-radius: 6px 0 0 6px;"><button id="search-tx-id-button" style="width: auto; padding: 10px; border-radius: 0 6px 6px 0;">Search</button></div><ul id="transaction-list-ul" class="transaction-list"></ul></div><button id="logout-button" class="logout-button">Logout (Lock Wallet)</button></div></div>
-    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><p>Upload a digital banknote image to validate it and add the funds to your balance.</p><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label><input type="file" id="banknote-image-input" accept="image/*"><div id="validation-status" class="status-box"></div><div id="charge-confirmation" style="display:none;
+    <div id="charge-view" class="view"><div class="card"><h2>Charge Wallet</h2><p>Upload a digital banknote image to validate it and add the funds to your balance.</p><label for="banknote-image-input" class="qr-upload-label" id="banknote-upload-label">Upload Banknote Image</label>
+    <input type="file" id="banknote-image-input" accept="image/jpeg,image/png,image/webp">
+    <div id="validation-status" class="status-box"></div><div id="charge-confirmation" style="display:none;
     margin-top: 20px;"><p>Validation successful! Amount: <b id="validated-amount"></b></p><button id="confirm-charge-button">Add to Balance</button></div><button class="back-button" id="back-from-charge">Back</button></div></div>
     <div id="receive-view" class="view"><div class="card"><h2>Receive Funds</h2><p>Share your address to receive funds.</p><div id="static-qr-code"></div><p style="font-size: 12px;
     word-wrap: break-word; background: #f0f2f5; padding: 8px; border-radius: 4px;" id="full-receive-address"></p><hr style="margin: 20px 0;"><p>Or request a specific amount:</p><input type="number" id="request-amount-input" placeholder="Amount to receive"><button id="create-request-qr-button">Generate Payment Request QR</button><div id="receive-status" class="status-box"></div><button class="back-button" id="back-from-receive">Back</button></div></div>
@@ -649,26 +651,27 @@ if (typeof globalThis.Buffer === 'undefined') {
             const modal = document.getElementById('transaction-detail-modal');
             const confirmationData = tx.confirmation_data || tx;
 
+            // FIX: Validate data from server/storage before displaying it
+            const fromAddress = confirmationData.from && ethers.isAddress(confirmationData.from) ? confirmationData.from : 'Invalid Address';
+            const toAddress = confirmationData.to && ethers.isAddress(confirmationData.to) ? confirmationData.to : 'Invalid Address';
+            const amount = !isNaN(parseFloat(confirmationData.amount)) ? parseFloat(confirmationData.amount) : 0;
+            const fee = !isNaN(parseFloat(confirmationData.fee)) ? parseFloat(confirmationData.fee) : 0;
+
             SecurityUtils.setTextContent(document.getElementById('detail-id'), confirmationData.id || 'N/A');
             SecurityUtils.setTextContent(document.getElementById('detail-status'), confirmationData.status || 'N/A');
             SecurityUtils.setTextContent(document.getElementById('detail-type'), confirmationData.type || 'N/A');
             SecurityUtils.setTextContent(document.getElementById('detail-datetime'), 
                 new Date(confirmationData.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }));
-            SecurityUtils.setTextContent(document.getElementById('detail-amount'), 
-                `$${SecurityUtils.sanitizeNumeric(confirmationData.amount || 0).toFixed(2)}`);
-            SecurityUtils.setTextContent(document.getElementById('detail-fee'), 
-                `$${SecurityUtils.sanitizeNumeric(confirmationData.fee || 0).toFixed(2)}`);
-            SecurityUtils.setTextContent(document.getElementById('detail-from'), 
-                SecurityUtils.sanitizeAddress(confirmationData.from || 'N/A'));
-            SecurityUtils.setTextContent(document.getElementById('detail-to'), 
-                SecurityUtils.sanitizeAddress(confirmationData.to || 'N/A'));
-            SecurityUtils.setTextContent(document.getElementById('detail-comment'), 
-                confirmationData.comment || 'N/A');
+            SecurityUtils.setTextContent(document.getElementById('detail-amount'), `$${amount.toFixed(2)}`);
+            SecurityUtils.setTextContent(document.getElementById('detail-fee'), `$${fee.toFixed(2)}`);
+            SecurityUtils.setTextContent(document.getElementById('detail-from'), fromAddress);
+            SecurityUtils.setTextContent(document.getElementById('detail-to'), toAddress);
+            SecurityUtils.setTextContent(document.getElementById('detail-comment'), confirmationData.comment || 'N/A');
 
             const linkedHashEl = document.getElementById('detail-linked-hash');
             const localHashEl = document.getElementById('detail-local-hash');
 
-            if (confirmationData.type === 'send' || (confirmationData.from === state.wallet.address && confirmationData.purpose !== 'fee')) {
+            if (confirmationData.type === 'send' || (fromAddress === state.wallet.address && confirmationData.purpose !== 'fee')) {
                 SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A'));
                 document.getElementById('detail-local-hash').closest('p').style.display = 'none';
             } else {
@@ -789,23 +792,30 @@ if (typeof globalThis.Buffer === 'undefined') {
             setStatus(statusEl, `Charge Failed: ${err.message}`, 'error'); button.disabled = false; } });
             document.getElementById('banknote-image-input').addEventListener('change', async (event) => {
                 const file = event.target.files[0];
-                if (!file) return;
-                
                 const statusEl = document.getElementById('validation-status');
+                if (!file) return;
+
+                // FIX: Enforce allowed file types in JavaScript
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                if (!allowedTypes.includes(file.type)) {
+                    setStatus(statusEl, 'Invalid file type. Please upload a JPEG, PNG, or WebP file.', 'error');
+                    event.target.value = ''; // Clear the file input
+                    return;
+                }
+                
                 const confirmSection = document.getElementById('charge-confirmation');
-     
-                           const confirmBtn = document.getElementById('confirm-charge-button');
+                const confirmBtn = document.getElementById('confirm-charge-button');
 
                 confirmSection.style.display = 'none';
                 confirmBtn.disabled = true;
                 setStatus(statusEl, 'Preparing image...', 'info');
 
                 let banknotePayload;
-              
-                 let parsedInfo = {};
+                let parsedInfo = {};
 
                 try {
-                    // Step 1: Decode the QR grid from the image
+                    // Step 1: Decode the QR grid from the image. The resize/preprocess steps
+                    // also act as a sanitizer by drawing the image to a canvas.
                     const resizedDataUrl = await CoreLogic.Utils.resizeImage(file, CoreLogic.Constants.MAX_IMAGE_DIMENSION);
                     const processedDataUrl = await 
                     CoreLogic.Utils.preprocessImage(resizedDataUrl);
@@ -813,17 +823,14 @@ if (typeof globalThis.Buffer === 'undefined') {
                         const img = new Image();
                         img.onload = () => {
                             const c = document.createElement('canvas');
-    
-                                         c.width = img.width; c.height = img.height;
+                            c.width = img.width; c.height = img.height;
                             const ctx = c.getContext('2d');
                             ctx.drawImage(img, 0, 0);
-          
-                                     resolve(ctx.getImageData(0, 0, img.width, img.height));
+                            resolve(ctx.getImageData(0, 0, img.width, img.height));
                         };
                         img.onerror = reject;
                         img.src = processedDataUrl;
-   
-                                   });
+                    });
                     banknotePayload = await CoreLogic.Banknote.decodeQrGrid(imageData, statusEl);
 
                     // Step 2: Extract key info before validation attempt
