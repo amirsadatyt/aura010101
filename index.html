@@ -2,7 +2,7 @@
 <html lang="en-US">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aura Wallet (Supabase Ledger) - S Tier Pro</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -75,27 +75,14 @@
             background-image: var(--bg-image);
             background-attachment: fixed;
             display: flex; justify-content: center; align-items: center;
-            min-height: 100vh; margin: 0;
-            color: var(--text-light); 
-            overflow-x: hidden;
+            min-height: 100vh; margin: 0; 
+            padding: 2.5rem 1rem 1rem 1rem; /* This line has been changed */
+            color: var(--text-light); overflow: hidden;
             transition: background-color 0.5s ease;
-            
-            /* --- PROFESSIONAL FIX FOR MOBILE PADDING --- */
-            padding-top: calc(1rem + env(safe-area-inset-top, 0px));
-            padding-right: calc(1rem + env(safe-area-inset-right, 0px));
-            padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-            padding-left: calc(1rem + env(safe-area-inset-left, 0px));
         }
 
         /* --- DYNAMIC VIEW TRANSITIONS --- */
-        main { 
-            position: relative; 
-            width: 100%; 
-            height: 100%; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-        }
+        main { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         .view {
             position: absolute; opacity: 0; pointer-events: none;
             transform: translateY(20px); transition: opacity 0.4s ease, transform 0.4s ease;
@@ -174,8 +161,6 @@
         }
         .back-button { background: color-mix(in srgb, var(--surface-color), transparent 20%); color: var(--text-light); margin-top: 10px; }
         .back-button:hover { background: color-mix(in srgb, var(--border-color), transparent 50%); box-shadow: none; }
-        .secondary-back-button { background: none; border: 1px solid var(--border-color); color: var(--text-light); margin-top: 10px; }
-        .secondary-back-button:hover { background: var(--input-bg); box-shadow: none; transform: translateY(-2px); }
         .logout-button { background: var(--danger-color); color: var(--text-dark); margin-top: 10px; }
         .logout-button:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--danger-color) 30%, transparent); }
         .link-button { background: none; border: none; color: var(--primary-color); text-decoration: underline; cursor: pointer; padding: 5px; width: auto; font-size: 14px; display: inline; }
@@ -350,52 +335,16 @@
     
     <div id="receive-view" class="view"><div class="card"><h2>Receive Funds</h2><p>Share your address to receive funds.</p><div id="static-qr-code"></div><p style="font-size: 12px; word-wrap: break-word; background: var(--input-bg); padding: 12px; border-radius: var(--border-radius-md);" id="full-receive-address"></p><hr style="margin: 20px 0; border-color: var(--border-color);"><p>Or request a specific amount:</p><div class="input-wrapper"><div class="icon" aria-hidden="true">$</div><input type="number" id="request-amount-input" placeholder="Amount to receive"></div><button id="create-request-qr-button">Generate Payment Request QR</button><div id="receive-status" class="status-box" aria-live="polite"></div><button class="back-button" id="back-from-receive">Back</button></div></div>
     
-    <div id="send-view" class="view"><div class="card">
-        <h2>Send Funds</h2>
-
-        <div id="send-choice-container">
-            <p>Choose a method to enter the recipient's details.</p>
-            <div class="action-buttons" style="grid-template-columns: 1fr; gap: 10px; margin: 15px 0;">
-                <button id="show-send-manual-button">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                    Enter Address Manually
-                </button>
-                <button id="show-send-qr-button">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg>
-                    Scan QR Code
-                </button>
-            </div>
+    <div id="send-view" class="view"><div class="card"><h2>Send Funds</h2><p>Enter recipient address and amount.</p><div>
+        <div class="input-wrapper">
+            <div class="icon" id="address-icon" aria-hidden="true"></div>
+            <input type="text" id="send-address-input" placeholder="Recipient's Aura Address">
         </div>
-
-        <div id="send-manual-container" style="display: none;">
-            <p>Enter recipient address and amount.</p>
-            <div class="input-wrapper">
-                <div class="icon" id="address-icon" aria-hidden="true"></div>
-                <input type="text" id="send-address-input" placeholder="Recipient's Aura Address">
-            </div>
-            <div class="input-wrapper">
-                <div class="icon" aria-hidden="true">$</div>
-                <input type="number" id="send-amount-input" placeholder="Amount to send">
-            </div>
-            <input type="text" id="send-comment-input" placeholder="Short comment (optional)" maxlength="50" style="margin-bottom: 5px;">
-            <p id="comment-char-count" style="text-align: right; font-size: 12px; opacity: 0.7; margin-top: 0; margin-bottom: 10px;">0 / 50</p>
-            <button id="send-manual-button">Continue</button>
-            <button class="secondary-back-button back-to-send-choice">Back</button>
+        <div class="input-wrapper">
+            <div class="icon" aria-hidden="true">$</div>
+            <input type="number" id="send-amount-input" placeholder="Amount to send">
         </div>
-
-        <div id="send-qr-container" style="display: none;">
-             <p>Scan a recipient's payment request QR code.</p>
-             <div id="video-container" style="position: relative; width: 100%; max-width: 300px; margin: 15px auto; border-radius: var(--border-radius-md); overflow: hidden; border: 2px solid var(--border-color); background: #000;">
-                 <video id="qr-video" playsinline style="width: 100%; height: auto; display: block;"></video>
-                 <div id="loading-message" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center;">Requesting camera access...</div>
-             </div>
-             <canvas id="qr-canvas" style="display: none;"></canvas>
-             <button class="secondary-back-button back-to-send-choice">Cancel Scan</button>
-        </div>
-
-        <div id="send-status" class="status-box" aria-live="polite"></div>
-        <button class="back-button" id="back-from-send">Back to Wallet</button>
-    </div></div>
+        <input type="text" id="send-comment-input" placeholder="Short comment (optional)" maxlength="50" style="margin-bottom: 5px;"><p id="comment-char-count" style="text-align: right; font-size: 12px; opacity: 0.7; margin-top: 0; margin-bottom: 10px;">0 / 50</p><button id="send-manual-button">Continue</button></div><p style="text-align:center; margin: 20px 0; font-weight: bold; opacity: 0.7;">- OR -</p><p>Scan a recipient's payment request QR code.</p><div id="video-container" style="position: relative; width: 100%; max-width: 300px; margin: 15px auto; border-radius: var(--border-radius-md); overflow: hidden; border: 2px solid var(--border-color); background: #000;"><video id="qr-video" playsinline style="width: 100%; height: auto; display: block;"></video><div id="loading-message" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); color: white; display: flex; align-items: center; justify-content: center;">Requesting camera access...</div></div><canvas id="qr-canvas" style="display: none;"></canvas><div id="send-status" class="status-box" aria-live="polite"></div><button class="back-button" id="back-from-send">Back</button></div></div>
     
     <div id="send-confirm-view" class="view"><div class="card"><h2>Confirm Payment</h2><p>You are about to send:</p><h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2><p>To:</p><p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: var(--input-bg); padding: 10px; border-radius: var(--border-radius-md);"></p><p style="font-style: italic; opacity: 0.8; word-wrap: break-word;" id="confirm-comment-display"></p><button id="confirm-payment-button">Confirm and Pay</button><div id="send-confirm-status" class="status-box" aria-live="polite"></div><button class="back-button" id="back-from-send-confirm">Cancel</button></div></div>
 
@@ -412,7 +361,7 @@
     <script src="html2canvas.min.js"></script>
     
     <script type="module">
-        // --- ALL JAVASCRIPT LOGIC IS UNCHANGED ---
+        // --- ALL JAVASCRIPT LOGIC IS UNCHANGED EXCEPT FOR THEME SWITCHING & UI HELPERS ---
         // Polyfill Buffer...
         if (typeof globalThis.Buffer === 'undefined') {
         globalThis.Buffer = {
@@ -539,7 +488,7 @@
         function abbreviateAddress(address) { if (!address) return ''; const sanitized = SecurityUtils.sanitizeAddress(address); return `${sanitized.substring(0, 6)}...${sanitized.substring(sanitized.length - 4)}`; }
         function stopScanner() { if (state.cameraStream) { state.cameraStream.getTracks().forEach(track => track.stop()); state.cameraStream = null; state.isScannerActive = false; } }
         async function startScanner() { if (state.isScannerActive || !document.getElementById('send-view').classList.contains('active')) return; state.isScannerActive = true; const video = document.getElementById('qr-video'), loadingMessage = document.getElementById('loading-message'), canvasElement = document.getElementById('qr-canvas'), canvas = canvasElement.getContext('2d'), sendStatusEl = document.getElementById('send-status'); setStatus(sendStatusEl, ''); loadingMessage.style.display = 'flex'; SecurityUtils.setTextContent(loadingMessage, 'Requesting camera access...'); try { state.cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); video.srcObject = state.cameraStream; video.setAttribute("playsinline", true); await video.play(); loadingMessage.style.display = 'none'; requestAnimationFrame(tick); } catch (err) { console.error("Camera Error:", err); SecurityUtils.setTextContent(loadingMessage, 'Could not access camera.'); setStatus(sendStatusEl, 'Camera access is required.', 'error'); state.isScannerActive = false; } function tick() { if (!state.isScannerActive) return; if (video.readyState === video.HAVE_ENOUGH_DATA) { canvasElement.height = video.videoHeight; canvasElement.width = video.videoWidth; canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height); const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height); const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" }); if (code) { stopScanner(); setStatus(sendStatusEl, 'QR Code Detected! Processing...', 'info'); let isPaymentRequest = false; try { const request = JSON.parse(code.data); if (request.type === 'AURA_PAYMENT_REQUEST' && request.amount && request.receiverAddress) { isPaymentRequest = true; Promise.resolve().then(async () => { if (Date.now() > request.expiresAt) throw new Error("This payment request has expired."); if (await SupabaseLedger.hasBeenSpent(request.linkedTxHash)) throw new Error("This payment request has already been paid."); setStatus(sendStatusEl, 'Validating transaction with server...', 'info'); const { fee, totalDebit } = await SupabaseLedger.prepareTransaction(state.wallet.address, request.amount); state.activePaymentRequest = { ...request, fee, total: totalDebit }; state.activeManualSend = null; const confirmAmountEl = document.getElementById('confirm-amount-display'); const confirmAmountHTML = `Amount: $${request.amount.toFixed(2)}<br><span style="font-size: 14px; opacity: 0.7;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${totalDebit.toFixed(2)}</strong>`; SecurityUtils.setHTMLContent(confirmAmountEl, confirmAmountHTML, ['br', 'span', 'strong']); SecurityUtils.setTextContent(document.getElementById('confirm-recipient-address-display'), request.receiverAddress); await showView('send-confirm-view'); }).catch(err => { setStatus(sendStatusEl, err.message, 'error'); setTimeout(() => startScanner(), 2000); }); } } catch (e) {} if (!isPaymentRequest) { if (ethers.isAddress(code.data)) { document.getElementById('send-address-input').value = code.data; setStatus(sendStatusEl, 'Recipient address scanned! Please enter the amount to send.', 'success'); document.getElementById('send-amount-input').focus(); } else { setStatus(sendStatusEl, 'Invalid QR Code. Not a valid address or payment request.', 'error'); setTimeout(() => startScanner(), 2000); } } return; } } requestAnimationFrame(tick); } }
-        async function showView(id) { if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner(); if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); const viewElement = document.getElementById(id); if(viewElement) viewElement.classList.add('active'); if (id === 'wallet-view') { if(state.wallet) SecurityUtils.setTextContent(document.getElementById('address-display'), abbreviateAddress(state.wallet.address)); await updateBalanceAndRender(); BackgroundSync.start(); } if (id === 'send-view') { document.getElementById('send-manual-container').style.display = 'none'; document.getElementById('send-qr-container').style.display = 'none'; document.getElementById('send-choice-container').style.display = 'block'; resetViewInputs('send-view'); setStatus(document.getElementById('send-status'), ''); } if (id === 'receive-view') { SecurityUtils.setTextContent(document.getElementById('full-receive-address'), state.wallet.address); generateQrCode(state.wallet.address, 'static-qr-code'); } }
+        async function showView(id) { if (document.getElementById('send-view').classList.contains('active') && id !== 'send-view') stopScanner(); if (state.activePollingTimer) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; } document.querySelectorAll('.view').forEach(v => v.classList.remove('active')); const viewElement = document.getElementById(id); if(viewElement) viewElement.classList.add('active'); if (id === 'wallet-view') { if(state.wallet) SecurityUtils.setTextContent(document.getElementById('address-display'), abbreviateAddress(state.wallet.address)); await updateBalanceAndRender(); BackgroundSync.start(); } if (id === 'send-view') { startScanner(); } if (id === 'receive-view') { SecurityUtils.setTextContent(document.getElementById('full-receive-address'), state.wallet.address); generateQrCode(state.wallet.address, 'static-qr-code'); } }
         function renderTransactionHistory() {
             const listUl = document.getElementById('transaction-list-ul');
             listUl.innerHTML = '';
@@ -641,28 +590,6 @@
             document.getElementById('show-receive-view-button').addEventListener('click', () => { resetViewInputs('receive-view'); showView('receive-view'); });
             document.getElementById('show-send-view-button').addEventListener('click', () => { resetViewInputs('send-view'); showView('send-view'); });
             document.getElementById('send-comment-input').addEventListener('input', (event) => { const count = event.target.value.length; SecurityUtils.setTextContent(document.getElementById('comment-char-count'), `${count} / 50`); });
-            
-            // --- MODIFIED: Send View Logic ---
-            document.getElementById('show-send-manual-button').addEventListener('click', () => {
-                document.getElementById('send-choice-container').style.display = 'none';
-                document.getElementById('send-manual-container').style.display = 'block';
-                stopScanner(); 
-            });
-            document.getElementById('show-send-qr-button').addEventListener('click', () => {
-                document.getElementById('send-choice-container').style.display = 'none';
-                document.getElementById('send-qr-container').style.display = 'block';
-                startScanner();
-            });
-            document.querySelectorAll('.back-to-send-choice').forEach(button => {
-                button.addEventListener('click', () => {
-                    document.getElementById('send-manual-container').style.display = 'none';
-                    document.getElementById('send-qr-container').style.display = 'none';
-                    document.getElementById('send-choice-container').style.display = 'block';
-                    stopScanner();
-                    setStatus(document.getElementById('send-status'), '');
-                });
-            });
-
             document.getElementById('send-manual-button').addEventListener('click', async (event) => { const button = event.target; const statusEl = document.getElementById('send-status'); const recipientAddress = document.getElementById('send-address-input').value.trim(); const amountStr = document.getElementById('send-amount-input').value; const amount = parseFloat(amountStr); const rawComment = document.getElementById('send-comment-input').value.trim(); setStatus(statusEl, ''); if (rawComment.length > 50) { setStatus(statusEl, 'Comment cannot exceed 50 characters.', 'error'); return; } if (!ethers.isAddress(recipientAddress)) { setStatus(statusEl, 'Invalid recipient address.', 'error'); return; } if (isNaN(amount) || amount <= 0) { setStatus(statusEl, 'Please enter a valid amount.', 'error'); return; } const comment = SecurityUtils.sanitizeText(rawComment); button.disabled = true; setStatus(statusEl, 'Validating transaction with server...', 'info'); try { const { fee, totalDebit } = await SupabaseLedger.prepareTransaction(state.wallet.address, amount); state.activeManualSend = { address: recipientAddress, amount: amount, comment: comment, fee: fee, total: totalDebit }; state.activePaymentRequest = null; const confirmAmountEl = document.getElementById('confirm-amount-display'); const confirmAmountHTML = `Amount: $${amount.toFixed(2)}<br><span style="font-size: 14px; opacity: 0.7;">Fee (${(state.config.FEE_PERCENTAGE*100).toFixed(1)}%): +$${fee.toFixed(2)}</span><br><strong style="font-size: 18px;">Total: $${totalDebit.toFixed(2)}</strong>`; SecurityUtils.setHTMLContent(confirmAmountEl, confirmAmountHTML, ['br', 'span', 'strong']); SecurityUtils.setTextContent(document.getElementById('confirm-recipient-address-display'), recipientAddress); SecurityUtils.setTextContent(document.getElementById('confirm-comment-display'), comment ? `Comment: "${comment}"` : ''); await showView('send-confirm-view'); } catch (err) { setStatus(statusEl, err.message, 'error'); } finally { button.disabled = false; } });
             document.getElementById('search-tx-id-button').addEventListener('click', async () => { const searchButton = document.getElementById('search-tx-id-button'); const searchInput = document.getElementById('search-tx-id-input'); const searchId = searchInput.value.trim(); if (!searchId) { renderTransactionHistory(); return; } const localTransaction = state.userStore.chain.find(tx => tx.id && tx.id.toString() === searchId); if (localTransaction) { showTransactionDetails(localTransaction); return; } searchButton.disabled = true; SecurityUtils.setTextContent(searchButton, '...'); try { const serverTransaction = await SupabaseLedger.findTransactionById(searchId); if (serverTransaction) { const displayableTx = { id: serverTransaction.id, status: 'completed', type: serverTransaction.senderAddress === 'BANKNOTE_ISSUER' ? 'charge' : (serverTransaction.senderAddress === state.wallet.address ? 'send' : 'receive'), timestamp: serverTransaction.timestamp, amount: serverTransaction.amount, fee: 0, from: serverTransaction.senderAddress, to: serverTransaction.receiverAddress, hash: serverTransaction.hash, linkedTxHash: serverTransaction.linkedTxHash, comment: serverTransaction.comment }; showTransactionDetails(displayableTx); } else { alert('Transaction not found on the server.'); } } catch (error) { console.error("Server search failed:", error); alert(`Error searching server: ${error.message}`); } finally { searchButton.disabled = false; SecurityUtils.setTextContent(searchButton, 'Search'); } });
             document.getElementById('create-request-qr-button').addEventListener('click', () => { const amount = parseFloat(document.getElementById('request-amount-input').value); const statusEl = document.getElementById('receive-status'); if (isNaN(amount) || amount <= 0) { setStatus(statusEl, 'Please enter a valid amount.', 'error'); return; } const request = WalletLogic.createPaymentRequest(amount); SecurityUtils.setTextContent(document.getElementById('qr-display-title'), 'Payment Request'); SecurityUtils.setTextContent(document.getElementById('qr-display-instruction'), `Show this QR to the sender to pay $${amount.toFixed(2)}.`); document.getElementById('qr-display-box').style.display = 'block'; generateQrCode(JSON.stringify(request), 'qr-display-box'); document.getElementById('waiting-on-payment').style.display = 'block'; const statusMsg = document.getElementById('final-status-message'), timerEl = document.getElementById('payment-timer'); setStatus(statusMsg, 'Waiting for sender to pay...', 'info'); document.querySelector('#waiting-on-payment .loader').style.display = 'block'; showView('qr-display-view'); let timeLeft = state.config.PAYMENT_REQUEST_EXPIRY; const updateTimer = () => { timeLeft -= 1000; const minutes = Math.floor(timeLeft / 60000), seconds = Math.floor((timeLeft % 60000) / 1000).toString().padStart(2, '0'); SecurityUtils.setTextContent(timerEl, `Expires in: ${minutes}:${seconds}`); if (timeLeft <= 0) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; setStatus(statusMsg, 'Payment request expired.', 'error'); document.querySelector('#waiting-on-payment .loader').style.display = 'none'; } }; updateTimer(); state.activePollingTimer = setInterval(async () => { updateTimer(); if (timeLeft <= 0) return; try { const confirmation = await SupabaseLedger.findConfirmation(request.linkedTxHash); if (confirmation) { clearInterval(state.activePollingTimer); state.activePollingTimer = null; timerEl.style.display = 'none'; setStatus(statusMsg, 'Payment detected! Finalizing...', 'info'); if (await WalletLogic.finalizePayment(confirmation)) { setStatus(statusMsg, `Success! $${Number(confirmation.amount).toFixed(2)} received.`, 'success'); document.querySelector('#waiting-on-payment .loader').style.display = 'none'; setTimeout(async () => { await showView('wallet-view'); }, 2000); } } } catch (err) { console.error("Polling error:", err); setStatus(statusMsg, 'Network error while checking for payment.', 'error'); clearInterval(state.activePollingTimer); state.activePollingTimer = null; } }, state.config.POLLING_INTERVAL); });
