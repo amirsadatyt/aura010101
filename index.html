@@ -391,32 +391,7 @@
     <div id="send-confirm-view" class="view"><div class="card"><h2>Confirm Payment</h2><p>You are about to send:</p><h2 id="confirm-amount-display" style="color: var(--primary-color);"></h2><p>To:</p><p id="confirm-recipient-address-display" style="font-size: 12px; word-wrap: break-word; background: var(--input-bg); padding: 10px; border-radius: var(--border-radius-md);"></p><p style="font-style: italic; opacity: 0.8; word-wrap: break-word;" id="confirm-comment-display"></p><button id="confirm-payment-button">Confirm and Pay</button><div id="send-confirm-status" class="status-box" aria-live="polite"></div><button class="back-button" id="back-from-send-confirm">Cancel</button></div></div>
     <div id="qr-display-view" class="view"><div class="card"><h2 id="qr-display-title"></h2><p id="qr-display-instruction"></p><div id="qr-display-box"></div><div id="waiting-on-payment" style="display: none;"><div id="payment-timer"></div><div class="loader"></div><p id="final-status-message" class="status-box" style="font-size:18px;" aria-live="polite"></p></div><button class="back-button" id="back-from-qr-display">Back to Wallet</button></div></div>
     
-    <div id="transaction-detail-modal" class="modal-overlay" style="display:none;"><div class="modal-content card"><h2>Transaction Details</h2>
-        <div id="modal-details-content" style="text-align:left; font-size: 14px; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; align-items: start;">
-            <strong>ID:</strong> 
-            <span id="detail-id" style="word-break: break-all;"></span>
-            <strong>Status:</strong> 
-            <span id="detail-status" style="word-break: break-all;"></span>
-            <strong>Type:</strong> 
-            <span id="detail-type" style="word-break: break-all;"></span>
-            <strong>Date & Time:</strong> 
-            <span id="detail-datetime" style="word-break: break-all;"></span>
-            <strong>Amount:</strong> 
-            <span id="detail-amount" style="word-break: break-all;"></span>
-            <strong>Fee:</strong> 
-            <span id="detail-fee" style="word-break: break-all;"></span>
-            <strong>From:</strong> 
-            <span id="detail-from" style="word-break: break-all;"></span>
-            <strong>To:</strong> 
-            <span id="detail-to" style="word-break: break-all;"></span>
-            <strong>Comment:</strong> 
-            <span id="detail-comment" style="word-break: break-all;"></span>
-            <strong>Transaction Hash (TxID):</strong> 
-            <span id="detail-linked-hash" style="word-break: break-all;"></span>
-            <strong class="local-hash-label">Local Receipt Hash:</strong> 
-            <span id="detail-local-hash" style="word-break: break-all;"></span>
-        </div>
-        <button id="download-tx-button">Download as JPG</button><button id="close-modal-button" class="back-button">Close</button></div></div>
+    <div id="transaction-detail-modal" class="modal-overlay" style="display:none;"><div class="modal-content card"><h2>Transaction Details</h2><div id="modal-details-content" style="text-align:left; font-size: 14px;"><p style="margin-bottom: 10px;"><strong>ID:</strong> <span id="detail-id"></span></p><p style="margin-bottom: 10px;"><strong>Status:</strong> <span id="detail-status"></span></p><p style="margin-bottom: 10px;"><strong>Type:</strong> <span id="detail-type"></span></p><p style="margin-bottom: 10px;"><strong>Date & Time:</strong> <span id="detail-datetime"></span></p><p style="margin-bottom: 10px;"><strong>Amount:</strong> <span id="detail-amount"></span></p><p style="margin-bottom: 10px;"><strong>Fee:</strong> <span id="detail-fee"></span></p><p style="word-wrap: break-word; margin-bottom: 10px;"><strong>From:</strong> <span id="detail-from"></span></p><p style="word-wrap: break-word; margin-bottom: 10px;"><strong>To:</strong> <span id="detail-to"></span></p><p style="word-wrap: break-word; margin-bottom: 10px;"><strong>Comment:</strong> <span id="detail-comment"></span></p><p style="word-wrap: break-word; margin-bottom: 10px;"><strong>Transaction Hash (TxID):</strong> <span id="detail-linked-hash"></span></p><p style="word-wrap: break-word; margin-bottom: 10px;"><strong>Local Receipt Hash:</strong> <span id="detail-local-hash"></span></p></div><button id="download-tx-button">Download as JPG</button><button id="close-modal-button" class="back-button">Close</button></div></div>
 </main>
    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
@@ -610,61 +585,47 @@
                 listUl.appendChild(item);
             });
         }
-        
-        // === FIX START ===
-        function showTransactionDetails(tx) {
-            const modal = document.getElementById('transaction-detail-modal');
-            const confirmationData = tx.confirmation_data || tx;
-            const fromAddress = confirmationData.from && ethers.isAddress(confirmationData.from) ? confirmationData.from : 'Invalid Address';
-            const toAddress = confirmationData.to && ethers.isAddress(confirmationData.to) ? confirmationData.to : 'Invalid Address';
-            const amount = !isNaN(parseFloat(confirmationData.amount)) ? parseFloat(confirmationData.amount) : 0;
-            const fee = !isNaN(parseFloat(confirmationData.fee)) ? parseFloat(confirmationData.fee) : 0;
-
-            SecurityUtils.setTextContent(document.getElementById('detail-id'), confirmationData.id || 'N/A');
-            SecurityUtils.setTextContent(document.getElementById('detail-status'), confirmationData.status || 'N/A');
-            SecurityUtils.setTextContent(document.getElementById('detail-type'), confirmationData.type || 'N/A');
-            SecurityUtils.setTextContent(document.getElementById('detail-datetime'), new Date(confirmationData.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }));
-            SecurityUtils.setTextContent(document.getElementById('detail-amount'), `$${amount.toFixed(2)}`);
-            SecurityUtils.setTextContent(document.getElementById('detail-fee'), `$${fee.toFixed(2)}`);
-            SecurityUtils.setTextContent(document.getElementById('detail-from'), fromAddress);
-            SecurityUtils.setTextContent(document.getElementById('detail-to'), toAddress);
-            SecurityUtils.setTextContent(document.getElementById('detail-comment'), confirmationData.comment || 'N/A');
-
-            const linkedHashEl = document.getElementById('detail-linked-hash');
-            const localHashEl = document.getElementById('detail-local-hash');
-            const localHashLabel = document.querySelector('.local-hash-label');
-
-            if (confirmationData.type === 'send' || (fromAddress === state.wallet.address && confirmationData.purpose !== 'fee')) {
-                SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A'));
-                if (localHashLabel) localHashLabel.style.display = 'none';
-                if (localHashEl) localHashEl.style.display = 'none';
-            } else {
-                SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.linkedTxHash || 'N/A'));
-                SecurityUtils.setTextContent(localHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A'));
-                if (localHashLabel) localHashLabel.style.display = '';
-                if (localHashEl) localHashEl.style.display = '';
-            }
-            
-            modal.style.display = 'flex';
-            
-            document.getElementById('close-modal-button').onclick = () => {
-                modal.style.display = 'none';
-            };
-            
-            document.getElementById('download-tx-button').onclick = () => {
-                const contentToCapture = document.getElementById('modal-details-content');
-                html2canvas(contentToCapture, {
-                    scale: 2,
-                    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--surface-color')
-                }).then(canvas => {
-                    const link = document.createElement('a');
-                    link.download = `transaction_${SecurityUtils.sanitizeTransactionId((confirmationData.linkedTxHash || confirmationData.hash)).substring(0, 10)}.jpg`;
-                    link.href = canvas.toDataURL('image/jpeg', 0.9);
-                    link.click();
-                });
-            };
+        function showTransactionDetails(tx) { 
+            const modal = document.getElementById('transaction-detail-modal'); 
+            const confirmationData = tx.confirmation_data || tx; 
+            const fromAddress = confirmationData.from && ethers.isAddress(confirmationData.from) ? confirmationData.from : 'Invalid Address'; 
+            const toAddress = confirmationData.to && ethers.isAddress(confirmationData.to) ? confirmationData.to : 'Invalid Address'; 
+            const amount = !isNaN(parseFloat(confirmationData.amount)) ? parseFloat(confirmationData.amount) : 0; 
+            const fee = !isNaN(parseFloat(confirmationData.fee)) ? parseFloat(confirmationData.fee) : 0; 
+            SecurityUtils.setTextContent(document.getElementById('detail-id'), confirmationData.id || 'N/A'); 
+            SecurityUtils.setTextContent(document.getElementById('detail-status'), confirmationData.status || 'N/A'); 
+            SecurityUtils.setTextContent(document.getElementById('detail-type'), confirmationData.type || 'N/A'); 
+            SecurityUtils.setTextContent(document.getElementById('detail-datetime'), new Date(confirmationData.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' })); 
+            SecurityUtils.setTextContent(document.getElementById('detail-amount'), `$${amount.toFixed(2)}`); 
+            SecurityUtils.setTextContent(document.getElementById('detail-fee'), `$${fee.toFixed(2)}`); 
+            SecurityUtils.setTextContent(document.getElementById('detail-from'), fromAddress); 
+            SecurityUtils.setTextContent(document.getElementById('detail-to'), toAddress); 
+            SecurityUtils.setTextContent(document.getElementById('detail-comment'), confirmationData.comment || 'N/A'); 
+            const linkedHashEl = document.getElementById('detail-linked-hash'); 
+            const localHashEl = document.getElementById('detail-local-hash'); 
+            if (confirmationData.type === 'send' || (fromAddress === state.wallet.address && confirmationData.purpose !== 'fee')) { 
+                SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A')); 
+                document.getElementById('detail-local-hash').closest('p').style.display = 'none'; 
+            } else { 
+                SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.linkedTxHash || 'N/A')); 
+                SecurityUtils.setTextContent(localHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A')); 
+                document.getElementById('detail-local-hash').closest('p').style.display = 'block'; 
+            } 
+            modal.style.display = 'flex'; 
+            document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; }; 
+            document.getElementById('download-tx-button').onclick = () => { 
+                const contentToCapture = document.getElementById('modal-details-content'); 
+                html2canvas(contentToCapture, { 
+                    scale: 2, 
+                    backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-color') 
+                }).then(canvas => { 
+                    const link = document.createElement('a'); 
+                    link.download = `transaction_${SecurityUtils.sanitizeTransactionId((confirmationData.linkedTxHash || confirmationData.hash)).substring(0, 10)}.jpg`; 
+                    link.href = canvas.toDataURL('image/jpeg', 0.9); 
+                    link.click(); 
+                }); 
+            }; 
         }
-        // === FIX END ===
         
         async function initializeApp() {
             try {
