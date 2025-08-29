@@ -585,7 +585,63 @@
                 listUl.appendChild(item);
             });
         }
-        function showTransactionDetails(tx) { const modal = document.getElementById('transaction-detail-modal'); const confirmationData = tx.confirmation_data || tx; const fromAddress = confirmationData.from && ethers.isAddress(confirmationData.from) ? confirmationData.from : 'Invalid Address'; const toAddress = confirmationData.to && ethers.isAddress(confirmationData.to) ? confirmationData.to : 'Invalid Address'; const amount = !isNaN(parseFloat(confirmationData.amount)) ? parseFloat(confirmationData.amount) : 0; const fee = !isNaN(parseFloat(confirmationData.fee)) ? parseFloat(confirmationData.fee) : 0; SecurityUtils.setTextContent(document.getElementById('detail-id'), confirmationData.id || 'N/A'); SecurityUtils.setTextContent(document.getElementById('detail-status'), confirmationData.status || 'N/A'); SecurityUtils.setTextContent(document.getElementById('detail-type'), confirmationData.type || 'N/A'); SecurityUtils.setTextContent(document.getElementById('detail-datetime'), new Date(confirmationData.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' })); SecurityUtils.setTextContent(document.getElementById('detail-amount'), `$${amount.toFixed(2)}`); SecurityUtils.setTextContent(document.getElementById('detail-fee'), `$${fee.toFixed(2)}`); SecurityUtils.setTextContent(document.getElementById('detail-from'), fromAddress); SecurityUtils.setTextContent(document.getElementById('detail-to'), toAddress); SecurityUtils.setTextContent(document.getElementById('detail-comment'), confirmationData.comment || 'N/A'); const linkedHashEl = document.getElementById('detail-linked-hash'); const localHashEl = document.getElementById('detail-local-hash'); if (confirmationData.type === 'send' || (fromAddress === state.wallet.address && confirmationData.purpose !== 'fee')) { SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A')); document.getElementById('detail-local-hash').closest('p').style.display = 'none'; } else { SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.linkedTxHash || 'N/A')); SecurityUtils.setTextContent(localHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A')); document.getElementById('detail-local-hash').closest('p').style.display = 'block'; } modal.style.display = 'flex'; document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; }; document.getElementById('download-tx-button').onclick = () => { const contentToCapture = document.getElementById('modal-details-content'); html2canvas(contentToCapture, { scale: 2, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--surface-color') }).then(canvas => { const link = document.createElement('a'); link.download = `transaction_${SecurityUtils.sanitizeTransactionId((confirmationData.linkedTxHash || confirmationData.hash)).substring(0, 10)}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.9); link.click(); }); }; }
+        function showTransactionDetails(tx) {
+            const modal = document.getElementById('transaction-detail-modal');
+            const confirmationData = tx.confirmation_data || tx;
+            const fromAddress = confirmationData.from && ethers.isAddress(confirmationData.from) ? confirmationData.from : 'Invalid Address';
+            const toAddress = confirmationData.to && ethers.isAddress(confirmationData.to) ? confirmationData.to : 'Invalid Address';
+            const amount = !isNaN(parseFloat(confirmationData.amount)) ? parseFloat(confirmationData.amount) : 0;
+            const fee = !isNaN(parseFloat(confirmationData.fee)) ? parseFloat(confirmationData.fee) : 0;
+            SecurityUtils.setTextContent(document.getElementById('detail-id'), confirmationData.id || 'N/A');
+            SecurityUtils.setTextContent(document.getElementById('detail-status'), confirmationData.status || 'N/A');
+            SecurityUtils.setTextContent(document.getElementById('detail-type'), confirmationData.type || 'N/A');
+            SecurityUtils.setTextContent(document.getElementById('detail-datetime'), new Date(confirmationData.timestamp).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'medium' }));
+            SecurityUtils.setTextContent(document.getElementById('detail-amount'), `$${amount.toFixed(2)}`);
+            SecurityUtils.setTextContent(document.getElementById('detail-fee'), `$${fee.toFixed(2)}`);
+            SecurityUtils.setTextContent(document.getElementById('detail-from'), fromAddress);
+            SecurityUtils.setTextContent(document.getElementById('detail-to'), toAddress);
+            SecurityUtils.setTextContent(document.getElementById('detail-comment'), confirmationData.comment || 'N/A');
+            const linkedHashEl = document.getElementById('detail-linked-hash');
+            const localHashEl = document.getElementById('detail-local-hash');
+            if (confirmationData.type === 'send' || (fromAddress === state.wallet.address && confirmationData.purpose !== 'fee')) {
+                SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A'));
+                document.getElementById('detail-local-hash').closest('p').style.display = 'none';
+            } else {
+                SecurityUtils.setTextContent(linkedHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.linkedTxHash || 'N/A'));
+                SecurityUtils.setTextContent(localHashEl, SecurityUtils.sanitizeTransactionId(confirmationData.hash || 'N/A'));
+                document.getElementById('detail-local-hash').closest('p').style.display = 'block';
+            }
+            modal.style.display = 'flex';
+            document.getElementById('close-modal-button').onclick = () => {
+                modal.style.display = 'none';
+            };
+
+            // --- FIX STARTS HERE ---
+            document.getElementById('download-tx-button').onclick = () => {
+                // Capture the entire modal card for better styling and to include the title.
+                const contentToCapture = document.querySelector('#transaction-detail-modal .modal-content');
+                if (!contentToCapture) {
+                    console.error("Could not find modal content to capture.");
+                    return;
+                }
+
+                // The html2canvas library will now use the element's own background.
+                // This is more robust against theme changes and avoids transparency issues.
+                html2canvas(contentToCapture, {
+                    scale: 2,
+                    useCORS: true 
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `transaction_${SecurityUtils.sanitizeTransactionId((confirmationData.linkedTxHash || confirmationData.hash)).substring(0, 10)}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.9);
+                    link.click();
+                }).catch(err => {
+                    console.error("Failed to generate transaction image:", err);
+                    alert("Sorry, there was an error creating the image.");
+                });
+            };
+            // --- FIX ENDS HERE ---
+        }
         
         async function initializeApp() {
             try {
