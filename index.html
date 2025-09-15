@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Background Remover — Local (BodyPix)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>AI Background Remover — Client-side</h1>
+    <p class="muted">Uses TensorFlow.js BodyPix to segment people and remove or replace backgrounds. Works fully in your browser — no upload to servers.</p>
+
+    <div class="controls">
+      <label class="file-label">Upload image
+        <input id="inputImage" type="file" accept="image/*">
+      </label>
+
+      <label>Model choice
+        <select id="modelChoice">
+          <option value="lite">BodyPix - Lite (fast)</option>
+          <option value="mobile">BodyPix - Mobile (balanced)</option>
+          <option value="full">BodyPix - Full (more accurate, slower)</option>
+        </select>
+      </label>
+
+      <label>Segmentation threshold
+        <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.7">
+        <span id="thresholdVal">0.70</span>
+      </label>
+
+      <label>Edge feather (px)
+        <input id="feather" type="range" min="0" max="60" step="1" value="12">
+        <span id="featherVal">12</span>
+      </label>
+
+      <label>Background blur (px)
+        <input id="bgblur" type="range" min="0" max="40" step="1" value="4">
+        <span id="bgblurVal">4</span>
+      </label>
+
+      <label>Replace with
+        <select id="bgMode">
+          <option value="transparent">Transparent</option>
+          <option value="color">Solid Color</option>
+          <option value="image">Upload Image</option>
+        </select>
+      </label>
+
+      <label id="colorPickerLabel" style="display:none">Color
+        <input id="bgColor" type="color" value="#ffffff">
+      </label>
+
+      <label id="bgUploadLabel" style="display:none">Background image
+        <input id="bgImage" type="file" accept="image/*">
+      </label>
+
+      <div class="actions">
+        <button id="runBtn">Run</button>
+        <button id="downloadBtn" disabled>Download PNG</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div>
+
+    <section class="preview-area">
+      <canvas id="outputCanvas"></canvas>
+      <div class="status" id="status">Model not loaded</div>
+    </section>
+
+    <footer>
+      <small>Built with <a href="https://github.com/tensorflow/tfjs-models/tree/master/body-pix" target="_blank" rel="noopener">BodyPix</a>. This is a client-side demo — accuracy depends on input.</small>
+    </footer>
+  </main>
+
+  <!-- TensorFlow.js & BodyPix from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.9.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
