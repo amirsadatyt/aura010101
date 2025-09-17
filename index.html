@@ -1,1 +1,281 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Falcon-1024 Quantum-Resistant Wallet</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #1a2b4d;
+            border-bottom: 2px solid #e1e8ed;
+            padding-bottom: 10px;
+            margin-top: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 0;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        textarea, input[type="password"], button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            font-size: 1rem;
+            font-family: monospace;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .secondary-button {
+             background-color: #6c757d;
+        }
+        .secondary-button:hover {
+             background-color: #5a6268;
+        }
+        .output-area {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-family: monospace;
+            border: 1px solid #ced4da;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 15px;
+        }
+        #status {
+            text-align: center;
+            margin-top: 15px;
+            font-weight: bold;
+            color: #dc3545;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Falcon-1024 Quantum-Resistant Wallet 🦅</h1>
+
+        <div id="status"></div>
+
+        <div class="section">
+            <h2>1. Create or Restore Wallet</h2>
+            <label for="mnemonic">12-Word Seed Phrase:</label>
+            <textarea id="mnemonic" placeholder="Enter your 12-word seed phrase to restore, or click generate."></textarea>
+            <button id="generateMnemonicBtn" class="secondary-button">Generate 12-Word Mnemonic</button>
+
+            <label for="passphrase">Optional Passphrase:</label>
+            <input type="password" id="passphrase" placeholder="Enter an optional passphrase for added security.">
+
+            <button id="deriveKeypairBtn">Derive Keypair from Mnemonic</button>
+
+            <label>Derived Keys:</label>
+            <div id="keypairOutput" class="output-area">Your public and private keys will appear here.</div>
+        </div>
+
+        <div class="section">
+            <h2>2. Sign Message</h2>
+            <label for="messageToSign">Message to Sign:</label>
+            <textarea id="messageToSign" placeholder="Enter the message you want to sign with your private key."></textarea>
+            <button id="signMessageBtn">Sign Message</button>
+
+            <label>Signature:</label>
+            <div id="signatureOutput" class="output-area">The generated signature will appear here.</div>
+        </div>
+
+        <div class="section">
+            <h2>3. Verify Signature</h2>
+            <label for="messageToVerify">Original Message:</label>
+            <textarea id="messageToVerify" placeholder="Enter the original, unsigned message."></textarea>
+
+            <label for="publicKeyToVerify">Public Key (Hex):</label>
+            <textarea id="publicKeyToVerify" placeholder="Enter the public key that should have signed the message."></textarea>
+
+            <label for="signatureToVerify">Signature (Hex):</label>
+            <textarea id="signatureToVerify" placeholder="Enter the signature to verify."></textarea>
+
+            <button id="verifyBtn">Verify Signature</button>
+
+            <label>Verification Result:</label>
+            <div id="verificationResult" class="output-area">The verification result will appear here.</div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the entire Falcon Wallet module from the local file
+        import * as falconWallet from './falcon-wallet.browser (1).mjs';
+
+        // --- DOM Element Selection ---
+        const statusDiv = document.getElementById('status');
+        
+        // Wallet Creation / Restoration
+        const mnemonicTextarea = document.getElementById('mnemonic');
+        const passphraseInput = document.getElementById('passphrase');
+        const generateMnemonicBtn = document.getElementById('generateMnemonicBtn');
+        const deriveKeypairBtn = document.getElementById('deriveKeypairBtn');
+        const keypairOutput = document.getElementById('keypairOutput');
+
+        // Signing
+        const messageToSign = document.getElementById('messageToSign');
+        const signMessageBtn = document.getElementById('signMessageBtn');
+        const signatureOutput = document.getElementById('signatureOutput');
+
+        // Verification
+        const messageToVerify = document.getElementById('messageToVerify');
+        const publicKeyToVerify = document.getElementById('publicKeyToVerify');
+        const signatureToVerify = document.getElementById('signatureToVerify');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const verificationResult = document.getElementById('verificationResult');
+
+        // --- State Management ---
+        let currentKeypair = null;
+
+        // --- Event Listeners ---
+
+        // 1. Generate Mnemonic Button
+        generateMnemonicBtn.addEventListener('click', () => {
+            // Generates a 12-word mnemonic using the library's function
+            const newMnemonic = falconWallet.generateMnemonic(12);
+            mnemonicTextarea.value = newMnemonic;
+            keypairOutput.textContent = 'New mnemonic generated. Click "Derive Keypair" to create the wallet.';
+            signatureOutput.textContent = '';
+            currentKeypair = null;
+        });
+
+        // 2. Derive Keypair Button
+        deriveKeypairBtn.addEventListener('click', async () => {
+            const mnemonic = mnemonicTextarea.value.trim();
+            const passphrase = passphraseInput.value;
+
+            if (!falconWallet.isValidMnemonic(mnemonic)) {
+                keypairOutput.textContent = 'Error: Invalid Mnemonic Phrase. Please check for typos.';
+                return;
+            }
+
+            statusDiv.textContent = 'Deriving keypair... (this may take a moment)';
+            keypairOutput.textContent = '';
+            
+            try {
+                // This is an async operation, so we await the result
+                currentKeypair = await falconWallet.deriveKeypair(mnemonic, passphrase);
+                
+                // Populate the UI with the new keypair information
+                keypairOutput.innerHTML = 
+                    `<strong>Public Key:</strong>\n${currentKeypair.publicKey}\n\n` +
+                    `<strong>Private Key:</strong>\n${currentKeypair.privateKey}`;
+                
+                // Also copy the public key to the verification section for convenience
+                publicKeyToVerify.value = currentKeypair.publicKey;
+
+                statusDiv.textContent = '✅ Keypair derived successfully!';
+                setTimeout(() => statusDiv.textContent = '', 3000);
+
+            } catch (error) {
+                console.error('Derivation Error:', error);
+                keypairOutput.textContent = `Error: ${error.message}`;
+                statusDiv.textContent = '';
+            }
+        });
+
+        // 3. Sign Message Button
+        signMessageBtn.addEventListener('click', async () => {
+            if (!currentKeypair) {
+                signatureOutput.textContent = 'Error: Please derive a keypair first before signing.';
+                return;
+            }
+            
+            const message = messageToSign.value;
+            if (!message) {
+                 signatureOutput.textContent = 'Error: Please enter a message to sign.';
+                return;
+            }
+
+            statusDiv.textContent = 'Signing message...';
+            signatureOutput.textContent = '';
+
+            try {
+                const signature = await falconWallet.signMessage(message, currentKeypair.privateKey);
+                signatureOutput.textContent = signature;
+                
+                // Copy message and signature to verification section for convenience
+                messageToVerify.value = message;
+                signatureToVerify.value = signature;
+
+                statusDiv.textContent = '✅ Message signed successfully!';
+                setTimeout(() => statusDiv.textContent = '', 3000);
+
+            } catch (error) {
+                console.error('Signing Error:', error);
+                signatureOutput.textContent = `Error: ${error.message}`;
+                statusDiv.textContent = '';
+            }
+        });
+
+        // 4. Verify Signature Button
+        verifyBtn.addEventListener('click', async () => {
+            const message = messageToVerify.value;
+            const publicKey = publicKeyToVerify.value.trim();
+            const signature = signatureToVerify.value.trim();
+
+            if (!message || !publicKey || !signature) {
+                verificationResult.textContent = 'Error: Please provide the original message, public key, and signature.';
+                return;
+            }
+
+            statusDiv.textContent = 'Verifying signature...';
+            verificationResult.textContent = '';
+
+            try {
+                const isValid = await falconWallet.verifyMessage(message, publicKey, signature);
+                verificationResult.textContent = `Verification Result: ${isValid ? '✅ Valid Signature' : '❌ Invalid Signature'}`;
+                statusDiv.textContent = '';
+            } catch (error) {
+                console.error('Verification Error:', error);
+                verificationResult.textContent = `Error: ${error.message}`;
+                statusDiv.textContent = '';
+            }
+        });
+
+    </script>
+</body>
+</html>
