@@ -60,6 +60,10 @@
         button:hover {
             background-color: #0056b3;
         }
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
         .secondary-button {
              background-color: #6c757d;
         }
@@ -75,6 +79,7 @@
             white-space: pre-wrap;
             font-family: monospace;
             border: 1px solid #ced4da;
+            min-height: 50px;
         }
         label {
             font-weight: bold;
@@ -89,13 +94,25 @@
             height: 20px;
             transition: opacity 0.5s;
         }
-        #status.error {
-            color: #dc3545;
+        .error-message {
+            display: none; 
+            background-color: #ffdddd; 
+            border: 1px solid #dc3545; 
+            color: #721c24; 
+            padding: 15px; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
+    <div id="error-message" class="error-message">
+        <h2>⚠️ خطا: صفحه به درستی بارگیری نشده است</h2>
+        <p>این کیف پول با باز کردن مستقیم فایل کار نمی‌کند (آدرس `file:///`).</p>
+        <p><strong>برای حل مشکل، باید از یک سرور محلی استفاده کنید.</strong> لطفاً طبق دستورالعمل، یک سرور راه‌اندازی کرده و سپس آدرس <strong>http://localhost:8000</strong> را در مرورگر خود باز کنید.</p>
+    </div>
     <div class="container">
         <h1>Falcon-1024 Quantum-Resistant Wallet 🦅</h1>
 
@@ -144,58 +161,50 @@
         </div>
     </div>
 
+    <script>
+        // This is a non-module script that runs immediately.
+        // It checks if the page was loaded from the filesystem.
+        if (window.location.protocol === 'file:') {
+            // Show the error message
+            document.getElementById('error-message').style.display = 'block';
+            // Disable all buttons to prevent confusion
+            document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+        }
+    </script>
     <script type="module">
         // Import the entire Falcon Wallet module from the local file
         import * as falconWallet from './falcon-wallet.browser (1).mjs';
 
-        // --- DOM Element Selection ---
         const statusDiv = document.getElementById('status');
-
-        // This function will display a status message and then fade it out
         const showStatus = (message, isError = false, duration = 3000) => {
             statusDiv.textContent = message;
-            statusDiv.className = isError ? 'error' : '';
+            statusDiv.style.color = isError ? '#dc3545' : '#28a745';
             if (duration > 0) {
-                setTimeout(() => {
-                    statusDiv.textContent = '';
-                }, duration);
+                setTimeout(() => statusDiv.textContent = '', duration);
             }
         };
 
-        // Check if the library loaded and show a success message
         if (falconWallet) {
             console.log('✅ Falcon wallet library loaded successfully!');
             showStatus('Library loaded successfully!');
-        } else {
-            // This will only show if the import itself fails, which usually appears in the console
-            showStatus('Error: Could not load the wallet library!', true, 0);
         }
         
-        // Wallet Creation / Restoration
         const mnemonicTextarea = document.getElementById('mnemonic');
         const passphraseInput = document.getElementById('passphrase');
         const generateMnemonicBtn = document.getElementById('generateMnemonicBtn');
         const deriveKeypairBtn = document.getElementById('deriveKeypairBtn');
         const keypairOutput = document.getElementById('keypairOutput');
-
-        // Signing
         const messageToSign = document.getElementById('messageToSign');
         const signMessageBtn = document.getElementById('signMessageBtn');
         const signatureOutput = document.getElementById('signatureOutput');
-
-        // Verification
         const messageToVerify = document.getElementById('messageToVerify');
         const publicKeyToVerify = document.getElementById('publicKeyToVerify');
         const signatureToVerify = document.getElementById('signatureToVerify');
         const verifyBtn = document.getElementById('verifyBtn');
         const verificationResult = document.getElementById('verificationResult');
 
-        // --- State Management ---
         let currentKeypair = null;
 
-        // --- Event Listeners ---
-
-        // 1. Generate Mnemonic Button
         generateMnemonicBtn.addEventListener('click', () => {
             const newMnemonic = falconWallet.generateMnemonic(12);
             mnemonicTextarea.value = newMnemonic;
@@ -204,94 +213,71 @@
             currentKeypair = null;
         });
 
-        // 2. Derive Keypair Button
         deriveKeypairBtn.addEventListener('click', async () => {
             const mnemonic = mnemonicTextarea.value.trim();
             const passphrase = passphraseInput.value;
-
             if (!falconWallet.isValidMnemonic(mnemonic)) {
                 keypairOutput.textContent = 'Error: Invalid Mnemonic Phrase. Please check for typos.';
                 return;
             }
-
             showStatus('Deriving keypair... (this may take a moment)', false, 0);
             keypairOutput.textContent = '';
-            
             try {
                 currentKeypair = await falconWallet.deriveKeypair(mnemonic, passphrase);
-                
                 keypairOutput.innerHTML = 
                     `<strong>Public Key:</strong>\n${currentKeypair.publicKey}\n\n` +
                     `<strong>Private Key:</strong>\n<small>${currentKeypair.privateKey}</small>`;
-                
                 publicKeyToVerify.value = currentKeypair.publicKey;
-
                 showStatus('✅ Keypair derived successfully!');
-
             } catch (error) {
-                console.error('Derivation Error:', error);
                 keypairOutput.textContent = `Error: ${error.message}`;
                 showStatus('Derivation failed.', true);
             }
         });
 
-        // 3. Sign Message Button
         signMessageBtn.addEventListener('click', async () => {
             if (!currentKeypair) {
                 signatureOutput.textContent = 'Error: Please derive a keypair first before signing.';
                 return;
             }
-            
             const message = messageToSign.value;
             if (!message) {
                  signatureOutput.textContent = 'Error: Please enter a message to sign.';
                 return;
             }
-
             showStatus('Signing message...', false, 0);
             signatureOutput.textContent = '';
-
             try {
                 const signature = await falconWallet.signMessage(message, currentKeypair.privateKey);
                 signatureOutput.textContent = signature;
-                
                 messageToVerify.value = message;
                 signatureToVerify.value = signature;
-
                 showStatus('✅ Message signed successfully!');
-
             } catch (error) {
-                console.error('Signing Error:', error);
                 signatureOutput.textContent = `Error: ${error.message}`;
                 showStatus('Signing failed.', true);
             }
         });
 
-        // 4. Verify Signature Button
         verifyBtn.addEventListener('click', async () => {
             const message = messageToVerify.value;
             const publicKey = publicKeyToVerify.value.trim();
             const signature = signatureToVerify.value.trim();
-
             if (!message || !publicKey || !signature) {
                 verificationResult.textContent = 'Error: Please provide the original message, public key, and signature.';
                 return;
             }
-
             showStatus('Verifying signature...', false, 0);
             verificationResult.textContent = '';
-
             try {
                 const isValid = await falconWallet.verifyMessage(message, publicKey, signature);
                 verificationResult.textContent = `Verification Result: ${isValid ? '✅ Valid Signature' : '❌ Invalid Signature'}`;
-                statusDiv.textContent = '';
+                showStatus('');
             } catch (error) {
-                console.error('Verification Error:', error);
                 verificationResult.textContent = `Error: ${error.message}`;
                 showStatus('Verification failed.', true);
             }
         });
-
     </script>
 </body>
 </html>
