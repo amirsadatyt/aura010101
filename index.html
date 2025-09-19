@@ -1,1 +1,1140 @@
 
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Educational Quantum-Resistant Wallet - NEVER USE FOR REAL FUNDS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
+    html { scroll-behavior: smooth; }
+    body {
+        font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #e2e8f0;
+        min-height: 100vh;
+    }
+    .mono { font-family: 'Fira Code', monospace; }
+    .btn { 
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; 
+        padding: 0.75rem 1.25rem; border-radius: 0.75rem; font-weight: 600; 
+        cursor: pointer; border: none; transition: all 0.3s ease; white-space: nowrap;
+        position: relative; overflow: hidden;
+    }
+    .btn:before {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%;
+        width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        transition: left 0.5s;
+    }
+    .btn:hover:before { left: 100%; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { cursor: not-allowed; opacity: 0.5; transform: none; box-shadow: none; }
+    .btn-primary { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #ffffff; }
+    .btn-secondary { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff; }
+    .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; }
+    .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff; }
+    .btn-ghost { background: rgba(51,65,85,0.3); color: #94a3b8; border: 1px solid rgba(51,65,85,0.5); }
+    .btn-ghost:hover { background: rgba(30,41,59,0.7); color: white; }
+
+    .card { 
+        background: rgba(30,41,59,0.8); 
+        backdrop-filter: blur(10px);
+        border-radius: 1rem; 
+        border: 1px solid rgba(51,65,85,0.3); 
+        padding: 2rem; 
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+    .input-base { 
+        width: 100%; padding: 0.875rem; border-radius: 0.75rem; 
+        background: rgba(15,23,42,0.8); border: 1px solid rgba(51,65,85,0.5); 
+        color: #e2e8f0; transition: all 0.3s ease;
+        font-size: 0.875rem;
+    }
+    .input-base:focus { 
+        outline: none; 
+        border-color: #0ea5e9; 
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1), 0 0 20px rgba(14, 165, 233, 0.2); 
+    }
+    .warning-box {
+        background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(220,38,38,0.1));
+        border: 2px solid rgba(239,68,68,0.3);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .status-secure { background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .status-locked { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .loading-spinner {
+        width: 1.25rem;
+        height: 1.25rem;
+        border: 2px solid transparent;
+        border-top: 2px solid currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none; }
+    .icon { width: 1.25rem; height: 1.25rem; }
+    .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
+    }
+</style>
+</head>
+<body class="antialiased">
+<div class="min-h-screen p-4 sm:p-6 lg:p-8 flex flex-col items-center">
+    <div class="container mx-auto max-w-4xl w-full space-y-8">
+        <header class="text-center">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+                Educational Quantum Wallet
+            </h1>
+            <p class="text-slate-400 mt-3 text-lg">Advanced Educational Implementation - Post-Quantum Cryptography Demo</p>
+            
+            <div class="warning-box mt-6">
+                <div class="flex items-start space-x-3">
+                    <svg class="w-6 h-6 text-red-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    <div>
+                        <h3 class="font-bold text-red-400 text-lg">CRITICAL WARNING</h3>
+                        <p class="text-red-300 mt-2">
+                            This is an <strong>educational demonstration ONLY</strong>. Never use this with real cryptocurrency or sensitive data.
+                            This implementation lacks production-grade security, formal audits, and regulatory compliance required for financial applications.
+                        </p>
+                        <ul class="text-red-300 text-sm mt-3 space-y-1">
+                            <li>• No formal cryptographic audit</li>
+                            <li>• Missing hardware security module integration</li>
+                            <li>• Unverified third-party dependencies</li>
+                            <li>• No side-channel attack protection</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="space-y-8">
+            <!-- System Status -->
+            <section class="card">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-white">System Status</h2>
+                    <div id="systemStatus" class="status-indicator status-locked">
+                        <div class="loading-spinner"></div>
+                        Initializing...
+                    </div>
+                </div>
+                <div id="systemInfo" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-slate-400">Libraries</div>
+                        <div id="libStatus" class="text-slate-300">Loading...</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-slate-400">Falcon Module</div>
+                        <div id="falconStatus" class="text-slate-300">Loading...</div>
+                    </div>
+                    <div class="bg-slate-800/50 rounded-lg p-3">
+                        <div class="text-slate-400">Wallet State</div>
+                        <div id="walletStatus" class="text-slate-300">Locked</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Wallet Generation -->
+            <section class="card">
+                <h2 class="text-2xl font-semibold text-white mb-6">Generate New Wallet</h2>
+                
+                <div class="flex items-center space-x-4 mb-6">
+                    <span class="text-slate-300 font-medium">Entropy Level:</span>
+                    <button class="btn btn-ghost text-sm" id="btn128">128-bit (12 words)</button>
+                    <button class="btn btn-ghost text-sm" id="btn256">256-bit (24 words)</button>
+                </div>
+
+                <button id="generateBtn" class="btn btn-primary">
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                    </svg>
+                    Generate Secure Wallet
+                </button>
+
+                <div id="mnemonicSection" class="hidden mt-6 space-y-4">
+                    <div class="bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-500/30 rounded-xl p-6">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="font-semibold text-emerald-400">Recovery Phrase</label>
+                            <button id="copyBtn" class="btn btn-ghost btn-sm">
+                                <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.5A1.125 1.125 0 0 1 4.875 6.375h9.75a1.125 1.125 0 0 1 1.125 1.125v3.375" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h9.75c.621 0 1.125.504 1.125 1.125V21" />
+                                </svg>
+                                Copy
+                            </button>
+                        </div>
+                        <div id="mnemonicDisplay" class="mono text-lg text-emerald-300 leading-relaxed bg-slate-900/50 rounded-lg p-4 border border-emerald-500/20"></div>
+                        <div class="text-amber-400 text-sm mt-4 flex items-start space-x-2">
+                            <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <strong>Critical:</strong> Write this phrase down immediately and store it securely offline. 
+                                This is the only way to recover your wallet. Never share it with anyone.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="keyInfo" class="hidden space-y-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-slate-300">Public Key</label>
+                                <div id="publicKeyDisplay" class="mono text-xs bg-slate-800 p-3 rounded-lg mt-2 break-all border border-slate-600"></div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-slate-300">Address</label>
+                                <div id="addressDisplay" class="mono text-xs bg-slate-800 p-3 rounded-lg mt-2 break-all border border-slate-600"></div>
+                            </div>
+                        </div>
+                        <button id="exportBtn" class="btn btn-success">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            Export Public Data
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Wallet Recovery -->
+            <section class="card">
+                <h2 class="text-2xl font-semibold text-white mb-6">Restore Wallet</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="font-medium text-slate-300 block mb-2">Recovery Phrase</label>
+                        <textarea id="restoreInput" rows="3" class="input-base mono" placeholder="Enter your 12 or 24 word recovery phrase..."></textarea>
+                    </div>
+                    <button id="restoreBtn" class="btn btn-secondary">
+                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0l3.181-3.183" />
+                        </svg>
+                        Restore Wallet
+                    </button>
+                </div>
+
+                <div id="restoreResult" class="hidden mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
+                    <h3 class="font-semibold text-green-400 mb-3">Wallet Restored Successfully</h3>
+                    <div class="space-y-3 text-sm">
+                        <div>
+                            <span class="text-slate-400">Public Key:</span>
+                            <div id="restoredPublicKey" class="mono text-xs bg-slate-800 p-2 rounded mt-1 break-all"></div>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Address:</span>
+                            <div id="restoredAddress" class="mono text-xs bg-slate-800 p-2 rounded mt-1 break-all"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Message Signing -->
+            <section class="card">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-semibold text-white">Message Signing & Verification</h2>
+                    <div id="signingStatus" class="status-indicator status-locked">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <circle cx="10" cy="10" r="3"/>
+                        </svg>
+                        Wallet Required
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="font-medium text-slate-300 block mb-2">Message to Sign/Verify</label>
+                        <textarea id="messageInput" rows="4" class="input-base" placeholder="Enter your message here...">Hello, quantum-resistant world! This message demonstrates post-quantum digital signatures.</textarea>
+                    </div>
+
+                    <div id="signatureSection" class="hidden">
+                        <label class="font-medium text-slate-300 block mb-2">Digital Signature</label>
+                        <textarea id="signatureDisplay" rows="6" class="input-base mono text-xs" readonly></textarea>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3">
+                        <button id="signBtn" class="btn btn-success" disabled>
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
+                            </svg>
+                            Sign Message
+                        </button>
+                        <button id="verifyBtn" class="btn btn-secondary">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                            </svg>
+                            Verify Signature
+                        </button>
+                        <button id="lockBtn" class="btn btn-danger hidden">
+                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                            </svg>
+                            Lock Wallet
+                        </button>
+                    </div>
+
+                    <div id="verificationResult" class="min-h-[3rem] flex items-center"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center py-8">
+            <div id="statusLog" class="text-sm text-slate-400 min-h-[1.5rem] mb-4"></div>
+            <div class="text-xs text-slate-500">
+                <p>Educational Implementation • Post-Quantum Cryptography Research</p>
+                <p class="mt-2">⚠️ Never use for production applications or real financial assets ⚠️</p>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<script type="module">
+'use strict';
+
+// ==========================================
+// EDUCATIONAL QUANTUM WALLET IMPLEMENTATION
+// ==========================================
+// WARNING: This is for educational purposes only
+// DO NOT USE WITH REAL CRYPTOCURRENCY OR SENSITIVE DATA
+
+class SecureLogger {
+    static log(message, level = 'info', duration = 5000) {
+        const logElement = document.getElementById('statusLog');
+        if (!logElement) return;
+
+        // Clear previous timeout
+        if (SecureLogger.timeoutId) {
+            clearTimeout(SecureLogger.timeoutId);
+        }
+
+        // Set message and styling
+        logElement.textContent = message;
+        logElement.className = 'text-sm min-h-[1.5rem] mb-4 transition-all duration-300';
+        
+        switch (level) {
+            case 'error':
+                logElement.classList.add('text-red-400');
+                break;
+            case 'success':
+                logElement.classList.add('text-green-400');
+                break;
+            case 'warning':
+                logElement.classList.add('text-amber-400');
+                break;
+            default:
+                logElement.classList.add('text-slate-400');
+        }
+
+        // Auto-clear after duration
+        SecureLogger.timeoutId = setTimeout(() => {
+            if (logElement.textContent === message) {
+                logElement.textContent = '';
+            }
+        }, duration);
+    }
+
+    static error(message) { this.log(message, 'error'); }
+    static success(message) { this.log(message, 'success'); }
+    static warning(message) { this.log(message, 'warning'); }
+}
+
+class CryptoUtils {
+    static toHex(bytes) {
+        return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    static fromHex(hex) {
+        if (typeof hex !== 'string' || hex.length % 2 !== 0) {
+            throw new Error('Invalid hex string format');
+        }
+        const bytes = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < bytes.length; i++) {
+            bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+        }
+        return bytes;
+    }
+
+    static secureWipe(data) {
+        if (data instanceof Uint8Array) {
+            crypto.getRandomValues(data);
+            data.fill(0);
+        }
+    }
+
+    static async validateMnemonic(mnemonic, wordlist) {
+        try {
+            const words = mnemonic.trim().toLowerCase().split(/\s+/);
+            if (![12, 24].includes(words.length)) return false;
+            
+            // Basic validation - in production, use full BIP39 validation
+            return words.every(word => wordlist.includes(word));
+        } catch {
+            return false;
+        }
+    }
+}
+
+class HmacDrbgSecure {
+    constructor(seed) {
+        this.outlen = 32;
+        this.K = new Uint8Array(this.outlen).fill(0x00);
+        this.V = new Uint8Array(this.outlen).fill(0x01);
+        this._initialized = false;
+        this._initPromise = this._initialize(seed);
+    }
+
+    async ready() {
+        await this._initPromise;
+        return this._initialized;
+    }
+
+    async _hmac(keyData, data) {
+        try {
+            const key = await crypto.subtle.importKey(
+                'raw', keyData, 
+                { name: 'HMAC', hash: 'SHA-256' }, 
+                false, ['sign']
+            );
+            const signature = await crypto.subtle.sign('HMAC', key, data);
+            return new Uint8Array(signature);
+        } catch (error) {
+            throw new Error(`HMAC operation failed: ${error.message}`);
+        }
+    }
+
+    async _update(provided = new Uint8Array()) {
+        // HMAC-DRBG Update function per NIST SP 800-90A
+        let temp = new Uint8Array(this.V.length + 1 + provided.length);
+        temp.set(this.V, 0);
+        temp.set([0x00], this.V.length);
+        temp.set(provided, this.V.length + 1);
+        
+        this.K = await this._hmac(this.K, temp);
+        this.V = await this._hmac(this.K, this.V);
+        
+        if (provided.length > 0) {
+            temp = new Uint8Array(this.V.length + 1 + provided.length);
+            temp.set(this.V, 0);
+            temp.set([0x01], this.V.length);
+            temp.set(provided, this.V.length + 1);
+            
+            this.K = await this._hmac(this.K, temp);
+            this.V = await this._hmac(this.K, this.V);
+        }
+    }
+
+    async _initialize(seed) {
+        if (!seed || seed.length < 32) {
+            throw new Error('Insufficient seed entropy');
+        }
+        await this._update(seed);
+        this._initialized = true;
+    }
+
+    async generate(numBytes) {
+        if (!this._initialized) {
+            throw new Error('DRBG not initialized');
+        }
+        
+        if (numBytes > 65536) { // 64KB limit per NIST
+            throw new Error('Requested bytes exceed DRBG limits');
+        }
+
+        const output = new Uint8Array(numBytes);
+        let generated = 0;
+        
+        while (generated < numBytes) {
+            this.V = await this._hmac(this.K, this.V);
+            const take = Math.min(this.outlen, numBytes - generated);
+            output.set(this.V.subarray(0, take), generated);
+            generated += take;
+        }
+        
+        await this._update(); // Reseed after generation
+        return output;
+    }
+
+    destroy() {
+        CryptoUtils.secureWipe(this.K);
+        CryptoUtils.secureWipe(this.V);
+        this._initialized = false;
+    }
+}
+
+class StreamingRng {
+    constructor(drbg, options = {}) {
+        this.drbg = drbg;
+        this.bufferSize = options.bufferSize || 32 * 1024;
+        this.refillThreshold = options.refillThreshold || 8 * 1024;
+        this.refillChunk = options.refillChunk || 16 * 1024;
+        
+        this.buffer = new Uint8Array(0);
+        this.readPos = 0;
+        this.writePos = 0;
+        this.refilling = false;
+        this.active = false;
+    }
+
+    async initialize() {
+        await this.drbg.ready();
+        const initial = await this.drbg.generate(this.bufferSize);
+        this.buffer = initial;
+        this.readPos = 0;
+        this.writePos = initial.length;
+        this.active = true;
+        this._startRefillLoop();
+    }
+
+    getRandomValuesSync(typedArray) {
+        if (!this.active) {
+            throw new Error('RNG has been destroyed');
+        }
+
+        const needed = typedArray.byteLength;
+        const available = this.writePos - this.readPos;
+        
+        if (needed > available) {
+            throw new Error(`Insufficient entropy: need ${needed}, have ${available}`);
+        }
+
+        const view = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+        view.set(this.buffer.subarray(this.readPos, this.readPos + needed));
+        this.readPos += needed;
+
+        // Trigger refill if below threshold
+        if (available - needed <= this.refillThreshold && !this.refilling) {
+            this._refillBuffer();
+        }
+
+        return typedArray;
+    }
+
+    async _refillBuffer() {
+        if (this.refilling || !this.active) return;
+        
+        this.refilling = true;
+        try {
+            const chunk = await this.drbg.generate(this.refillChunk);
+            const remaining = this.writePos - this.readPos;
+            
+            // Compact buffer if too much read data
+            if (this.readPos > this.bufferSize / 2) {
+                const activeData = this.buffer.subarray(this.readPos, this.writePos);
+                this.buffer = new Uint8Array(activeData.length + chunk.length);
+                this.buffer.set(activeData, 0);
+                this.buffer.set(chunk, activeData.length);
+                this.readPos = 0;
+                this.writePos = activeData.length + chunk.length;
+            } else {
+                // Extend buffer
+                const newBuffer = new Uint8Array(this.writePos + chunk.length);
+                newBuffer.set(this.buffer.subarray(0, this.writePos), 0);
+                newBuffer.set(chunk, this.writePos);
+                this.buffer = newBuffer;
+                this.writePos += chunk.length;
+            }
+        } catch (error) {
+            SecureLogger.error(`RNG refill failed: ${error.message}`);
+            this.destroy();
+        } finally {
+            this.refilling = false;
+        }
+    }
+
+    _startRefillLoop() {
+        const refillLoop = async () => {
+            while (this.active) {
+                if ((this.writePos - this.readPos) <= this.refillThreshold) {
+                    await this._refillBuffer();
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        };
+        refillLoop().catch(error => {
+            SecureLogger.error(`RNG background loop failed: ${error.message}`);
+        });
+    }
+
+    destroy() {
+        this.active = false;
+        CryptoUtils.secureWipe(this.buffer);
+        this.drbg.destroy();
+        this.buffer = new Uint8Array(0);
+        this.readPos = 0;
+        this.writePos = 0;
+    }
+}
+
+// Secure Wallet State Management
+class WalletState {
+    constructor() {
+        this.reset();
+    }
+
+    reset() {
+        // Securely wipe existing keys
+        if (this.privateKey) CryptoUtils.secureWipe(this.privateKey);
+        if (this.publicKey) CryptoUtils.secureWipe(this.publicKey);
+        
+        this.privateKey = null;
+        this.publicKey = null;
+        this.address = null;
+        this.isUnlocked = false;
+        this.lastActivity = Date.now();
+    }
+
+    setKeys(privateKey, publicKey, address) {
+        this.reset();
+        this.privateKey = new Uint8Array(privateKey);
+        this.publicKey = new Uint8Array(publicKey);
+        this.address = address;
+        this.isUnlocked = true;
+        this.lastActivity = Date.now();
+    }
+
+    updateActivity() {
+        this.lastActivity = Date.now();
+    }
+
+    lock() {
+        this.reset();
+        SecureLogger.warning('Wallet locked for security');
+    }
+
+    isActive() {
+        return this.isUnlocked && this.privateKey && this.publicKey;
+    }
+}
+
+// Main Application Class
+class QuantumWallet {
+    constructor() {
+        this.modules = {};
+        this.falcon = null;
+        this.walletState = new WalletState();
+        this.entropyBits = 128;
+        this.autoLockTimeout = 10 * 60 * 1000; // 10 minutes
+        this.initializationPromise = this.initialize();
+    }
+
+    async initialize() {
+        try {
+            this.updateSystemStatus('initializing', 'Loading cryptographic modules...');
+            
+            // Load BIP39 and related modules
+            this.updateLibStatus('Loading...');
+            const bip39Module = await import('https://esm.sh/@scure/bip39');
+            this.modules.bip39 = bip39Module.default || bip39Module;
+            this.modules.wordlist = (await import('https://esm.sh/@scure/bip39/wordlists/english.js')).wordlist;
+            
+            // Load SHAKE256
+            const sha3Module = await import('https://esm.sh/js-sha3@0.9.3');
+            this.modules.shake256 = sha3Module.shake256 || sha3Module.default?.shake256;
+            this.updateLibStatus('Loaded');
+
+            // Load Falcon module
+            this.updateFalconStatus('Loading...');
+            const falconModule = await import('https://esm.sh/@dashlane/pqc-sign-falcon-1024-browser@1.0.0');
+            const falconBuilder = falconModule.default || falconModule;
+            this.falcon = await falconBuilder();
+            this.updateFalconStatus('Ready');
+
+            this.updateSystemStatus('ready', 'System ready for operation');
+            this.setupEventHandlers();
+            this.startAutoLockTimer();
+            
+            SecureLogger.success('Quantum wallet system initialized successfully');
+        } catch (error) {
+            this.updateSystemStatus('error', 'Initialization failed');
+            SecureLogger.error(`Initialization failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    updateSystemStatus(status, message) {
+        const statusEl = document.getElementById('systemStatus');
+        if (!statusEl) return;
+
+        statusEl.className = 'status-indicator';
+        statusEl.innerHTML = '';
+
+        switch (status) {
+            case 'initializing':
+                statusEl.classList.add('status-locked');
+                statusEl.innerHTML = '<div class="loading-spinner"></div>Initializing...';
+                break;
+            case 'ready':
+                statusEl.classList.add('status-secure');
+                statusEl.innerHTML = `
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="10" cy="10" r="3"/>
+                    </svg>
+                    System Ready
+                `;
+                break;
+            case 'error':
+                statusEl.classList.add('status-locked');
+                statusEl.innerHTML = `
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                    System Error
+                `;
+                break;
+        }
+    }
+
+    updateLibStatus(status) {
+        const el = document.getElementById('libStatus');
+        if (el) el.textContent = status;
+    }
+
+    updateFalconStatus(status) {
+        const el = document.getElementById('falconStatus');
+        if (el) el.textContent = status;
+    }
+
+    updateWalletStatus() {
+        const statusEl = document.getElementById('walletStatus');
+        const signingStatusEl = document.getElementById('signingStatus');
+        const signBtn = document.getElementById('signBtn');
+        const lockBtn = document.getElementById('lockBtn');
+
+        if (this.walletState.isActive()) {
+            if (statusEl) statusEl.textContent = 'Unlocked';
+            
+            if (signingStatusEl) {
+                signingStatusEl.className = 'status-indicator status-secure';
+                signingStatusEl.innerHTML = `
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="10" cy="10" r="3"/>
+                    </svg>
+                    Ready to Sign
+                `;
+            }
+            
+            if (signBtn) signBtn.disabled = false;
+            if (lockBtn) lockBtn.classList.remove('hidden');
+        } else {
+            if (statusEl) statusEl.textContent = 'Locked';
+            
+            if (signingStatusEl) {
+                signingStatusEl.className = 'status-indicator status-locked';
+                signingStatusEl.innerHTML = `
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="10" cy="10" r="3"/>
+                    </svg>
+                    Wallet Required
+                `;
+            }
+            
+            if (signBtn) signBtn.disabled = true;
+            if (lockBtn) lockBtn.classList.add('hidden');
+        }
+    }
+
+    async generateKeyPair(mnemonic) {
+        const seed = await this.modules.bip39.mnemonicToSeed(mnemonic);
+        const drbg = new HmacDrbgSecure(seed);
+        const streamRng = new StreamingRng(drbg);
+        await streamRng.initialize();
+
+        // Temporarily replace crypto.getRandomValues
+        const originalGetRandomValues = crypto.getRandomValues.bind(crypto);
+        crypto.getRandomValues = (array) => streamRng.getRandomValuesSync(array);
+
+        try {
+            const keyPair = await this.falcon.keypair();
+            return {
+                privateKey: new Uint8Array(keyPair.privateKey),
+                publicKey: new Uint8Array(keyPair.publicKey)
+            };
+        } finally {
+            crypto.getRandomValues = originalGetRandomValues;
+            streamRng.destroy();
+        }
+    }
+
+    generateAddress(publicKey) {
+        const pubHex = CryptoUtils.toHex(publicKey);
+        const hash = this.modules.shake256(pubHex, 256);
+        return `pqc1${hash.slice(0, 40)}`;
+    }
+
+    async withLoadingButton(buttonId, asyncOperation) {
+        const button = document.getElementById(buttonId);
+        if (!button) return;
+
+        const originalContent = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = `
+            <div class="loading-spinner"></div>
+            Processing...
+        `;
+
+        try {
+            await asyncOperation();
+        } catch (error) {
+            SecureLogger.error(error.message || 'Operation failed');
+        } finally {
+            button.disabled = false;
+            button.innerHTML = originalContent;
+        }
+    }
+
+    setupEventHandlers() {
+        // Entropy selection
+        document.getElementById('btn128')?.addEventListener('click', () => {
+            this.entropyBits = 128;
+            this.updateEntropyButtons();
+        });
+        
+        document.getElementById('btn256')?.addEventListener('click', () => {
+            this.entropyBits = 256;
+            this.updateEntropyButtons();
+        });
+
+        // Wallet generation
+        document.getElementById('generateBtn')?.addEventListener('click', () => {
+            this.withLoadingButton('generateBtn', () => this.generateWallet());
+        });
+
+        // Copy mnemonic
+        document.getElementById('copyBtn')?.addEventListener('click', () => {
+            this.copyMnemonic();
+        });
+
+        // Export public data
+        document.getElementById('exportBtn')?.addEventListener('click', () => {
+            this.exportPublicData();
+        });
+
+        // Wallet restoration
+        document.getElementById('restoreBtn')?.addEventListener('click', () => {
+            this.withLoadingButton('restoreBtn', () => this.restoreWallet());
+        });
+
+        // Message signing
+        document.getElementById('signBtn')?.addEventListener('click', () => {
+            this.withLoadingButton('signBtn', () => this.signMessage());
+        });
+
+        // Signature verification
+        document.getElementById('verifyBtn')?.addEventListener('click', () => {
+            this.withLoadingButton('verifyBtn', () => this.verifySignature());
+        });
+
+        // Lock wallet
+        document.getElementById('lockBtn')?.addEventListener('click', () => {
+            this.lockWallet();
+        });
+
+        // Update UI
+        this.updateEntropyButtons();
+        this.updateWalletStatus();
+    }
+
+    updateEntropyButtons() {
+        const btn128 = document.getElementById('btn128');
+        const btn256 = document.getElementById('btn256');
+        
+        if (btn128 && btn256) {
+            btn128.classList.toggle('bg-sky-600', this.entropyBits === 128);
+            btn128.classList.toggle('text-white', this.entropyBits === 128);
+            btn256.classList.toggle('bg-sky-600', this.entropyBits === 256);
+            btn256.classList.toggle('text-white', this.entropyBits === 256);
+        }
+    }
+
+    async generateWallet() {
+        const strength = this.entropyBits;
+        const mnemonic = this.modules.bip39.generateMnemonic(this.modules.wordlist, strength);
+        
+        // Display mnemonic
+        const mnemonicEl = document.getElementById('mnemonicDisplay');
+        if (mnemonicEl) {
+            mnemonicEl.textContent = mnemonic;
+            document.getElementById('mnemonicSection')?.classList.remove('hidden');
+        }
+
+        // Generate key pair
+        const { privateKey, publicKey } = await this.generateKeyPair(mnemonic);
+        const address = this.generateAddress(publicKey);
+
+        // Update state
+        this.walletState.setKeys(privateKey, publicKey, address);
+
+        // Display key information
+        const publicKeyEl = document.getElementById('publicKeyDisplay');
+        const addressEl = document.getElementById('addressDisplay');
+        
+        if (publicKeyEl) publicKeyEl.textContent = CryptoUtils.toHex(publicKey);
+        if (addressEl) addressEl.textContent = address;
+        
+        document.getElementById('keyInfo')?.classList.remove('hidden');
+        this.updateWalletStatus();
+
+        SecureLogger.success('New wallet generated successfully');
+    }
+
+    async copyMnemonic() {
+        const mnemonicEl = document.getElementById('mnemonicDisplay');
+        if (!mnemonicEl?.textContent) {
+            SecureLogger.error('No mnemonic to copy');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(mnemonicEl.textContent);
+            
+            const copyBtn = document.getElementById('copyBtn');
+            if (copyBtn) {
+                const originalContent = copyBtn.innerHTML;
+                copyBtn.innerHTML = `
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                    Copied!
+                `;
+                
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalContent;
+                }, 2000);
+            }
+            
+            SecureLogger.success('Mnemonic copied to clipboard');
+        } catch (error) {
+            SecureLogger.error('Failed to copy mnemonic');
+        }
+    }
+
+    exportPublicData() {
+        if (!this.walletState.isActive()) {
+            SecureLogger.error('No active wallet to export');
+            return;
+        }
+
+        const exportData = {
+            version: '1.0.0',
+            type: 'educational-quantum-wallet',
+            timestamp: new Date().toISOString(),
+            publicKey: CryptoUtils.toHex(this.walletState.publicKey),
+            address: this.walletState.address,
+            algorithm: 'falcon-1024',
+            warning: 'EDUCATIONAL USE ONLY - NOT FOR PRODUCTION'
+        };
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: 'application/json'
+        });
+        
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `quantum-wallet-${this.walletState.address.slice(0, 8)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        SecureLogger.success('Public data exported successfully');
+    }
+
+    async restoreWallet() {
+        const restoreInput = document.getElementById('restoreInput');
+        if (!restoreInput) return;
+
+        const mnemonic = restoreInput.value.trim().toLowerCase();
+        
+        if (!await CryptoUtils.validateMnemonic(mnemonic, this.modules.wordlist)) {
+            SecureLogger.error('Invalid mnemonic phrase');
+            return;
+        }
+
+        // Generate key pair from mnemonic
+        const { privateKey, publicKey } = await this.generateKeyPair(mnemonic);
+        const address = this.generateAddress(publicKey);
+
+        // Update state
+        this.walletState.setKeys(privateKey, publicKey, address);
+
+        // Display restored information
+        const restoredPubEl = document.getElementById('restoredPublicKey');
+        const restoredAddrEl = document.getElementById('restoredAddress');
+        
+        if (restoredPubEl) restoredPubEl.textContent = CryptoUtils.toHex(publicKey);
+        if (restoredAddrEl) restoredAddrEl.textContent = address;
+        
+        document.getElementById('restoreResult')?.classList.remove('hidden');
+        this.updateWalletStatus();
+
+        // Clear input for security
+        restoreInput.value = '';
+        
+        SecureLogger.success('Wallet restored successfully');
+    }
+
+    async signMessage() {
+        if (!this.walletState.isActive()) {
+            SecureLogger.error('No active wallet for signing');
+            return;
+        }
+
+        const messageInput = document.getElementById('messageInput');
+        if (!messageInput?.value) {
+            SecureLogger.error('Enter a message to sign');
+            return;
+        }
+
+        this.walletState.updateActivity();
+        
+        const message = messageInput.value;
+        const messageBytes = new TextEncoder().encode(message);
+        
+        const result = await this.falcon.sign(messageBytes, this.walletState.privateKey);
+        const signature = new Uint8Array(result.signature);
+        
+        const signatureEl = document.getElementById('signatureDisplay');
+        if (signatureEl) {
+            signatureEl.value = CryptoUtils.toHex(signature);
+            document.getElementById('signatureSection')?.classList.remove('hidden');
+        }
+
+        // Clear verification result
+        const verifyEl = document.getElementById('verificationResult');
+        if (verifyEl) verifyEl.innerHTML = '';
+
+        SecureLogger.success('Message signed successfully');
+    }
+
+    async verifySignature() {
+        const messageInput = document.getElementById('messageInput');
+        const signatureInput = document.getElementById('signatureDisplay');
+        
+        if (!messageInput?.value || !signatureInput?.value) {
+            SecureLogger.error('Message and signature required for verification');
+            return;
+        }
+
+        let publicKey;
+        if (this.walletState.isActive()) {
+            publicKey = this.walletState.publicKey;
+        } else {
+            // Try to get from restored wallet display
+            const restoredPubEl = document.getElementById('restoredPublicKey');
+            if (!restoredPubEl?.textContent) {
+                SecureLogger.error('No public key available for verification');
+                return;
+            }
+            publicKey = CryptoUtils.fromHex(restoredPubEl.textContent);
+        }
+
+        try {
+            const message = messageInput.value;
+            const messageBytes = new TextEncoder().encode(message);
+            const signatureBytes = CryptoUtils.fromHex(signatureInput.value.trim());
+            
+            const isValid = await this.falcon.verify(signatureBytes, messageBytes, publicKey);
+            
+            const verifyEl = document.getElementById('verificationResult');
+            if (verifyEl) {
+                if (isValid) {
+                    verifyEl.innerHTML = `
+                        <div class="flex items-center space-x-2 text-green-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span class="font-semibold">Signature VERIFIED</span>
+                        </div>
+                        <div class="text-sm text-green-300 mt-1">The signature is cryptographically valid</div>
+                    `;
+                    SecureLogger.success('Signature verification successful');
+                } else {
+                    verifyEl.innerHTML = `
+                        <div class="flex items-center space-x-2 text-red-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span class="font-semibold">Signature INVALID</span>
+                        </div>
+                        <div class="text-sm text-red-300 mt-1">The signature does not match the message</div>
+                    `;
+                    SecureLogger.error('Signature verification failed');
+                }
+            }
+        } catch (error) {
+            SecureLogger.error(`Verification error: ${error.message}`);
+        }
+    }
+
+    lockWallet() {
+        this.walletState.lock();
+        
+        // Hide sensitive UI elements
+        document.getElementById('mnemonicSection')?.classList.add('hidden');
+        document.getElementById('keyInfo')?.classList.add('hidden');
+        document.getElementById('restoreResult')?.classList.add('hidden');
+        document.getElementById('signatureSection')?.classList.add('hidden');
+        
+        // Clear form inputs
+        const restoreInput = document.getElementById('restoreInput');
+        if (restoreInput) restoreInput.value = '';
+        
+        const verifyEl = document.getElementById('verificationResult');
+        if (verifyEl) verifyEl.innerHTML = '';
+        
+        this.updateWalletStatus();
+    }
+
+    startAutoLockTimer() {
+        setInterval(() => {
+            if (this.walletState.isActive()) {
+                const timeSinceActivity = Date.now() - this.walletState.lastActivity;
+                if (timeSinceActivity > this.autoLockTimeout) {
+                    this.lockWallet();
+                    SecureLogger.warning('Wallet auto-locked due to inactivity');
+                }
+            }
+        }, 60000); // Check every minute
+    }
+}
+
+// Initialize the application
+let quantumWallet;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        quantumWallet = new QuantumWallet();
+        await quantumWallet.initializationPromise;
+    } catch (error) {
+        SecureLogger.error('Failed to initialize quantum wallet application');
+        console.error('Initialization error:', error);
+    }
+});
+
+// Export for debugging (remove in production)
+window.QuantumWallet = { quantumWallet, SecureLogger, CryptoUtils };
+
+</script>
+</body>
+</html>
