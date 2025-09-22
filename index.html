@@ -1,1140 +1,977 @@
-
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Educational Quantum-Resistant Wallet - NEVER USE FOR REAL FUNDS</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
-    html { scroll-behavior: smooth; }
-    body {
-        font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: #e2e8f0;
-        min-height: 100vh;
-    }
-    .mono { font-family: 'Fira Code', monospace; }
-    .btn { 
-        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; 
-        padding: 0.75rem 1.25rem; border-radius: 0.75rem; font-weight: 600; 
-        cursor: pointer; border: none; transition: all 0.3s ease; white-space: nowrap;
-        position: relative; overflow: hidden;
-    }
-    .btn:before {
-        content: '';
-        position: absolute;
-        top: 0; left: -100%;
-        width: 100%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-        transition: left 0.5s;
-    }
-    .btn:hover:before { left: 100%; }
-    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
-    .btn:active { transform: translateY(0); }
-    .btn:disabled { cursor: not-allowed; opacity: 0.5; transform: none; box-shadow: none; }
-    .btn-primary { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #ffffff; }
-    .btn-secondary { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff; }
-    .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; }
-    .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff; }
-    .btn-ghost { background: rgba(51,65,85,0.3); color: #94a3b8; border: 1px solid rgba(51,65,85,0.5); }
-    .btn-ghost:hover { background: rgba(30,41,59,0.7); color: white; }
-
-    .card { 
-        background: rgba(30,41,59,0.8); 
-        backdrop-filter: blur(10px);
-        border-radius: 1rem; 
-        border: 1px solid rgba(51,65,85,0.3); 
-        padding: 2rem; 
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-    }
-    .input-base { 
-        width: 100%; padding: 0.875rem; border-radius: 0.75rem; 
-        background: rgba(15,23,42,0.8); border: 1px solid rgba(51,65,85,0.5); 
-        color: #e2e8f0; transition: all 0.3s ease;
-        font-size: 0.875rem;
-    }
-    .input-base:focus { 
-        outline: none; 
-        border-color: #0ea5e9; 
-        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1), 0 0 20px rgba(14, 165, 233, 0.2); 
-    }
-    .warning-box {
-        background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(220,38,38,0.1));
-        border: 2px solid rgba(239,68,68,0.3);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-    }
-    .status-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .status-secure { background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
-    .status-locked { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-    .loading-spinner {
-        width: 1.25rem;
-        height: 1.25rem;
-        border: 2px solid transparent;
-        border-top: 2px solid currentColor;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .hidden { display: none; }
-    .icon { width: 1.25rem; height: 1.25rem; }
-    .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: .5; }
-    }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimized AI Photo Editor & Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background: #111827; /* Gray 900 */
+            --surface: #1f2937;    /* Gray 800 */
+            --primary: #facc15;    /* Yellow 400 */
+            --primary-hover: #fde047;/* Yellow 300 */
+            --text-primary: #f9fafb;   /* Gray 50 */
+            --text-secondary: #9ca3af; /* Gray 400 */
+            --border: #374151;    /* Gray 700 */
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--background); color: var(--text-primary); }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: var(--surface); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        .loader { border: 4px solid var(--surface); border-top: 4px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: var(--border); border-radius: 5px; outline: none; opacity: 0.7; transition: opacity .2s; }
+        input[type="range"]:hover { opacity: 1; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: var(--primary); cursor: pointer; border-radius: 50%; }
+        input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; background: var(--primary); cursor: pointer; border-radius: 50%; }
+        #mask-canvas { position: absolute; cursor: crosshair; touch-action: none; z-index: 10; }
+        #ai-chat-container { transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out; resize: horizontal; overflow: auto; }
+        .chat-maximized { width: 100vw !important; height: 100vh !important; top: 0 !important; right: 0 !important; transform: none !important; z-index: 100 !important; resize: none; }
+        .chat-message.user .chat-bubble { background-color: var(--primary); color: var(--background); }
+        .chat-message.ai .chat-bubble { background-color: var(--surface); }
+        .typing-indicator span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--text-secondary); animation: typing-bounce 1.2s infinite ease-in-out; }
+        .typing-indicator span:nth-child(2) { animation-delay: -1.0s; }
+        .typing-indicator span:nth-child(3) { animation-delay: -0.8s; }
+        @keyframes typing-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+        @keyframes message-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .chat-message { animation: message-in 0.3s ease-out; }
+        .chat-bubble { max-width: max-content; word-break: break-word; }
+        .chat-bubble pre { background-color: #111827; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.875rem; line-height: 1.25rem; overflow-x: auto; position: relative; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .chat-bubble pre code { font-family: 'Courier New', Courier, monospace; }
+        .code-block-header { display: flex; justify-content: space-between; align-items: center; background-color: #374151; padding: 0.25rem 0.75rem; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem; font-size: 0.75rem; color: #d1d5db; }
+        .code-block-buttons { display: flex; gap: 0.5rem; }
+        .code-btn { background-color: transparent; color: #d1d5db; border: none; padding: 0.25rem; border-radius: 0.375rem; cursor: pointer; transition: background-color 0.2s, color 0.2s; display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; }
+        .code-btn:hover { background-color: #4b5563; color: white; }
+    </style>
 </head>
-<body class="antialiased">
-<div class="min-h-screen p-4 sm:p-6 lg:p-8 flex flex-col items-center">
-    <div class="container mx-auto max-w-4xl w-full space-y-8">
-        <header class="text-center">
-            <h1 class="text-4xl font-bold bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-                Educational Quantum Wallet
-            </h1>
-            <p class="text-slate-400 mt-3 text-lg">Advanced Educational Implementation - Post-Quantum Cryptography Demo</p>
-            
-            <div class="warning-box mt-6">
-                <div class="flex items-start space-x-3">
-                    <svg class="w-6 h-6 text-red-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                    </svg>
+<body class="overflow-hidden">
+    <div id="app" class="flex h-screen w-screen flex-col md:flex-row relative bg-background">
+        <!-- Sidebar -->
+        <aside class="w-full md:w-80 lg:w-96 bg-surface/50 border-r border-border flex flex-col p-4 space-y-4">
+            <header class="flex items-center justify-between gap-3 pb-4 border-b border-border flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <svg width="40" height="40" viewBox="0 0 256 256"><path fill="#facc15" d="M232.53,103.82a16,16,0,0,1-13,11.5l-62.09,9L128,182.09a16,16,0,0,1-29,0l-29.43-57.77l-62.1-9a16,16,0,0,1-13-27.1l45-45.06L11,19.34a16,16,0,0,1,20.67-22.1l211.2,78.29a16,16,0,0,1-10.34,30.29ZM191.8,91.13,32.32,29.14l30.3,30.33a16,16,0,0,1,0,22.62Z"></path></svg>
                     <div>
-                        <h3 class="font-bold text-red-400 text-lg">CRITICAL WARNING</h3>
-                        <p class="text-red-300 mt-2">
-                            This is an <strong>educational demonstration ONLY</strong>. Never use this with real cryptocurrency or sensitive data.
-                            This implementation lacks production-grade security, formal audits, and regulatory compliance required for financial applications.
-                        </p>
-                        <ul class="text-red-300 text-sm mt-3 space-y-1">
-                            <li>• No formal cryptographic audit</li>
-                            <li>• Missing hardware security module integration</li>
-                            <li>• Unverified third-party dependencies</li>
-                            <li>• No side-channel attack protection</li>
-                        </ul>
+                        <h1 class="text-xl font-bold text-text-primary">AI Magic Editor</h1>
+                        <p class="text-sm text-text-secondary">Next-Gen Creative Editing</p>
                     </div>
                 </div>
-            </div>
-        </header>
-
-        <main class="space-y-8">
-            <!-- System Status -->
-            <section class="card">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl font-semibold text-white">System Status</h2>
-                    <div id="systemStatus" class="status-indicator status-locked">
-                        <div class="loading-spinner"></div>
-                        Initializing...
-                    </div>
-                </div>
-                <div id="systemInfo" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div class="bg-slate-800/50 rounded-lg p-3">
-                        <div class="text-slate-400">Libraries</div>
-                        <div id="libStatus" class="text-slate-300">Loading...</div>
-                    </div>
-                    <div class="bg-slate-800/50 rounded-lg p-3">
-                        <div class="text-slate-400">Falcon Module</div>
-                        <div id="falconStatus" class="text-slate-300">Loading...</div>
-                    </div>
-                    <div class="bg-slate-800/50 rounded-lg p-3">
-                        <div class="text-slate-400">Wallet State</div>
-                        <div id="walletStatus" class="text-slate-300">Locked</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Wallet Generation -->
-            <section class="card">
-                <h2 class="text-2xl font-semibold text-white mb-6">Generate New Wallet</h2>
-                
-                <div class="flex items-center space-x-4 mb-6">
-                    <span class="text-slate-300 font-medium">Entropy Level:</span>
-                    <button class="btn btn-ghost text-sm" id="btn128">128-bit (12 words)</button>
-                    <button class="btn btn-ghost text-sm" id="btn256">256-bit (24 words)</button>
-                </div>
-
-                <button id="generateBtn" class="btn btn-primary">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                    </svg>
-                    Generate Secure Wallet
+                 <button id="toggle-chat-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary" title="Toggle AI Chat">
+                    <svg class="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
                 </button>
+            </header>
 
-                <div id="mnemonicSection" class="hidden mt-6 space-y-4">
-                    <div class="bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-500/30 rounded-xl p-6">
-                        <div class="flex items-center justify-between mb-3">
-                            <label class="font-semibold text-emerald-400">Recovery Phrase</label>
-                            <button id="copyBtn" class="btn btn-ghost btn-sm">
-                                <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.5A1.125 1.125 0 0 1 4.875 6.375h9.75a1.125 1.125 0 0 1 1.125 1.125v3.375" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h9.75c.621 0 1.125.504 1.125 1.125V21" />
-                                </svg>
-                                Copy
-                            </button>
+            <div id="sidebar-content" class="flex-grow overflow-y-auto custom-scrollbar pr-2 space-y-6">
+                <!-- Step 1: Upload -->
+                <section>
+                    <label class="text-sm font-medium text-text-secondary flex items-center gap-2 mb-3">
+                        <span class="w-6 h-6 bg-primary text-gray-900 rounded-full flex items-center justify-center font-bold">1</span>
+                        Upload Image
+                    </label>
+                    <div id="image-upload-area" class="relative w-full h-32 border-2 border-dashed border-border rounded-lg flex items-center justify-center text-center cursor-pointer hover:border-primary transition-colors bg-background/50">
+                        <input type="file" id="image-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/png, image/jpeg, image/webp">
+                        <div id="upload-prompt" class="flex flex-col items-center text-text-secondary pointer-events-none">
+                            <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <p class="text-sm">Click or drag to upload</p>
+                            <p class="text-xs text-gray-500">PNG, JPG, WEBP</p>
                         </div>
-                        <div id="mnemonicDisplay" class="mono text-lg text-emerald-300 leading-relaxed bg-slate-900/50 rounded-lg p-4 border border-emerald-500/20"></div>
-                        <div class="text-amber-400 text-sm mt-4 flex items-start space-x-2">
-                            <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                            </svg>
-                            <div>
-                                <strong>Critical:</strong> Write this phrase down immediately and store it securely offline. 
-                                This is the only way to recover your wallet. Never share it with anyone.
-                            </div>
-                        </div>
+                        <img id="upload-preview" class="hidden w-full h-full object-contain p-2 rounded-lg" />
                     </div>
+                </section>
 
-                    <div id="keyInfo" class="hidden space-y-4">
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-sm font-medium text-slate-300">Public Key</label>
-                                <div id="publicKeyDisplay" class="mono text-xs bg-slate-800 p-3 rounded-lg mt-2 break-all border border-slate-600"></div>
-                            </div>
-                            <div>
-                                <label class="text-sm font-medium text-slate-300">Address</label>
-                                <div id="addressDisplay" class="mono text-xs bg-slate-800 p-3 rounded-lg mt-2 break-all border border-slate-600"></div>
-                            </div>
-                        </div>
-                        <button id="exportBtn" class="btn btn-success">
-                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                            </svg>
-                            Export Public Data
+                <!-- Step 2: Prompt -->
+                <section class="space-y-3">
+                    <label for="prompt" class="text-sm font-medium text-text-secondary flex items-center gap-2">
+                        <span class="w-6 h-6 bg-primary text-gray-900 rounded-full flex items-center justify-center font-bold">2</span>
+                        Describe Your Edit
+                    </label>
+                    <textarea id="prompt" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-50 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-400" placeholder="e.g., 'Make the sky dramatic' or 'Change the car to red'"></textarea>
+                    
+                    <div class="flex items-center justify-between text-sm">
+                        <label for="draft-mode-toggle" class="text-text-secondary cursor-pointer">Fast Draft Mode:</label>
+                        <button id="draft-mode-toggle" class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 ease-in-out cursor-pointer" role="switch" aria-checked="true">
+                            <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out"></span>
                         </button>
                     </div>
-                </div>
-            </section>
 
-            <!-- Wallet Recovery -->
-            <section class="card">
-                <h2 class="text-2xl font-semibold text-white mb-6">Restore Wallet</h2>
-                <div class="space-y-4">
-                    <div>
-                        <label class="font-medium text-slate-300 block mb-2">Recovery Phrase</label>
-                        <textarea id="restoreInput" rows="3" class="input-base mono" placeholder="Enter your 12 or 24 word recovery phrase..."></textarea>
+                    <button id="generate-btn" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-in-out flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed w-full bg-yellow-400 text-gray-900 hover:bg-yellow-300 focus:ring-yellow-400" disabled>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        Apply Edit
+                    </button>
+                </section>
+
+                <!-- Step 3: Masking -->
+                <section id="masking-tools" class="hidden space-y-3">
+                    <label class="text-sm font-medium text-text-secondary flex items-center gap-2">
+                        <span class="w-6 h-6 bg-primary text-gray-900 rounded-full flex items-center justify-center font-bold">3</span>
+                        Masking (Optional)
+                    </label>
+                    <p class="text-xs text-text-secondary -mt-2">Draw on the image to edit a specific area.</p>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-text-secondary flex-shrink-0">Brush Size:</span>
+                        <input type="range" id="brush-size" min="5" max="100" value="30" class="w-full">
                     </div>
-                    <button id="restoreBtn" class="btn btn-secondary">
-                        <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0l3.181-3.183" />
-                        </svg>
-                        Restore Wallet
+                    <button id="clear-mask-btn" class="w-full text-xs px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-in-out flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed bg-gray-800 text-gray-50 hover:bg-gray-700 focus:ring-gray-500 border border-gray-700">Clear Mask</button>
+                </section>
+
+                <!-- Step 4: Magic Edits -->
+                <section class="space-y-3" id="magic-edits-container">
+                    <label class="text-sm font-medium text-text-secondary flex items-center gap-2">
+                        <span class="w-6 h-6 bg-primary text-gray-900 rounded-full flex items-center justify-center font-bold">4</span>
+                        Magic Edits (1-Click)
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="magic-btn" data-prompt="Subtly enhance the lighting, color saturation, and sharpness.">Enhance</button>
+                        <button class="magic-btn" data-prompt="Professionally remove the background.">Remove BG</button>
+                        <button class="magic-btn" data-prompt="Apply a cinematic color grade.">Cinematic</button>
+                        <button class="magic-btn" data-prompt="Convert to a moody black and white.">B & W</button>
+                        <button class="magic-btn" data-prompt="Give a warm, vintage look with faded colors.">Vintage</button>
+                        <button class="magic-btn" data-prompt="Restore old photo: remove scratches, fix colors, and improve quality.">Restore</button>
+                    </div>
+                </section>
+
+                <!-- Step 5: Multi-View -->
+                <section id="multi-view-section" class="hidden space-y-3">
+                    <label class="text-sm font-medium text-text-secondary flex items-center gap-2">
+                        <span class="w-6 h-6 bg-primary text-gray-900 rounded-full flex items-center justify-center font-bold">5</span>
+                        Multi-View Generation
+                    </label>
+                    <p class="text-xs text-text-secondary -mt-2">Create four images from different professional angles of your object/subject.</p>
+                    <button id="generate-views-btn" class="w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-in-out flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background bg-yellow-400 text-gray-900 hover:bg-yellow-300 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.864-1.536A2 2 0 0112 3h1a2 2 0 011.664.89l.864 1.536a2 2 0 001.664.89H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Generate 4 Views
+                    </button>
+                </section>
+            </div>
+
+            <!-- Footer Buttons -->
+            <footer class="pt-4 border-t border-border flex-shrink-0 flex items-center gap-2">
+                 <button id="undo-btn" class="w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-in-out flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed bg-gray-800 text-gray-50 hover:bg-gray-700 focus:ring-gray-500 border border-gray-700" disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 15l-3-3m0 0l3-3m-3 3h8A5 5 0 009 5H7"></path></svg>
+                    Undo
+                </button>
+                <button id="download-btn" class="w-full px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-in-out flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed bg-gray-800 text-gray-50 hover:bg-gray-700 focus:ring-gray-500 border border-gray-700" disabled>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Download
+                </button>
+            </footer>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 bg-background flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
+            <div id="image-container" class="w-full h-full flex items-center justify-center relative">
+                <div id="placeholder" class="text-center text-text-secondary">
+                    <svg class="w-24 h-24 mx-auto" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <h2 class="mt-4 text-xl font-medium text-text-primary">Your Image Appears Here</h2>
+                    <p>Upload an image to start editing.</p>
+                </div>
+                <img id="image-display" class="hidden max-w-full max-h-full object-contain rounded-lg shadow-2xl"/>
+                <canvas id="mask-canvas" class="hidden"></canvas>
+                <div class="absolute bottom-4 right-4 flex items-center gap-2">
+                    <button id="compare-btn" class="hidden bg-black/50 backdrop-blur-sm px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-in-out flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background border border-gray-700 text-gray-50 hover:bg-gray-700 focus:ring-gray-500">Hold to Compare</button>
+                    <button id="fullscreen-btn" class="bg-black/50 backdrop-blur-sm p-2 rounded-lg transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background border border-gray-700 text-gray-50 hover:bg-gray-700 focus:ring-gray-500" title="Toggle Fullscreen">
+                        <svg id="fullscreen-enter-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m0 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m0 0v-4m0 4l-5-5"></path></svg>
+                        <svg id="fullscreen-exit-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19v-4m0 0h4M15 19l-5-5M9 5v4m0 0H5M9 5l5 5m0 9v-4m0 0h4m-4 0l5-5M9 5V9m0-4H5m4 0l-5 5"></path></svg>
                     </button>
                 </div>
+            </div>
+            
+            <div id="loading-overlay" class="hidden absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center text-center z-50">
+                <div class="loader"></div>
+                <p id="loading-text" class="mt-4 text-lg font-semibold text-text-primary">Applying AI magic...</p>
+                <p class="text-text-secondary">This can take a moment.</p>
+            </div>
 
-                <div id="restoreResult" class="hidden mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-lg">
-                    <h3 class="font-semibold text-green-400 mb-3">Wallet Restored Successfully</h3>
-                    <div class="space-y-3 text-sm">
-                        <div>
-                            <span class="text-slate-400">Public Key:</span>
-                            <div id="restoredPublicKey" class="mono text-xs bg-slate-800 p-2 rounded mt-1 break-all"></div>
-                        </div>
-                        <div>
-                            <span class="text-slate-400">Address:</span>
-                            <div id="restoredAddress" class="mono text-xs bg-slate-800 p-2 rounded mt-1 break-all"></div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Message Signing -->
-            <section class="card">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-2xl font-semibold text-white">Message Signing & Verification</h2>
-                    <div id="signingStatus" class="status-indicator status-locked">
-                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <circle cx="10" cy="10" r="3"/>
-                        </svg>
-                        Wallet Required
-                    </div>
-                </div>
-
-                <div class="space-y-4">
-                    <div>
-                        <label class="font-medium text-slate-300 block mb-2">Message to Sign/Verify</label>
-                        <textarea id="messageInput" rows="4" class="input-base" placeholder="Enter your message here...">Hello, quantum-resistant world! This message demonstrates post-quantum digital signatures.</textarea>
-                    </div>
-
-                    <div id="signatureSection" class="hidden">
-                        <label class="font-medium text-slate-300 block mb-2">Digital Signature</label>
-                        <textarea id="signatureDisplay" rows="6" class="input-base mono text-xs" readonly></textarea>
-                    </div>
-
-                    <div class="flex flex-wrap gap-3">
-                        <button id="signBtn" class="btn btn-success" disabled>
-                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125" />
-                            </svg>
-                            Sign Message
-                        </button>
-                        <button id="verifyBtn" class="btn btn-secondary">
-                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
-                            Verify Signature
-                        </button>
-                        <button id="lockBtn" class="btn btn-danger hidden">
-                            <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-                            </svg>
-                            Lock Wallet
-                        </button>
-                    </div>
-
-                    <div id="verificationResult" class="min-h-[3rem] flex items-center"></div>
-                </div>
-            </section>
+            <div id="error-toast" class="hidden absolute bottom-5 right-5 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-300 transform translate-y-20">
+                <p id="error-message"></p>
+            </div>
         </main>
 
-        <footer class="text-center py-8">
-            <div id="statusLog" class="text-sm text-slate-400 min-h-[1.5rem] mb-4"></div>
-            <div class="text-xs text-slate-500">
-                <p>Educational Implementation • Post-Quantum Cryptography Research</p>
-                <p class="mt-2">⚠️ Never use for production applications or real financial assets ⚠️</p>
+        <!-- AI Chat Panel -->
+        <div id="ai-chat-container" class="absolute top-0 right-0 h-full w-full md:w-[400px] lg:w-[450px] min-w-[300px] max-w-[100vw] bg-gray-900 border-l border-border shadow-2xl flex flex-col transform translate-x-full z-40">
+            <header class="flex items-center justify-between p-4 border-b border-border flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                    <div>
+                        <h2 id="chat-header-title" class="text-lg font-bold text-text-primary">Gemini 2.5 Flash</h2>
+                        <p class="text-xs text-text-secondary -mt-1">Assistant</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="new-chat-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary" title="New Chat">
+                        <svg class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </button>
+                    <button id="toggle-chat-size-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary" title="Toggle Chat Size">
+                        <svg id="chat-maximize-icon" class="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m7 11v-4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m0 0v-4m0 4l-5-5"></path></svg>
+                        <svg id="chat-minimize-icon" class="w-5 h-5 text-text-secondary hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19v-4m0 0h4M15 19l-5-5M9 5v4m0 0H5M9 5l5 5"></path></svg>
+                    </button>
+                    <button id="close-chat-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary" title="Close Chat">
+                        <svg class="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </header>
+            
+            <div id="chat-messages" class="flex-grow p-4 overflow-y-auto custom-scrollbar space-y-4"></div>
+
+            <div id="typing-indicator" class="hidden px-4 pb-2 flex items-center gap-3">
+                 <div class="w-8 h-8 rounded-full bg-surface flex-shrink-0"></div>
+                 <div class="p-3 rounded-lg bg-surface">
+                    <div class="typing-indicator"><span></span><span></span><span></span></div>
+                 </div>
             </div>
-        </footer>
+
+            <footer class="p-4 border-t border-border flex-shrink-0">
+                <div id="attachment-preview" class="hidden items-center justify-between bg-surface p-2 rounded-md mb-2 text-sm">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <svg class="w-5 h-5 text-text-secondary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span id="attachment-name" class="truncate text-text-secondary"></span>
+                    </div>
+                    <button id="remove-attachment-btn" class="p-1 rounded-full text-text-secondary hover:bg-gray-600" title="Remove Attachment">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                    </button>
+                </div>
+                <form id="chat-form" class="flex items-center gap-3">
+                    <input type="file" id="attachment-upload" class="hidden" accept="image/*, .txt, .html, .pdf, .js, .py, .css">
+                    <button type="button" id="attachment-btn" class="p-2 rounded-full text-text-secondary hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-primary" title="Attach File">
+                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    </button>
+                    <input type="text" id="chat-input" class="flex-grow bg-gray-800 border border-gray-700 rounded-full px-4 py-2 text-text-primary placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Type a message..." autocomplete="off">
+                    <button type="submit" id="chat-send-btn" class="p-2 rounded-full bg-primary text-gray-900 hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50" disabled title="Send Message">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    </button>
+                </form>
+            </footer>
+        </div>
     </div>
-</div>
+    <!-- Multi-View Modal -->
+    <div id="multi-view-modal" class="hidden fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div class="bg-surface rounded-lg p-6 shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between pb-4 border-b border-border mb-4">
+                <h3 class="text-xl font-bold text-text-primary">Four Professional Angles</h3>
+                <button id="close-multi-view-modal" class="text-text-secondary hover:text-white transition-colors" title="Close">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+            </div>
+            <div id="multi-view-container" class="flex-grow overflow-y-auto custom-scrollbar grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </div>
+    </div>
 
-<script type="module">
-'use strict';
+    <!-- Code Runner Modal -->
+    <div id="code-runner-modal" class="hidden fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+        <div class="bg-surface rounded-lg p-4 shadow-xl w-full max-w-4xl h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between pb-2 border-b border-border mb-2 flex-shrink-0">
+                <h3 class="text-lg font-bold text-text-primary">Live Code Preview</h3>
+                <button id="close-code-runner-modal" class="text-text-secondary hover:text-white transition-colors" title="Close">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                </button>
+            </div>
+            <iframe id="code-runner-iframe" class="w-full h-full bg-white border-0 rounded-b-lg flex-grow" sandbox="allow-scripts allow-same-origin"></iframe>
+        </div>
+    </div>
 
-// ==========================================
-// EDUCATIONAL QUANTUM WALLET IMPLEMENTATION
-// ==========================================
-// WARNING: This is for educational purposes only
-// DO NOT USE WITH REAL CRYPTOCURRENCY OR SENSITIVE DATA
-
-class SecureLogger {
-    static log(message, level = 'info', duration = 5000) {
-        const logElement = document.getElementById('statusLog');
-        if (!logElement) return;
-
-        // Clear previous timeout
-        if (SecureLogger.timeoutId) {
-            clearTimeout(SecureLogger.timeoutId);
-        }
-
-        // Set message and styling
-        logElement.textContent = message;
-        logElement.className = 'text-sm min-h-[1.5rem] mb-4 transition-all duration-300';
-        
-        switch (level) {
-            case 'error':
-                logElement.classList.add('text-red-400');
-                break;
-            case 'success':
-                logElement.classList.add('text-green-400');
-                break;
-            case 'warning':
-                logElement.classList.add('text-amber-400');
-                break;
-            default:
-                logElement.classList.add('text-slate-400');
-        }
-
-        // Auto-clear after duration
-        SecureLogger.timeoutId = setTimeout(() => {
-            if (logElement.textContent === message) {
-                logElement.textContent = '';
-            }
-        }, duration);
-    }
-
-    static error(message) { this.log(message, 'error'); }
-    static success(message) { this.log(message, 'success'); }
-    static warning(message) { this.log(message, 'warning'); }
-}
-
-class CryptoUtils {
-    static toHex(bytes) {
-        return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    static fromHex(hex) {
-        if (typeof hex !== 'string' || hex.length % 2 !== 0) {
-            throw new Error('Invalid hex string format');
-        }
-        const bytes = new Uint8Array(hex.length / 2);
-        for (let i = 0; i < bytes.length; i++) {
-            bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-        }
-        return bytes;
-    }
-
-    static secureWipe(data) {
-        if (data instanceof Uint8Array) {
-            crypto.getRandomValues(data);
-            data.fill(0);
-        }
-    }
-
-    static async validateMnemonic(mnemonic, wordlist) {
-        try {
-            const words = mnemonic.trim().toLowerCase().split(/\s+/);
-            if (![12, 24].includes(words.length)) return false;
-            
-            // Basic validation - in production, use full BIP39 validation
-            return words.every(word => wordlist.includes(word));
-        } catch {
-            return false;
-        }
-    }
-}
-
-class HmacDrbgSecure {
-    constructor(seed) {
-        this.outlen = 32;
-        this.K = new Uint8Array(this.outlen).fill(0x00);
-        this.V = new Uint8Array(this.outlen).fill(0x01);
-        this._initialized = false;
-        this._initPromise = this._initialize(seed);
-    }
-
-    async ready() {
-        await this._initPromise;
-        return this._initialized;
-    }
-
-    async _hmac(keyData, data) {
-        try {
-            const key = await crypto.subtle.importKey(
-                'raw', keyData, 
-                { name: 'HMAC', hash: 'SHA-256' }, 
-                false, ['sign']
-            );
-            const signature = await crypto.subtle.sign('HMAC', key, data);
-            return new Uint8Array(signature);
-        } catch (error) {
-            throw new Error(`HMAC operation failed: ${error.message}`);
-        }
-    }
-
-    async _update(provided = new Uint8Array()) {
-        // HMAC-DRBG Update function per NIST SP 800-90A
-        let temp = new Uint8Array(this.V.length + 1 + provided.length);
-        temp.set(this.V, 0);
-        temp.set([0x00], this.V.length);
-        temp.set(provided, this.V.length + 1);
-        
-        this.K = await this._hmac(this.K, temp);
-        this.V = await this._hmac(this.K, this.V);
-        
-        if (provided.length > 0) {
-            temp = new Uint8Array(this.V.length + 1 + provided.length);
-            temp.set(this.V, 0);
-            temp.set([0x01], this.V.length);
-            temp.set(provided, this.V.length + 1);
-            
-            this.K = await this._hmac(this.K, temp);
-            this.V = await this._hmac(this.K, this.V);
-        }
-    }
-
-    async _initialize(seed) {
-        if (!seed || seed.length < 32) {
-            throw new Error('Insufficient seed entropy');
-        }
-        await this._update(seed);
-        this._initialized = true;
-    }
-
-    async generate(numBytes) {
-        if (!this._initialized) {
-            throw new Error('DRBG not initialized');
-        }
-        
-        if (numBytes > 65536) { // 64KB limit per NIST
-            throw new Error('Requested bytes exceed DRBG limits');
-        }
-
-        const output = new Uint8Array(numBytes);
-        let generated = 0;
-        
-        while (generated < numBytes) {
-            this.V = await this._hmac(this.K, this.V);
-            const take = Math.min(this.outlen, numBytes - generated);
-            output.set(this.V.subarray(0, take), generated);
-            generated += take;
-        }
-        
-        await this._update(); // Reseed after generation
-        return output;
-    }
-
-    destroy() {
-        CryptoUtils.secureWipe(this.K);
-        CryptoUtils.secureWipe(this.V);
-        this._initialized = false;
-    }
-}
-
-class StreamingRng {
-    constructor(drbg, options = {}) {
-        this.drbg = drbg;
-        this.bufferSize = options.bufferSize || 32 * 1024;
-        this.refillThreshold = options.refillThreshold || 8 * 1024;
-        this.refillChunk = options.refillChunk || 16 * 1024;
-        
-        this.buffer = new Uint8Array(0);
-        this.readPos = 0;
-        this.writePos = 0;
-        this.refilling = false;
-        this.active = false;
-    }
-
-    async initialize() {
-        await this.drbg.ready();
-        const initial = await this.drbg.generate(this.bufferSize);
-        this.buffer = initial;
-        this.readPos = 0;
-        this.writePos = initial.length;
-        this.active = true;
-        this._startRefillLoop();
-    }
-
-    getRandomValuesSync(typedArray) {
-        if (!this.active) {
-            throw new Error('RNG has been destroyed');
-        }
-
-        const needed = typedArray.byteLength;
-        const available = this.writePos - this.readPos;
-        
-        if (needed > available) {
-            throw new Error(`Insufficient entropy: need ${needed}, have ${available}`);
-        }
-
-        const view = new Uint8Array(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
-        view.set(this.buffer.subarray(this.readPos, this.readPos + needed));
-        this.readPos += needed;
-
-        // Trigger refill if below threshold
-        if (available - needed <= this.refillThreshold && !this.refilling) {
-            this._refillBuffer();
-        }
-
-        return typedArray;
-    }
-
-    async _refillBuffer() {
-        if (this.refilling || !this.active) return;
-        
-        this.refilling = true;
-        try {
-            const chunk = await this.drbg.generate(this.refillChunk);
-            const remaining = this.writePos - this.readPos;
-            
-            // Compact buffer if too much read data
-            if (this.readPos > this.bufferSize / 2) {
-                const activeData = this.buffer.subarray(this.readPos, this.writePos);
-                this.buffer = new Uint8Array(activeData.length + chunk.length);
-                this.buffer.set(activeData, 0);
-                this.buffer.set(chunk, activeData.length);
-                this.readPos = 0;
-                this.writePos = activeData.length + chunk.length;
-            } else {
-                // Extend buffer
-                const newBuffer = new Uint8Array(this.writePos + chunk.length);
-                newBuffer.set(this.buffer.subarray(0, this.writePos), 0);
-                newBuffer.set(chunk, this.writePos);
-                this.buffer = newBuffer;
-                this.writePos += chunk.length;
-            }
-        } catch (error) {
-            SecureLogger.error(`RNG refill failed: ${error.message}`);
-            this.destroy();
-        } finally {
-            this.refilling = false;
-        }
-    }
-
-    _startRefillLoop() {
-        const refillLoop = async () => {
-            while (this.active) {
-                if ((this.writePos - this.readPos) <= this.refillThreshold) {
-                    await this._refillBuffer();
-                }
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Elements ---
+        const getEl = (id) => document.getElementById(id);
+        const elements = {
+            app: getEl('app'),
+            imageUpload: getEl('image-upload'),
+            imageUploadArea: getEl('image-upload-area'),
+            uploadPrompt: getEl('upload-prompt'),
+            uploadPreview: getEl('upload-preview'),
+            imageContainer: getEl('image-container'),
+            imageDisplay: getEl('image-display'),
+            placeholder: getEl('placeholder'),
+            promptInput: getEl('prompt'),
+            generateBtn: getEl('generate-btn'),
+            magicEditsContainer: getEl('magic-edits-container'),
+            undoBtn: getEl('undo-btn'),
+            downloadBtn: getEl('download-btn'),
+            loadingOverlay: getEl('loading-overlay'),
+            loadingText: getEl('loading-text'),
+            errorToast: getEl('error-toast'),
+            errorMessage: getEl('error-message'),
+            draftModeToggle: getEl('draft-mode-toggle'),
+            maskingTools: getEl('masking-tools'),
+            maskCanvas: getEl('mask-canvas'),
+            brushSizeSlider: getEl('brush-size'),
+            clearMaskBtn: getEl('clear-mask-btn'),
+            compareBtn: getEl('compare-btn'),
+            fullscreenBtn: getEl('fullscreen-btn'),
+            fullscreenEnterIcon: getEl('fullscreen-enter-icon'),
+            fullscreenExitIcon: getEl('fullscreen-exit-icon'),
+            generateViewsBtn: getEl('generate-views-btn'),
+            multiViewSection: getEl('multi-view-section'),
+            toggleChatBtn: getEl('toggle-chat-btn'),
+            closeChatBtn: getEl('close-chat-btn'),
+            aiChatContainer: getEl('ai-chat-container'),
+            toggleChatSizeBtn: getEl('toggle-chat-size-btn'),
+            chatMaximizeIcon: getEl('chat-maximize-icon'),
+            chatMinimizeIcon: getEl('chat-minimize-icon'),
+            chatMessages: getEl('chat-messages'),
+            chatForm: getEl('chat-form'),
+            chatInput: getEl('chat-input'),
+            chatSendBtn: getEl('chat-send-btn'),
+            attachmentBtn: getEl('attachment-btn'),
+            attachmentUpload: getEl('attachment-upload'),
+            attachmentPreview: getEl('attachment-preview'),
+            attachmentName: getEl('attachment-name'),
+            removeAttachmentBtn: getEl('remove-attachment-btn'),
+            typingIndicator: getEl('typing-indicator'),
+            newChatBtn: getEl('new-chat-btn'),
+            multiViewModal: getEl('multi-view-modal'),
+            closeMultiViewModal: getEl('close-multi-view-modal'),
+            multiViewContainer: getEl('multi-view-container'),
+            codeRunnerModal: getEl('code-runner-modal'),
+            closeCodeRunnerModal: getEl('close-code-runner-modal'),
+            codeRunnerIframe: getEl('code-runner-iframe'),
         };
-        refillLoop().catch(error => {
-            SecureLogger.error(`RNG background loop failed: ${error.message}`);
-        });
-    }
 
-    destroy() {
-        this.active = false;
-        CryptoUtils.secureWipe(this.buffer);
-        this.drbg.destroy();
-        this.buffer = new Uint8Array(0);
-        this.readPos = 0;
-        this.writePos = 0;
-    }
-}
-
-// Secure Wallet State Management
-class WalletState {
-    constructor() {
-        this.reset();
-    }
-
-    reset() {
-        // Securely wipe existing keys
-        if (this.privateKey) CryptoUtils.secureWipe(this.privateKey);
-        if (this.publicKey) CryptoUtils.secureWipe(this.publicKey);
+        // --- State Management ---
+        const state = {
+            history: [],
+            currentHistoryIndex: -1,
+            originalImage: null,
+            currentFileName: 'edited-image.png',
+            isDraftMode: true,
+            isMasking: false,
+            isLoading: false,
+            isChatOpen: false,
+            isChatMaximized: false,
+            chatAttachment: null,
+            chatHistory: [],
+            errorTimeout: null,
+        };
         
-        this.privateKey = null;
-        this.publicKey = null;
-        this.address = null;
-        this.isUnlocked = false;
-        this.lastActivity = Date.now();
-    }
+        // --- API Configuration ---
+        const IMAGE_GENERATE_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict`;
+        const IMAGE_EDIT_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent`;
+        const CHAT_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+        const API_KEY = ""; // PASTE YOUR API KEY HERE
+        const DRAFT_SIZE = 768;
 
-    setKeys(privateKey, publicKey, address) {
-        this.reset();
-        this.privateKey = new Uint8Array(privateKey);
-        this.publicKey = new Uint8Array(publicKey);
-        this.address = address;
-        this.isUnlocked = true;
-        this.lastActivity = Date.now();
-    }
-
-    updateActivity() {
-        this.lastActivity = Date.now();
-    }
-
-    lock() {
-        this.reset();
-        SecureLogger.warning('Wallet locked for security');
-    }
-
-    isActive() {
-        return this.isUnlocked && this.privateKey && this.publicKey;
-    }
-}
-
-// Main Application Class
-class QuantumWallet {
-    constructor() {
-        this.modules = {};
-        this.falcon = null;
-        this.walletState = new WalletState();
-        this.entropyBits = 128;
-        this.autoLockTimeout = 10 * 60 * 1000; // 10 minutes
-        this.initializationPromise = this.initialize();
-    }
-
-    async initialize() {
-        try {
-            this.updateSystemStatus('initializing', 'Loading cryptographic modules...');
-            
-            // Load BIP39 and related modules
-            this.updateLibStatus('Loading...');
-            const bip39Module = await import('https://esm.sh/@scure/bip39');
-            this.modules.bip39 = bip39Module.default || bip39Module;
-            this.modules.wordlist = (await import('https://esm.sh/@scure/bip39/wordlists/english.js')).wordlist;
-            
-            // Load SHAKE256
-            const sha3Module = await import('https://esm.sh/js-sha3@0.9.3');
-            this.modules.shake256 = sha3Module.shake256 || sha3Module.default?.shake256;
-            this.updateLibStatus('Loaded');
-
-            // Load Falcon module
-            this.updateFalconStatus('Loading...');
-            const falconModule = await import('https://esm.sh/@dashlane/pqc-sign-falcon-1024-browser@1.0.0');
-            const falconBuilder = falconModule.default || falconModule;
-            this.falcon = await falconBuilder();
-            this.updateFalconStatus('Ready');
-
-            this.updateSystemStatus('ready', 'System ready for operation');
-            this.setupEventHandlers();
-            this.startAutoLockTimer();
-            
-            SecureLogger.success('Quantum wallet system initialized successfully');
-        } catch (error) {
-            this.updateSystemStatus('error', 'Initialization failed');
-            SecureLogger.error(`Initialization failed: ${error.message}`);
-            throw error;
-        }
-    }
-
-    updateSystemStatus(status, message) {
-        const statusEl = document.getElementById('systemStatus');
-        if (!statusEl) return;
-
-        statusEl.className = 'status-indicator';
-        statusEl.innerHTML = '';
-
-        switch (status) {
-            case 'initializing':
-                statusEl.classList.add('status-locked');
-                statusEl.innerHTML = '<div class="loading-spinner"></div>Initializing...';
-                break;
-            case 'ready':
-                statusEl.classList.add('status-secure');
-                statusEl.innerHTML = `
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <circle cx="10" cy="10" r="3"/>
-                    </svg>
-                    System Ready
-                `;
-                break;
-            case 'error':
-                statusEl.classList.add('status-locked');
-                statusEl.innerHTML = `
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                    </svg>
-                    System Error
-                `;
-                break;
-        }
-    }
-
-    updateLibStatus(status) {
-        const el = document.getElementById('libStatus');
-        if (el) el.textContent = status;
-    }
-
-    updateFalconStatus(status) {
-        const el = document.getElementById('falconStatus');
-        if (el) el.textContent = status;
-    }
-
-    updateWalletStatus() {
-        const statusEl = document.getElementById('walletStatus');
-        const signingStatusEl = document.getElementById('signingStatus');
-        const signBtn = document.getElementById('signBtn');
-        const lockBtn = document.getElementById('lockBtn');
-
-        if (this.walletState.isActive()) {
-            if (statusEl) statusEl.textContent = 'Unlocked';
-            
-            if (signingStatusEl) {
-                signingStatusEl.className = 'status-indicator status-secure';
-                signingStatusEl.innerHTML = `
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <circle cx="10" cy="10" r="3"/>
-                    </svg>
-                    Ready to Sign
-                `;
-            }
-            
-            if (signBtn) signBtn.disabled = false;
-            if (lockBtn) lockBtn.classList.remove('hidden');
-        } else {
-            if (statusEl) statusEl.textContent = 'Locked';
-            
-            if (signingStatusEl) {
-                signingStatusEl.className = 'status-indicator status-locked';
-                signingStatusEl.innerHTML = `
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <circle cx="10" cy="10" r="3"/>
-                    </svg>
-                    Wallet Required
-                `;
-            }
-            
-            if (signBtn) signBtn.disabled = true;
-            if (lockBtn) lockBtn.classList.add('hidden');
-        }
-    }
-
-    async generateKeyPair(mnemonic) {
-        const seed = await this.modules.bip39.mnemonicToSeed(mnemonic);
-        const drbg = new HmacDrbgSecure(seed);
-        const streamRng = new StreamingRng(drbg);
-        await streamRng.initialize();
-
-        // Temporarily replace crypto.getRandomValues
-        const originalGetRandomValues = crypto.getRandomValues.bind(crypto);
-        crypto.getRandomValues = (array) => streamRng.getRandomValuesSync(array);
-
-        try {
-            const keyPair = await this.falcon.keypair();
-            return {
-                privateKey: new Uint8Array(keyPair.privateKey),
-                publicKey: new Uint8Array(keyPair.publicKey)
+        // --- Utility Functions ---
+        const debounce = (func, delay) => {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), delay);
             };
-        } finally {
-            crypto.getRandomValues = originalGetRandomValues;
-            streamRng.destroy();
-        }
-    }
-
-    generateAddress(publicKey) {
-        const pubHex = CryptoUtils.toHex(publicKey);
-        const hash = this.modules.shake256(pubHex, 256);
-        return `pqc1${hash.slice(0, 40)}`;
-    }
-
-    async withLoadingButton(buttonId, asyncOperation) {
-        const button = document.getElementById(buttonId);
-        if (!button) return;
-
-        const originalContent = button.innerHTML;
-        button.disabled = true;
-        button.innerHTML = `
-            <div class="loading-spinner"></div>
-            Processing...
-        `;
-
-        try {
-            await asyncOperation();
-        } catch (error) {
-            SecureLogger.error(error.message || 'Operation failed');
-        } finally {
-            button.disabled = false;
-            button.innerHTML = originalContent;
-        }
-    }
-
-    setupEventHandlers() {
-        // Entropy selection
-        document.getElementById('btn128')?.addEventListener('click', () => {
-            this.entropyBits = 128;
-            this.updateEntropyButtons();
-        });
-        
-        document.getElementById('btn256')?.addEventListener('click', () => {
-            this.entropyBits = 256;
-            this.updateEntropyButtons();
-        });
-
-        // Wallet generation
-        document.getElementById('generateBtn')?.addEventListener('click', () => {
-            this.withLoadingButton('generateBtn', () => this.generateWallet());
-        });
-
-        // Copy mnemonic
-        document.getElementById('copyBtn')?.addEventListener('click', () => {
-            this.copyMnemonic();
-        });
-
-        // Export public data
-        document.getElementById('exportBtn')?.addEventListener('click', () => {
-            this.exportPublicData();
-        });
-
-        // Wallet restoration
-        document.getElementById('restoreBtn')?.addEventListener('click', () => {
-            this.withLoadingButton('restoreBtn', () => this.restoreWallet());
-        });
-
-        // Message signing
-        document.getElementById('signBtn')?.addEventListener('click', () => {
-            this.withLoadingButton('signBtn', () => this.signMessage());
-        });
-
-        // Signature verification
-        document.getElementById('verifyBtn')?.addEventListener('click', () => {
-            this.withLoadingButton('verifyBtn', () => this.verifySignature());
-        });
-
-        // Lock wallet
-        document.getElementById('lockBtn')?.addEventListener('click', () => {
-            this.lockWallet();
-        });
-
-        // Update UI
-        this.updateEntropyButtons();
-        this.updateWalletStatus();
-    }
-
-    updateEntropyButtons() {
-        const btn128 = document.getElementById('btn128');
-        const btn256 = document.getElementById('btn256');
-        
-        if (btn128 && btn256) {
-            btn128.classList.toggle('bg-sky-600', this.entropyBits === 128);
-            btn128.classList.toggle('text-white', this.entropyBits === 128);
-            btn256.classList.toggle('bg-sky-600', this.entropyBits === 256);
-            btn256.classList.toggle('text-white', this.entropyBits === 256);
-        }
-    }
-
-    async generateWallet() {
-        const strength = this.entropyBits;
-        const mnemonic = this.modules.bip39.generateMnemonic(this.modules.wordlist, strength);
-        
-        // Display mnemonic
-        const mnemonicEl = document.getElementById('mnemonicDisplay');
-        if (mnemonicEl) {
-            mnemonicEl.textContent = mnemonic;
-            document.getElementById('mnemonicSection')?.classList.remove('hidden');
-        }
-
-        // Generate key pair
-        const { privateKey, publicKey } = await this.generateKeyPair(mnemonic);
-        const address = this.generateAddress(publicKey);
-
-        // Update state
-        this.walletState.setKeys(privateKey, publicKey, address);
-
-        // Display key information
-        const publicKeyEl = document.getElementById('publicKeyDisplay');
-        const addressEl = document.getElementById('addressDisplay');
-        
-        if (publicKeyEl) publicKeyEl.textContent = CryptoUtils.toHex(publicKey);
-        if (addressEl) addressEl.textContent = address;
-        
-        document.getElementById('keyInfo')?.classList.remove('hidden');
-        this.updateWalletStatus();
-
-        SecureLogger.success('New wallet generated successfully');
-    }
-
-    async copyMnemonic() {
-        const mnemonicEl = document.getElementById('mnemonicDisplay');
-        if (!mnemonicEl?.textContent) {
-            SecureLogger.error('No mnemonic to copy');
-            return;
-        }
-
-        try {
-            await navigator.clipboard.writeText(mnemonicEl.textContent);
-            
-            const copyBtn = document.getElementById('copyBtn');
-            if (copyBtn) {
-                const originalContent = copyBtn.innerHTML;
-                copyBtn.innerHTML = `
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                    Copied!
-                `;
-                
-                setTimeout(() => {
-                    copyBtn.innerHTML = originalContent;
-                }, 2000);
-            }
-            
-            SecureLogger.success('Mnemonic copied to clipboard');
-        } catch (error) {
-            SecureLogger.error('Failed to copy mnemonic');
-        }
-    }
-
-    exportPublicData() {
-        if (!this.walletState.isActive()) {
-            SecureLogger.error('No active wallet to export');
-            return;
-        }
-
-        const exportData = {
-            version: '1.0.0',
-            type: 'educational-quantum-wallet',
-            timestamp: new Date().toISOString(),
-            publicKey: CryptoUtils.toHex(this.walletState.publicKey),
-            address: this.walletState.address,
-            algorithm: 'falcon-1024',
-            warning: 'EDUCATIONAL USE ONLY - NOT FOR PRODUCTION'
         };
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-            type: 'application/json'
+        const fileToDataURL = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+            reader.readAsDataURL(file);
         });
-        
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `quantum-wallet-${this.walletState.address.slice(0, 8)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const fileToGeminiPart = async (file) => ({
+            inlineData: { mimeType: file.type, data: (await fileToDataURL(file)).split(',')[1] }
+        });
 
-        SecureLogger.success('Public data exported successfully');
-    }
-
-    async restoreWallet() {
-        const restoreInput = document.getElementById('restoreInput');
-        if (!restoreInput) return;
-
-        const mnemonic = restoreInput.value.trim().toLowerCase();
-        
-        if (!await CryptoUtils.validateMnemonic(mnemonic, this.modules.wordlist)) {
-            SecureLogger.error('Invalid mnemonic phrase');
-            return;
+        // --- State & UI Updates ---
+        function updateUI() {
+            const hasImage = state.history.length > 0;
+            const canGenerate = (elements.promptInput.value.trim() !== '' || hasImage) && !state.isLoading;
+            
+            elements.generateBtn.disabled = !canGenerate;
+            elements.downloadBtn.disabled = !hasImage || state.isLoading;
+            elements.undoBtn.disabled = state.currentHistoryIndex < 1 || state.isLoading;
+            document.querySelectorAll('.magic-btn').forEach(btn => { btn.disabled = !hasImage || state.isLoading; });
+            elements.compareBtn.classList.toggle('hidden', state.currentHistoryIndex < 1);
+            
+            elements.placeholder.classList.toggle('hidden', hasImage);
+            elements.imageDisplay.classList.toggle('hidden', !hasImage);
+            elements.maskingTools.classList.toggle('hidden', !hasImage);
+            elements.multiViewSection.classList.toggle('hidden', !hasImage);
+            elements.generateViewsBtn.disabled = !hasImage || state.isLoading;
+            
+            const handle = elements.draftModeToggle.querySelector('span');
+            handle.style.transform = `translateX(${state.isDraftMode ? '1.5rem' : '0.25rem'})`;
+            elements.draftModeToggle.style.backgroundColor = state.isDraftMode ? 'var(--primary)' : '#4b5563';
+            
+            elements.chatSendBtn.disabled = (elements.chatInput.value.trim() === '' && !state.chatAttachment) || state.isLoading;
+            elements.aiChatContainer.classList.toggle('translate-x-full', !state.isChatOpen);
         }
 
-        // Generate key pair from mnemonic
-        const { privateKey, publicKey } = await this.generateKeyPair(mnemonic);
-        const address = this.generateAddress(publicKey);
+        // --- Image & Canvas Handling ---
+        async function handleFileUpload(file) {
+            if (!file || !file.type.startsWith('image/')) return showError('Please upload a valid image file.');
+            
+            setLoading(true, "Processing image...");
+            state.currentFileName = file.name.replace(/(\.[\w\d_-]+)$/i, '_edited.png');
+            
+            try {
+                const dataUrl = await fileToDataURL(file);
+                elements.uploadPreview.src = dataUrl;
+                elements.uploadPreview.classList.remove('hidden');
+                elements.uploadPrompt.classList.add('hidden');
 
-        // Update state
-        this.walletState.setKeys(privateKey, publicKey, address);
-
-        // Display restored information
-        const restoredPubEl = document.getElementById('restoredPublicKey');
-        const restoredAddrEl = document.getElementById('restoredAddress');
-        
-        if (restoredPubEl) restoredPubEl.textContent = CryptoUtils.toHex(publicKey);
-        if (restoredAddrEl) restoredAddrEl.textContent = address;
-        
-        document.getElementById('restoreResult')?.classList.remove('hidden');
-        this.updateWalletStatus();
-
-        // Clear input for security
-        restoreInput.value = '';
-        
-        SecureLogger.success('Wallet restored successfully');
-    }
-
-    async signMessage() {
-        if (!this.walletState.isActive()) {
-            SecureLogger.error('No active wallet for signing');
-            return;
-        }
-
-        const messageInput = document.getElementById('messageInput');
-        if (!messageInput?.value) {
-            SecureLogger.error('Enter a message to sign');
-            return;
-        }
-
-        this.walletState.updateActivity();
-        
-        const message = messageInput.value;
-        const messageBytes = new TextEncoder().encode(message);
-        
-        const result = await this.falcon.sign(messageBytes, this.walletState.privateKey);
-        const signature = new Uint8Array(result.signature);
-        
-        const signatureEl = document.getElementById('signatureDisplay');
-        if (signatureEl) {
-            signatureEl.value = CryptoUtils.toHex(signature);
-            document.getElementById('signatureSection')?.classList.remove('hidden');
-        }
-
-        // Clear verification result
-        const verifyEl = document.getElementById('verificationResult');
-        if (verifyEl) verifyEl.innerHTML = '';
-
-        SecureLogger.success('Message signed successfully');
-    }
-
-    async verifySignature() {
-        const messageInput = document.getElementById('messageInput');
-        const signatureInput = document.getElementById('signatureDisplay');
-        
-        if (!messageInput?.value || !signatureInput?.value) {
-            SecureLogger.error('Message and signature required for verification');
-            return;
-        }
-
-        let publicKey;
-        if (this.walletState.isActive()) {
-            publicKey = this.walletState.publicKey;
-        } else {
-            // Try to get from restored wallet display
-            const restoredPubEl = document.getElementById('restoredPublicKey');
-            if (!restoredPubEl?.textContent) {
-                SecureLogger.error('No public key available for verification');
-                return;
+                const base64Data = dataUrl.split(',')[1];
+                state.originalImage = { mimeType: file.type, data: base64Data };
+                resetHistory(state.originalImage);
+                await displayImage(state.originalImage);
+            } catch (err) {
+                console.error("File handling failed:", err);
+                showError("Could not process the uploaded file.");
+            } finally {
+                setLoading(false);
             }
-            publicKey = CryptoUtils.fromHex(restoredPubEl.textContent);
+        }
+        
+        function displayImage(image) {
+            return new Promise(resolve => {
+                if (!image) return resolve();
+                elements.imageDisplay.src = `data:${image.mimeType};base64,${image.data}`;
+                elements.imageDisplay.onload = () => { 
+                    setupMaskCanvas();
+                    resolve();
+                };
+                updateUI();
+            });
+        }
+        
+        function resetHistory(initialImage) {
+            state.history = [initialImage];
+            state.currentHistoryIndex = 0;
         }
 
-        try {
-            const message = messageInput.value;
-            const messageBytes = new TextEncoder().encode(message);
-            const signatureBytes = CryptoUtils.fromHex(signatureInput.value.trim());
+        function showMultiViewImages(images) {
+            elements.multiViewContainer.innerHTML = '';
+            const titles = ["Front View", "Side View", "Rear View", "Overhead View"];
+            const fragment = document.createDocumentFragment();
+            images.forEach((image, index) => {
+                const imageWrapper = document.createElement('div');
+                imageWrapper.className = 'flex flex-col items-center';
+                imageWrapper.innerHTML = `
+                    <img src="data:${image.mimeType};base64,${image.data}" class="w-full h-auto object-contain rounded-lg shadow-lg mb-2"/>
+                    <span class="text-sm text-text-secondary">${titles[index] || `View ${index + 1}`}</span>`;
+                fragment.appendChild(imageWrapper);
+            });
+            elements.multiViewContainer.appendChild(fragment);
+            elements.multiViewModal.classList.remove('hidden');
+        }
+
+        // --- Masking Logic ---
+        function setupMaskCanvas() {
+            const imageRect = elements.imageDisplay.getBoundingClientRect();
+            const containerRect = elements.imageContainer.getBoundingClientRect();
+            elements.maskCanvas.width = imageRect.width;
+            elements.maskCanvas.height = imageRect.height;
+            elements.maskCanvas.style.top = `${imageRect.top - containerRect.top}px`;
+            elements.maskCanvas.style.left = `${imageRect.left - containerRect.top}px`;
+            elements.maskCanvas.classList.remove('hidden');
+            clearMask();
+        }
+
+        function clearMask() {
+            const ctx = elements.maskCanvas.getContext('2d');
+            ctx.clearRect(0, 0, elements.maskCanvas.width, elements.maskCanvas.height);
+            state.isMasking = false;
+        }
+        
+        // --- API Call Logic ---
+        async function makeApiCallWithRetry(url, payload, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(`${url}?key=${API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        let errorDetail = `API Error: ${response.status} ${response.statusText}`;
+                        try {
+                            const errorBody = await response.text();
+                            // Attempt to parse as JSON for a structured error message
+                            try {
+                                const errorJson = JSON.parse(errorBody);
+                                if (errorJson.error && errorJson.error.message) {
+                                    errorDetail = errorJson.error.message;
+                                } else {
+                                    // If no specific message, the body itself might be the error
+                                    errorDetail = errorBody;
+                                }
+                            } catch (e) {
+                                // If parsing fails, the body is likely a simple string error
+                                errorDetail = errorBody || errorDetail;
+                            }
+                        } catch (e) {
+                            // Could not read response body, stick with the status line error
+                        }
+                        throw new Error(errorDetail);
+                    }
+
+                    const responseData = await response.json();
+                    
+                    const hasContent = (responseData.candidates && responseData.candidates.length > 0) || (responseData.predictions && responseData.predictions.length > 0);
+
+                    if (!responseData || !hasContent) {
+                         if (responseData.candidates?.[0]?.finishReason === 'SAFETY') {
+                            throw new Error("The AI returned an empty response due to safety filters. Try a different prompt or image.");
+                         }
+                         throw new Error("The AI returned an empty or invalid response.");
+                    }
+                    
+                    return responseData;
+
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    // Exponential backoff
+                    await new Promise(res => setTimeout(res, 1000 * Math.pow(2, i)));
+                }
+            }
+        }
+
+        async function generateEdit(promptText) {
+            if (state.isLoading) return;
+            const finalPrompt = promptText.trim();
+            const hasImage = state.history.length > 0;
+            if (!finalPrompt && hasImage) return showError("Please describe your edit.");
+            if (!finalPrompt && !hasImage) return showError("Please provide a prompt to generate an image.");
             
-            const isValid = await this.falcon.verify(signatureBytes, messageBytes, publicKey);
+            setLoading(true, hasImage ? `Applying "${finalPrompt}"...` : `Generating "${finalPrompt}"...`);
             
-            const verifyEl = document.getElementById('verificationResult');
-            if (verifyEl) {
-                if (isValid) {
-                    verifyEl.innerHTML = `
-                        <div class="flex items-center space-x-2 text-green-400">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <span class="font-semibold">Signature VERIFIED</span>
-                        </div>
-                        <div class="text-sm text-green-300 mt-1">The signature is cryptographically valid</div>
-                    `;
-                    SecureLogger.success('Signature verification successful');
+            try {
+                if (hasImage) {
+                    // IMAGE EDITING
+                    const currentImage = state.history[state.currentHistoryIndex];
+                    const imageToSend = state.isDraftMode ? await resizeImage(currentImage, DRAFT_SIZE) : currentImage;
+                    const parts = [{ text: finalPrompt }, { inlineData: { mimeType: imageToSend.mimeType, data: imageToSend.data } }];
+                    if (state.isMasking) {
+                        parts.push({text: "Apply the edit only to the masked (drawn-on) area."});
+                        parts.push({ inlineData: { mimeType: 'image/png', data: elements.maskCanvas.toDataURL('image/png').split(',')[1] }});
+                    }
+                    const payload = { contents: [{ parts }], generationConfig: { responseModalities: ['IMAGE'] } };
+                    const result = await makeApiCallWithRetry(IMAGE_EDIT_API_URL, payload);
+                    const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+                    if (!part?.inlineData?.data) throw new Error("The AI couldn't apply this edit. Please try a different prompt or image.");
+                    
+                    const editedImage = { mimeType: part.inlineData.mimeType, data: part.inlineData.data };
+                    state.history.splice(state.currentHistoryIndex + 1);
+                    state.history.push(editedImage);
+                    state.currentHistoryIndex++;
+                    await displayImage(editedImage);
                 } else {
-                    verifyEl.innerHTML = `
-                        <div class="flex items-center space-x-2 text-red-400">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <span class="font-semibold">Signature INVALID</span>
-                        </div>
-                        <div class="text-sm text-red-300 mt-1">The signature does not match the message</div>
-                    `;
-                    SecureLogger.error('Signature verification failed');
+                    // IMAGE GENERATION
+                    const payload = { instances: [{ prompt: `A high-quality image of "${finalPrompt}".` }], parameters: { sampleCount: 1 } };
+                    const result = await makeApiCallWithRetry(IMAGE_GENERATE_API_URL, payload);
+                    const b64Data = result.predictions?.[0]?.bytesBase64Encoded;
+                    if (!b64Data) throw new Error("Failed to generate an image. Please try a different prompt.");
+
+                    const generatedImage = { mimeType: 'image/png', data: b64Data };
+                    state.originalImage = generatedImage;
+                    resetHistory(generatedImage);
+                    await displayImage(generatedImage);
                 }
+                elements.promptInput.value = '';
+            } catch (error) {
+                console.error("Image generation/edit failed:", error);
+                showError(error.message || "An unknown error occurred.");
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            SecureLogger.error(`Verification error: ${error.message}`);
         }
-    }
+        
+        async function generateMultiView() {
+            if (!state.history.length || state.isLoading) return;
+            setLoading(true, `Generating professional views...`);
+            
+            try {
+                const currentImage = state.history[state.currentHistoryIndex];
+                const promptText = elements.promptInput.value.trim() || "the subject";
+                const payload = {
+                    contents: [{
+                        parts: [
+                            { text: `Based on the attached image, generate four professional images of ${promptText} from different angles: front view, side view, rear view, and overhead view. Ensure the subject and style are consistent across all images.` },
+                            { inlineData: { mimeType: currentImage.mimeType, data: currentImage.data } }
+                        ]
+                    }],
+                    generationConfig: { responseModalities: ["IMAGE"] }
+                };
+                
+                const result = await makeApiCallWithRetry(IMAGE_EDIT_API_URL, payload);
+                const generatedImages = result.candidates?.[0]?.content?.parts
+                    ?.filter(p => p.inlineData)
+                    .map(p => ({ mimeType: p.inlineData.mimeType, data: p.inlineData.data })) || [];
 
-    lockWallet() {
-        this.walletState.lock();
-        
-        // Hide sensitive UI elements
-        document.getElementById('mnemonicSection')?.classList.add('hidden');
-        document.getElementById('keyInfo')?.classList.add('hidden');
-        document.getElementById('restoreResult')?.classList.add('hidden');
-        document.getElementById('signatureSection')?.classList.add('hidden');
-        
-        // Clear form inputs
-        const restoreInput = document.getElementById('restoreInput');
-        if (restoreInput) restoreInput.value = '';
-        
-        const verifyEl = document.getElementById('verificationResult');
-        if (verifyEl) verifyEl.innerHTML = '';
-        
-        this.updateWalletStatus();
-    }
+                if (generatedImages.length < 4) throw new Error("Failed to generate all four views. Please try again.");
+                showMultiViewImages(generatedImages);
+            } catch (error) {
+                console.error("Multi-view generation failed:", error);
+                showError(error.message || "Failed to generate multi-view images.");
+            } finally {
+                setLoading(false);
+            }
+        }
 
-    startAutoLockTimer() {
-        setInterval(() => {
-            if (this.walletState.isActive()) {
-                const timeSinceActivity = Date.now() - this.walletState.lastActivity;
-                if (timeSinceActivity > this.autoLockTimeout) {
-                    this.lockWallet();
-                    SecureLogger.warning('Wallet auto-locked due to inactivity');
+        // --- Chat Logic ---
+        function toggleChat(forceState) {
+            state.isChatOpen = forceState ?? !state.isChatOpen;
+            if (!state.isChatOpen && state.isChatMaximized) toggleChatSize(false);
+            updateUI();
+        }
+        
+        function toggleChatSize(forceState) {
+            state.isChatMaximized = forceState ?? !state.isChatMaximized;
+            elements.aiChatContainer.classList.toggle('chat-maximized', state.isChatMaximized);
+            elements.chatMaximizeIcon.classList.toggle('hidden', state.isChatMaximized);
+            elements.chatMinimizeIcon.classList.toggle('hidden', !state.isChatMaximized);
+        }
+
+        function createMessageElement(isUser, content) {
+            const messageEl = document.createElement('div');
+            messageEl.className = `chat-message flex gap-3 ${isUser ? 'user justify-end' : 'ai'}`;
+            
+            const avatarUser = `<svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>`;
+            const avatarAI = `<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>`;
+            const name = isUser ? "You" : "AI Assistant";
+            const nameColor = isUser ? "text-gray-400" : "text-primary";
+            const avatarHTML = isUser ? avatarUser : avatarAI;
+            const order = isUser ? 'order-2' : '';
+            const avatarOrder = isUser ? 'order-1' : '';
+            const textAlign = isUser ? 'text-right' : '';
+
+            messageEl.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-surface flex-shrink-0 flex items-center justify-center ${avatarOrder}">${avatarHTML}</div>
+                <div class="${order}">
+                    <p class="font-semibold text-sm ${nameColor} mb-1 ${textAlign}">${name}</p>
+                    <div class="chat-bubble inline-block p-3 rounded-lg text-text-primary">${content}</div>
+                </div>`;
+            return messageEl;
+        }
+
+        async function handleChatSubmit(e) {
+            e.preventDefault();
+            const messageText = elements.chatInput.value.trim();
+            const attachedFile = state.chatAttachment;
+            if (!messageText && !attachedFile) return;
+
+            setLoading(true, "Processing file...");
+
+            const userParts = [{ text: messageText }];
+            let attachmentHTML = '';
+
+            if (attachedFile) {
+                const MAX_FILE_SIZE_MB = 4;
+                if (attachedFile.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+                    showError(`File is too large. Max size is ${MAX_FILE_SIZE_MB}MB.`);
+                    removeAttachment();
+                    setLoading(false);
+                    return;
+                }
+
+                try {
+                    userParts.push(await fileToGeminiPart(attachedFile));
+                    if (attachedFile.type.startsWith('image/')) {
+                        const url = URL.createObjectURL(attachedFile);
+                        attachmentHTML = `<div class="mt-2 p-2 bg-gray-700/50 rounded-lg"><img src="${url}" alt="${attachedFile.name}" class="max-w-xs rounded-md" onload="URL.revokeObjectURL(this.src)" /></div>`;
+                    } else {
+                        attachmentHTML = `<div class="mt-2 p-2 bg-gray-700/50 rounded-lg text-sm text-text-primary truncate">${attachedFile.name}</div>`;
+                    }
+                } catch (error) {
+                    console.error("Error processing file:", error);
+                    showError("Could not read the attached file.");
+                    removeAttachment();
+                    setLoading(false);
+                    return;
                 }
             }
-        }, 60000); // Check every minute
-    }
-}
+            
+            const userMessageContent = `<p>${messageText.replace(/\n/g, '<br>')}</p>${attachmentHTML}`;
+            elements.chatMessages.appendChild(createMessageElement(true, userMessageContent));
+            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+            
+            elements.chatInput.value = '';
+            removeAttachment();
+            state.chatHistory.push({ role: "user", parts: userParts });
 
-// Initialize the application
-let quantumWallet;
+            setLoading(true, "AI is thinking...");
+            elements.typingIndicator.classList.remove('hidden');
 
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        quantumWallet = new QuantumWallet();
-        await quantumWallet.initializationPromise;
-    } catch (error) {
-        SecureLogger.error('Failed to initialize quantum wallet application');
-        console.error('Initialization error:', error);
-    }
-});
+            try {
+                const payload = { contents: state.chatHistory, generationConfig: { candidateCount: 1 } };
+                const result = await makeApiCallWithRetry(CHAT_API_URL, payload);
+                const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!responseText) throw new Error("Received an empty response from the AI.");
 
-// Export for debugging (remove in production)
-window.QuantumWallet = { quantumWallet, SecureLogger, CryptoUtils };
+                state.chatHistory.push({ role: "model", parts: [{ text: responseText }] });
+                renderAiMessage(responseText);
+            } catch (error) {
+                console.error("Chat API failed:", error);
+                renderAiMessage(`<p class="text-red-400">Sorry, I encountered an error: ${error.message}</p>`, true);
+            } finally {
+                setLoading(false);
+                elements.typingIndicator.classList.add('hidden');
+            }
+        }
 
+
+        function renderAiMessage(text, isError = false) {
+            let contentHTML = '';
+            if (isError) {
+                contentHTML = text;
+            } else {
+                const parts = text.split(/(```[\s\S]*?```)/g);
+                contentHTML = parts.map(part => {
+                    if (part.startsWith('```')) {
+                        const match = part.match(/```(\w*)\n([\s\S]+)```/);
+                        if (!match) return `<pre><code>${part}</code></pre>`;
+                        const [, lang, code] = match;
+                        const safeCode = code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        
+                        const downloadBtnHTML = `<button class="code-btn download-code-btn" title="Download snippet"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg><span class="hidden sm:inline">Download</span></button>`;
+                        const copyBtnHTML = `<button class="code-btn copy-code-btn" title="Copy code"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg><span class="hidden sm:inline">Copy</span></button>`;
+                        const runBtnHTML = (lang && lang.toLowerCase() === 'html')
+                            ? `<button class="code-btn run-code-btn" title="Run HTML code"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span class="hidden sm:inline">Run Code</span></button>`
+                            : '';
+
+                        return `<div class="code-block-header"><span>${lang || 'code'}</span><div class="code-block-buttons">${runBtnHTML}${downloadBtnHTML}${copyBtnHTML}</div></div><pre class="rounded-b-lg rounded-t-none mt-0"><code class="language-${lang}">${safeCode}</code></pre>`;
+                    }
+                    return `<p>${part.replace(/\n/g, '<br>')}</p>`;
+                }).join('');
+            }
+            elements.chatMessages.appendChild(createMessageElement(false, contentHTML));
+            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+        }
+
+        function handleAttachmentSelection(e) {
+            const file = e.target.files[0];
+            if (file) {
+                state.chatAttachment = file;
+                elements.attachmentName.textContent = file.name;
+                elements.attachmentPreview.classList.remove('hidden');
+                elements.attachmentPreview.classList.add('flex');
+                updateUI();
+            }
+        }
+        
+        function removeAttachment() {
+            state.chatAttachment = null;
+            elements.attachmentUpload.value = '';
+            elements.attachmentPreview.classList.add('hidden');
+            elements.attachmentPreview.classList.remove('flex');
+            updateUI();
+        }
+
+        function startNewChat() {
+            elements.chatMessages.innerHTML = '';
+            state.chatHistory = [];
+            addInitialMessage();
+        }
+
+        function addInitialMessage() {
+            const welcomeMessage = "Hello! I'm powered by Gemini. How can I help? You can attach an image, document, or code file and ask me anything about it.";
+            state.chatHistory = [{ role: "model", parts: [{ text: welcomeMessage }] }];
+            renderAiMessage(welcomeMessage);
+        }
+
+        // --- Resizing and UI Helpers ---
+        function resizeImage(image, maxSize) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    let { width, height } = img;
+                    if (Math.max(width, height) <= maxSize) return resolve(image);
+                    if (width > height) {
+                        height = Math.round(height * (maxSize / width));
+                        width = maxSize;
+                    } else {
+                        width = Math.round(width * (maxSize / height));
+                        height = maxSize;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                    const resizedBase64 = canvas.toDataURL(image.mimeType).split(',')[1];
+                    resolve({ mimeType: image.mimeType, data: resizedBase64 });
+                };
+                img.onerror = reject;
+                img.src = `data:${image.mimeType};base64,${image.data}`;
+            });
+        }
+        
+        function setLoading(isLoading, text = "Applying AI magic...") {
+            state.isLoading = isLoading;
+            elements.loadingText.textContent = text;
+            elements.loadingOverlay.classList.toggle('hidden', !isLoading);
+            elements.loadingOverlay.classList.toggle('flex', isLoading);
+            updateUI();
+        }
+
+        function showError(message) {
+            clearTimeout(state.errorTimeout);
+            elements.errorMessage.textContent = message;
+            elements.errorToast.classList.remove('hidden', 'translate-y-20');
+            state.errorTimeout = setTimeout(() => {
+                elements.errorToast.classList.add('translate-y-20');
+                setTimeout(() => elements.errorToast.classList.add('hidden'), 5000);
+            }, 5000);
+        }
+        
+        function updateFullscreenIcons() {
+            const isFullscreen = !!document.fullscreenElement;
+            elements.fullscreenEnterIcon.classList.toggle('hidden', isFullscreen);
+            elements.fullscreenExitIcon.classList.toggle('hidden', !isFullscreen);
+        }
+
+        // --- Event Listeners ---
+        function addEventListeners() {
+            // File Upload
+            elements.imageUploadArea.addEventListener('click', () => elements.imageUpload.click());
+            elements.imageUpload.addEventListener('change', (e) => e.target.files.length && handleFileUpload(e.target.files[0]));
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => elements.imageUploadArea.addEventListener(evt, e => {
+                e.preventDefault(); e.stopPropagation();
+                if (evt === 'dragover') elements.imageUploadArea.classList.add('border-primary');
+                if (evt === 'dragleave' || evt === 'drop') elements.imageUploadArea.classList.remove('border-primary');
+                if (evt === 'drop') e.dataTransfer.files.length && handleFileUpload(e.dataTransfer.files[0]);
+            }));
+            
+            // Core Actions
+            elements.promptInput.addEventListener('input', updateUI);
+            elements.generateBtn.addEventListener('click', () => generateEdit(elements.promptInput.value));
+            elements.magicEditsContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('.magic-btn');
+                if (button && !button.disabled) {
+                    elements.promptInput.value = button.dataset.prompt;
+                    updateUI();
+                    generateEdit(button.dataset.prompt);
+                }
+            });
+
+            // History and Download
+            elements.undoBtn.addEventListener('click', () => {
+                if (state.currentHistoryIndex > 0) {
+                    state.currentHistoryIndex--;
+                    displayImage(state.history[state.currentHistoryIndex]);
+                }
+            });
+            elements.downloadBtn.addEventListener('click', () => {
+                const image = state.history[state.currentHistoryIndex];
+                if (image) {
+                    const link = document.createElement('a');
+                    link.href = `data:${image.mimeType};base64,${image.data}`;
+                    link.download = state.currentFileName;
+                    link.click();
+                }
+            });
+            
+            // Tools
+            elements.draftModeToggle.addEventListener('click', () => { state.isDraftMode = !state.isDraftMode; updateUI(); });
+            elements.clearMaskBtn.addEventListener('click', clearMask);
+            const debouncedResize = debounce(() => state.history.length > 0 && setupMaskCanvas(), 150);
+            window.addEventListener('resize', debouncedResize);
+            
+            // Compare Button
+            const showOriginal = () => displayImage(state.originalImage);
+            const showCurrent = () => displayImage(state.history[state.currentHistoryIndex]);
+            ['mousedown', 'touchstart'].forEach(evt => elements.compareBtn.addEventListener(evt, showOriginal, { passive: true }));
+            ['mouseup', 'mouseleave', 'touchend'].forEach(evt => elements.compareBtn.addEventListener(evt, showCurrent));
+            
+            // Fullscreen & Modals
+            elements.fullscreenBtn.addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
+            document.addEventListener('fullscreenchange', updateFullscreenIcons);
+            elements.generateViewsBtn.addEventListener('click', generateMultiView);
+            elements.closeMultiViewModal.addEventListener('click', () => elements.multiViewModal.classList.add('hidden'));
+            elements.closeCodeRunnerModal.addEventListener('click', () => {
+                elements.codeRunnerModal.classList.add('hidden');
+                elements.codeRunnerIframe.srcdoc = ''; // Clear iframe content
+            });
+
+            // Chat
+            elements.toggleChatBtn.addEventListener('click', () => toggleChat());
+            elements.closeChatBtn.addEventListener('click', () => toggleChat(false));
+            elements.toggleChatSizeBtn.addEventListener('click', () => toggleChatSize());
+            elements.chatForm.addEventListener('submit', handleChatSubmit);
+            elements.chatInput.addEventListener('input', updateUI);
+            elements.attachmentBtn.addEventListener('click', () => elements.attachmentUpload.click());
+            elements.attachmentUpload.addEventListener('change', handleAttachmentSelection);
+            elements.removeAttachmentBtn.addEventListener('click', removeAttachment);
+            elements.newChatBtn.addEventListener('click', startNewChat);
+
+            // Event delegation for chat code block buttons
+            elements.chatMessages.addEventListener('click', e => {
+                const copyBtn = e.target.closest('.copy-code-btn');
+                if (copyBtn) {
+                    const code = copyBtn.closest('.code-block-header').nextElementSibling.querySelector('code').textContent;
+                    navigator.clipboard.writeText(code).then(() => {
+                        const btnText = copyBtn.querySelector('span');
+                        if (btnText) { btnText.textContent = 'Copied!'; setTimeout(() => btnText.textContent = 'Copy', 2000); }
+                    }).catch(err => showError('Failed to copy code.'));
+                }
+                
+                const downloadBtn = e.target.closest('.download-code-btn');
+                if (downloadBtn) {
+                    const header = downloadBtn.closest('.code-block-header');
+                    const code = header.nextElementSibling.querySelector('code').textContent;
+                    const lang = header.querySelector('span:first-child').textContent;
+                    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `code-snippet-${Date.now()}.${lang === 'code' ? 'txt' : lang}`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+
+                const runBtn = e.target.closest('.run-code-btn');
+                if (runBtn) {
+                    const code = runBtn.closest('.code-block-header').nextElementSibling.querySelector('code').textContent;
+                    elements.codeRunnerIframe.srcdoc = code;
+                    elements.codeRunnerModal.classList.remove('hidden');
+                }
+            });
+
+            // Masking Canvas Drawing Events
+            let isDrawing = false;
+            const getCoords = e => {
+                const rect = elements.maskCanvas.getBoundingClientRect();
+                const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+                const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+            const startDrawing = e => {
+                e.preventDefault(); isDrawing = true;
+                const { x, y } = getCoords(e);
+                const ctx = elements.maskCanvas.getContext('2d');
+                ctx.lineWidth = elements.brushSizeSlider.value;
+                ctx.strokeStyle = 'rgba(255, 0, 150, 0.7)';
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            };
+            const draw = e => {
+                if (!isDrawing) return; e.preventDefault();
+                const { x, y } = getCoords(e);
+                const ctx = elements.maskCanvas.getContext('2d');
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            };
+            const stopDrawing = () => {
+                if (!isDrawing) return; isDrawing = false;
+                const ctx = elements.maskCanvas.getContext('2d');
+                ctx.closePath();
+                const hasDrawing = ctx.getImageData(0, 0, elements.maskCanvas.width, elements.maskCanvas.height).data.some(channel => channel !== 0);
+                state.isMasking = hasDrawing;
+            };
+            ['mousedown', 'touchstart'].forEach(e => elements.maskCanvas.addEventListener(e, startDrawing, { passive: false }));
+            ['mousemove', 'touchmove'].forEach(e => elements.maskCanvas.addEventListener(e, draw, { passive: false }));
+            ['mouseup', 'mouseleave', 'touchend'].forEach(e => elements.maskCanvas.addEventListener(e, stopDrawing));
+        }
+        
+        // --- Initialisation ---
+        updateUI();
+        addEventListeners();
+        addInitialMessage();
+    });
 </script>
 </body>
 </html>
+
